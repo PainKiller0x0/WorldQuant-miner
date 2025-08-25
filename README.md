@@ -1,0 +1,2 @@
+# WorldQuant-miner
+一个基于本地Ollama大语言模型的智能Alpha因子生成系统，能够自动生成、测试并提交Alpha因子到WorldQuant Brain平台。该系统完全基于本地部署，无需依赖云服务，提供更好的性能和隐私保护。

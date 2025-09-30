@@ -47,6 +47,9 @@ class ModelFleetManager:
         # Prioritize DeepSeek-R1 8B by default; keep smaller models as fallbacks
         self.model_fleet = [
             ModelInfo(
+		"qwen3:4b",4096,0,"Qwen3:4b - my preferred model",
+	    ),
+            ModelInfo(
                 "deepseek-r1:8b",
                 5200,
                 1,
@@ -89,6 +92,7 @@ class ModelFleetManager:
         self.auto_select_available_model()
 
     def auto_select_available_model(self):
+        return
         """Automatically select the best available model on startup."""
         best_available_model = self.select_best_available_model()
 
@@ -355,7 +359,7 @@ class AlphaOrchestrator:
         self.vram_monitor_thread = None
 
         # Restart mechanism
-        self.restart_interval = 1800  # 30 minutes in seconds
+        self.restart_interval = 86400  # 24 hours in seconds
         self.last_restart_time = time.time()
         self.restart_thread = None
 
@@ -989,16 +993,16 @@ def main():
         )  # 将分钟转换为秒
 
         # 更新模型队列以使用指定的模型
-        if args.ollama_model:
-            # 在队列中找到模型并设置为当前模型
-            for i, model_info in enumerate(
-                orchestrator.model_fleet_manager.model_fleet
-            ):
-                if model_info.name == args.ollama_model:
-                    orchestrator.model_fleet_manager.current_model_index = i
-                    orchestrator.model_fleet_manager.save_state()
-                    logger.info(f"设置模型队列使用: {args.ollama_model}")
-                    break
+##        if args.ollama_model:
+##            # 在队列中找到模型并设置为当前模型
+##            for i, model_info in enumerate(
+##                orchestrator.model_fleet_manager.model_fleet
+##            ):
+##                if model_info.name == args.ollama_model:
+##                    orchestrator.model_fleet_manager.current_model_index = i
+##                    orchestrator.model_fleet_manager.save_state()
+##                    logger.info(f"设置模型队列使用: {args.ollama_model}")
+##                    break
 
         if args.mode == "daily":
             orchestrator.daily_workflow()

@@ -7,7 +7,6 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
-from requests.auth import HTTPBasicAuth
 
 LOG_DIR = "logs"
 if not os.path.exists(LOG_DIR):
@@ -27,7 +26,7 @@ class WorldQuant:
         self.api_key = api_key
         self.base_url = "https://api.worldquantbrain.com"
         self.session = requests.Session()
-        self.session.auth = HTTPBasicAuth(user_id, api_key)
+        self.session.auth = (user_id, api_key)
         self._authenticate()
 
     def _authenticate(self):
@@ -41,38 +40,33 @@ class WorldQuant:
             raise
 
     def get_data_fields(self):
-        url = f"{self.base_url}/data-fields"
-        params = {
-            "limit": 100,
-            "offset": 0,
-            "universe": "TOP3000",
-            "region": "USA"
-        }
-        try:
-            logger.info(f"正在從 {url} 獲取數據字段，參數: {params}")
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            if 'results' in data and isinstance(data['results'], list):
-                fields = [field['id'] for field in data['results'] if 'id' in field]
-                logger.info(f"成功獲取 {len(fields)} 個數據字段。")
-                return fields
-            else:
-                logger.error(f"從 get_data_fields 收到了意外的格式: {data}")
-                return []
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get data fields: {e}")
+    url = f"{self.base_url}/data-fields"
+    # 关键修正：添加了正确的API参数
+    params = {
+        "limit": 100,  # 获取最多100个字段
+        "offset": 0
+    }
+    try:
+        response = self.session.get(url, params=params)
+        response.raise_for_status()
+        # 增加对返回结果的健壮性检查
+        data = response.json()
+        if 'results' in data and isinstance(data['results'], list):
+            return [field['id'] for field in data['results'] if 'id' in field]
+        else:
+            logger.error(f"从 get_data_fields 收到了意外的格式: {data}")
             return []
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to get data fields: {e}")
+        return []
 
     def get_operators(self):
         url = f"{self.base_url}/operators"
         try:
             response = self.session.get(url)
             response.raise_for_status()
-            operators = [op['name'] for op in response.json() if 'name' in op]
-            logger.info(f"成功獲取 {len(operators)} 個操作符。")
-            return operators
-        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            return [op['name'] for op in response.json()['results']]
+        except requests.exceptions.RequestException as e:
             logger.error(f"Failed to get operators: {e}")
             return []
 
@@ -80,7 +74,8 @@ class WorldQuant:
         url = f"{self.base_url}/alphas"
         payload = {"code": alpha_expression}
         try:
-            response = self.session.post(url, json=payload, timeout=1800) # 30 min timeout
+            # 增加超时时间，以适应长时间的回测
+            response = self.session.post(url, json=payload, timeout=1800) # 30分钟超时
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -94,11 +89,14 @@ class AlphaGenerator:
         self.batch_size = batch_size
         self.temperature = temperature
         self.ollama_url = os.getenv("OLLAMA_HOST", "http://ollama:11434") + "/api/generate"
+        
+        # --- 长期记忆功能初始化 ---
         self.tested_alphas_file = "tested_alphas.json"
         self.tested_alphas = self.load_tested_alphas()
-        logger.info(f"成功加載 {len(self.tested_alphas)} 個已測試過的 Alpha 記錄。")
+        logger.info(f"成功加载 {len(self.tested_alphas)} 个已测试过的 Alpha 记录。")
 
     def load_tested_alphas(self):
+        """从文件加载已经测试过的 alphas 到一个集合中。"""
         try:
             if os.path.exists(self.tested_alphas_file):
                 with open(self.tested_alphas_file, 'r') as f:
@@ -106,16 +104,17 @@ class AlphaGenerator:
                     return set(data)
             return set()
         except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"加載已測試的 alphas 文件時出錯: {e}, 將創建一個新的記錄文件。")
+            logger.error(f"加载已测试的 alphas 文件时出错: {e}, 将创建一个新的记录文件。")
             return set()
 
     def save_tested_alpha(self, alpha_expression):
+        """将一个新测试的 alpha 保存到集合和文件中。"""
         self.tested_alphas.add(alpha_expression)
         try:
             with open(self.tested_alphas_file, 'w') as f:
                 json.dump(list(self.tested_alphas), f)
         except IOError as e:
-            logger.error(f"保存已測試的 alpha 文件時出錯: {e}")
+            logger.error(f"保存已测试的 alpha 文件时出错: {e}")
 
     def generate_alpha_idea(self, fields, operators):
         field_list = ", ".join(fields)
@@ -125,11 +124,21 @@ class AlphaGenerator:
         Generate a single, novel alpha expression using the fields and operators provided.
         Available Fields: {field_list}
         Available Operators: {operator_list}
-        Your response MUST ONLY be the alpha expression itself, with no explanation or code block markers.
+        Quality Checklist:
+        1. Must end with a semicolon.
+        2. Must be syntactically correct for WorldQuant.
+        3. Avoid trivial expressions like `close;` or `rank(close);`.
+        4. Combine different operators and fields to create complex and logical structures.
+        5. Your response MUST ONLY be the alpha expression itself, with no explanation or code block markers.
         Example: `rank(corr(adv20, high, 5));`
         New Alpha Expression:
         """
-        payload = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": self.temperature}}
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": self.temperature}
+        }
         try:
             response = requests.post(self.ollama_url, json=payload, timeout=120)
             response.raise_for_status()
@@ -140,42 +149,52 @@ class AlphaGenerator:
             return None
 
     def test_alpha(self, alpha):
+        """测试单个Alpha，并记录所有尝试"""
         clean_alpha = alpha.strip()
-        if not clean_alpha: return None
-        if clean_alpha in self.tested_alphas:
-            logger.info(f"跳過已測試的 Alpha: {clean_alpha}")
+        if not clean_alpha:
             return None
-        logger.info(f"正在測試新 Alpha: {clean_alpha}")
+
+        # --- 核心检查逻辑 ---
+        if clean_alpha in self.tested_alphas:
+            logger.info(f"跳过已测试的 Alpha: {clean_alpha}")
+            return None
+
+        logger.info(f"正在测试新 Alpha: {clean_alpha}")
         try:
             result = self.wq.test_alpha(clean_alpha)
             return result
         except Exception as e:
-            logger.error(f"測試 Alpha '{clean_alpha}' 時出錯: {e}")
+            logger.error(f"测试 Alpha '{clean_alpha}' 时出错: {e}")
             return None
         finally:
+            # --- 核心保存逻辑 ---
             self.save_tested_alpha(clean_alpha)
 
     def run(self):
-        logger.info("Alpha 生成器啟動...")
+        logger.info("Alpha 生成器启动...")
         fields = self.wq.get_data_fields()
         operators = self.wq.get_operators()
+
         if not fields or not operators:
-            logger.error("無法獲取字段或操作符，生成器將在60秒後退出。")
+            logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
             time.sleep(60)
             return
 
         while True:
-            logger.info(f"開始新一輪 Alpha 生成，目標數量: {self.batch_size}")
+            logger.info(f"开始新一轮 Alpha 生成，目标数量: {self.batch_size}")
+            
             alpha_ideas = []
             with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = {executor.submit(self.generate_alpha_idea, fields, operators) for _ in range(self.batch_size)}
-                for future in as_completed(futures):
+                future_to_alpha = {executor.submit(self.generate_alpha_idea, fields, operators): i for i in range(self.batch_size)}
+                for future in as_completed(future_to_alpha):
                     idea = future.result()
-                    if idea: alpha_ideas.append(idea)
+                    if idea:
+                        alpha_ideas.append(idea)
             
-            logger.info(f"成功生成 {len(alpha_ideas)} 個新 Alpha 表達式。")
+            logger.info(f"成功生成 {len(alpha_ideas)} 个新 Alpha 表达式。")
+            
             if not alpha_ideas:
-                logger.info("本輪未生成有效 Alpha，等待60秒...")
+                logger.info("本轮未生成有效 Alpha，等待60秒...")
                 time.sleep(60)
                 continue
 
@@ -184,12 +203,15 @@ class AlphaGenerator:
                 future_to_result = {executor.submit(self.test_alpha, alpha): alpha for alpha in alpha_ideas}
                 for future in as_completed(future_to_result):
                     result = future.result()
+                    # 检查 result 是否为 None (跳过的情况)
                     if result and result.get('is_hopeful'):
-                        logger.info(f"發現一個有希望的 Alpha: {result.get('regular', {}).get('code', '')}")
+                        logger.info(f"发现一个有希望的 Alpha: {result.get('regular', {}).get('code', '')}")
                         hopeful_alphas.append(result)
 
-            if hopeful_alphas: self.save_hopeful_alphas(hopeful_alphas)
-            logger.info(f"本輪結束，發現了 {len(hopeful_alphas)} 個有希望的 Alpha。等待300秒開始下一輪...")
+            if hopeful_alphas:
+                self.save_hopeful_alphas(hopeful_alphas)
+
+            logger.info(f"本轮结束，发现了 {len(hopeful_alphas)} 个有希望的 Alpha。等待300秒开始下一轮...")
             time.sleep(300)
     
     def save_hopeful_alphas(self, hopeful_alphas):
@@ -197,15 +219,17 @@ class AlphaGenerator:
         existing_data = {}
         if os.path.exists(file_path):
             with open(file_path, 'r') as f:
-                try: existing_data = json.load(f)
-                except json.JSONDecodeError: pass
+                try:
+                    existing_data = json.load(f)
+                except json.JSONDecodeError:
+                    pass
         
-        new_alphas_dict = {alpha.get('id', alpha.get('regular', {}).get('code')): alpha for alpha in hopeful_alphas}
+        new_alphas_dict = {alpha['id']: alpha for alpha in hopeful_alphas}
         merged_data = {**existing_data, **new_alphas_dict}
         
         with open(file_path, 'w') as f:
             json.dump(merged_data, f, indent=4)
-        logger.info(f"已將 {len(new_alphas_dict)} 個新的有希望的 Alpha 保存/更新到 {file_path}")
+        logger.info(f"已将 {len(new_alphas_dict)} 个新的有希望的 Alpha 保存/更新到 {file_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Alpha Generator using Ollama')
@@ -220,4 +244,4 @@ if __name__ == "__main__":
         generator = AlphaGenerator(wq_client, model=args.model, batch_size=args.batch_size)
         generator.run()
     except Exception as e:
-        logger.critical(f"啟動 Alpha 生成器時發生致命錯誤: {e}")
+        logger.critical(f"启动 Alpha 生成器时发生致命错误: {e}")

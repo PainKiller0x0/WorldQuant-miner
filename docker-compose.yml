@@ -1,0 +1,36 @@
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama_service
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+  miner:
+    build: .
+    container_name: wq-miner
+    depends_on:
+      - ollama
+    environment:
+      - WQ_USER_ID=${WQ_USER_ID}
+      - WQ_API_KEY=${WQ_API_KEY}
+      - OLLAMA_HOST=http://ollama:11434
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./logs:/app/logs
+      - ./hopeful_alphas.json:/app/hopeful_alphas.json
+      - ./提交日志.json:/app/提交日志.json
+      - ./credential.txt:/app/credential.txt
+      - ./tested_alphas.json:/app/tested_alphas.json
+    command: >
+      sh -c "python -u Web仪表盘.py &
+      python -u alpha_orchestrator.py
+      --credentials credential.txt
+      --ollama-model qwen3:4b
+      --batch-size 5
+      --mode continuous"
+    restart: always
+volumes:
+  ollama_data:

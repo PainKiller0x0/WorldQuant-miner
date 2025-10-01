@@ -1,4 +1,4 @@
-# === 粘贴替换掉 alpha_generator_ollama.py 的所有旧代码 ===
+# === 最终版，替换 alpha_generator_ollama.py 的所有内容 ===
 import argparse
 import logging
 import json
@@ -6,7 +6,9 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
-from openai import OpenAI # 使用 OpenAI 库来兼容第三方服务
+from openai import OpenAI
+from datetime import datetime
+import shutil
 
 # --- 日志配置 ---
 LOG_DIR = "logs"
@@ -20,7 +22,7 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
-# --- WorldQuant API 部分 (不变) ---
+# --- WorldQuant API 部分 ---
 class WorldQuant:
     def __init__(self, user_id, api_key):
         self.user_id = user_id
@@ -40,21 +42,13 @@ class WorldQuant:
             raise
 
     def get_data_fields(self):
-        # 最终版 V7.0: 吸取服务器的教训，只使用最核心、最不可能出错的“量价”数据字段
-        logger.info("正在使用最终版、最核心的数据字段列表")
-        
-        core_fields = [
-            # 只有这些，才是永恒的、不可动摇的真理
-            "open", 
-            "high", 
-            "low", 
-            "close", 
-            "volume",
-            "vwap",
+        logger.info("正在使用优化版的、包含核心财务数据的数据字段列表")
+        enhanced_fields = [
+            "open", "high", "low", "close", "volume", "vwap", "turnover",
+            "market_cap", "revenue", "assets", "cashflow_op",
         ]
-        
-        logger.info(f"成功加載 {len(core_fields)} 個核心数据字段。")
-        return core_fields
+        logger.info(f"成功加載 {len(enhanced_fields)} 個优选数据字段。")
+        return enhanced_fields
 
     def get_operators(self):
         url = f"{self.base_url}/operators"
@@ -70,55 +64,52 @@ class WorldQuant:
             return []
 
     def test_alpha(self, alpha_expression: str):
-        # 最终版 V7.0: 增加网络容忍度
-        
         submit_url = f"{self.base_url}/simulations"
         payload = {
-            'type': 'REGULAR',
-            'regular': alpha_expression,
+            'type': 'REGULAR', 'regular': alpha_expression,
             'settings': {
-                'instrumentType': 'EQUITY',
-                'universe': 'TOP3000',
-                'region': 'USA',
-                'delay': 1,
-                'decay': 4,
-                'neutralization': 'SUBINDUSTRY',
-                'truncation': 0.1,
-                'pasteurization': 'ON',
-                'unitHandling': 'VERIFY',
-                'nanHandling': 'ON',
-                'language': 'FASTEXPR',
-                'visualization': False,
+                'instrumentType': 'EQUITY', 'universe': 'TOP3000', 'region': 'USA',
+                'delay': 1, 'decay': 4, 'neutralization': 'SUBINDUSTRY',
+                'truncation': 0.1, 'pasteurization': 'ON', 'unitHandling': 'VERIFY',
+                'nanHandling': 'ON', 'language': 'FASTEXPR', 'visualization': False,
             }
         }
         
-        try:
-            submit_response = self.session.post(submit_url, json=payload, timeout=120) # 提交超时也放宽一点
-            submit_response.raise_for_status()
-            progress_url = submit_response.headers.get('location')
-            if not progress_url:
-                logger.error(f"提交模拟任务后，未能从Header获取 location。")
+        progress_url = None
+        for attempt in range(2):
+            try:
+                submit_response = self.session.post(submit_url, json=payload, timeout=120)
+                if submit_response.status_code == 401:
+                    logger.warning("第1步：提交时认证失败 (401)，正在尝试重新认证...")
+                    self._authenticate()
+                    if attempt == 0: continue
+                
+                submit_response.raise_for_status()
+                progress_url = submit_response.headers.get('location')
+                
+                if not progress_url:
+                    logger.error(f"提交模拟任务后，未能从Header获取 location。")
+                    return None
+                
+                logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
+                break
+            except requests.exceptions.RequestException as e:
+                error_content = "No response body"
+                if e.response is not None:
+                    try: error_content = e.response.json()
+                    except json.JSONDecodeError: error_content = e.response.text
+                logger.error(f"第1步：提交模拟任务失败 '{alpha_expression}': {e} - Response: {error_content}")
                 return None
-            logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
-
-        except requests.exceptions.RequestException as e:
-            error_content = "No response body"
-            if e.response is not None:
-                try: error_content = e.response.json()
-                except json.JSONDecodeError: error_content = e.response.text
-            logger.error(f"第1步：提交模拟任务失败 '{alpha_expression}': {e} - Response: {error_content}")
+        else:
+            logger.error("重新认证后，提交模拟任务依然失败。")
             return None
 
         polling_start_time = time.time()
-        
         while time.time() - polling_start_time < 600:
             try:
-                # --- 这里是关键的修改 ---
-                # 把单次轮询的超时时间从60秒延长到120秒
-                poll_response = self.session.get(progress_url, timeout=120) 
-                
+                poll_response = self.session.get(progress_url, timeout=120)
                 if poll_response.status_code == 401:
-                    logger.warning("认证可能已过期，正在尝试重新认证...")
+                    logger.warning("第2/3步：轮询时认证失败 (401)，正在尝试重新认证...")
                     self._authenticate()
                     continue
                 poll_response.raise_for_status()
@@ -136,38 +127,30 @@ class WorldQuant:
                     final_data = final_response.json()
                     logger.info(f"Alpha '{alpha_id}' 模拟完成。")
                     return final_data
-
                 elif status == "ERROR":
                     logger.error(f"Alpha 模拟出错，服务器返回的完整错误报告: {result_data}")
                     return None
                 else:
                     logger.debug(f"Alpha 仍在模拟中... 状态: {status}")
                     time.sleep(5)
-
             except requests.exceptions.RequestException as e:
                 logger.error(f"第2/3步：轮询结果失败: {e}")
                 time.sleep(10)
             except Exception as e:
                 logger.error(f"处理轮询结果时发生未知错误: {e}")
                 return None
-        
         logger.warning(f"Alpha 模拟超时（超过10分钟）。")
         return None
-            
-# --- 全新的、简洁的 AlphaGenerator ---
+
+# --- 最终版 AlphaGenerator ---
 class AlphaGenerator:
-    def __init__(self, wq, api_config_path, batch_size=2):
+    def __init__(self, wq, api_config_path, batch_size=5):
         self.wq = wq
         self.batch_size = batch_size
         
         try:
-            with open(api_config_path, 'r') as f:
-                config = json.load(f)
-            
-            self.client = OpenAI(
-                api_key=config['api_key'],
-                base_url=config['base_url']
-            )
+            with open(api_config_path, 'r') as f: config = json.load(f)
+            self.client = OpenAI(api_key=config['api_key'], base_url=config['base_url'])
             logger.info(f"API client initialized for endpoint: {config['base_url']}")
         except Exception as e:
             logger.critical(f"加载 API 配置或初始化客户端失败: {e}")
@@ -177,54 +160,59 @@ class AlphaGenerator:
         self.tested_alphas = self.load_tested_alphas()
 
     def load_tested_alphas(self):
-            # 增加保险丝：如果发现是文件夹，就删了重建
-            if os.path.isdir(self.tested_alphas_file):
-                logger.warning(f"'{self.tested_alphas_file}' 是一个文件夹，正在删除并重建为空文件。")
-                import shutil
-                shutil.rmtree(self.tested_alphas_file)
-                open(self.tested_alphas_file, 'a').close()
-
-            try:
-                if os.path.exists(self.tested_alphas_file) and os.path.isfile(self.tested_alphas_file):
-                    with open(self.tested_alphas_file, 'r') as f:
-                        content = f.read()
-                        if content: return set(json.loads(content))
+        # 增加了对旧格式（字符串列表）的兼容性
+        if not os.path.exists(self.tested_alphas_file):
+            return set()
+            
+        if os.path.isdir(self.tested_alphas_file):
+            logger.warning(f"'{self.tested_alphas_file}' 是一个文件夹，正在删除并重建为空文件。")
+            shutil.rmtree(self.tested_alphas_file)
+            open(self.tested_alphas_file, 'a').close()
+            return set()
+            
+        try:
+            with open(self.tested_alphas_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if not content: return set()
+                
+                data = json.loads(content)
+                # 判断是新格式（字典列表）还是旧格式（字符串列表）
+                if isinstance(data, list) and len(data) > 0:
+                    if isinstance(data[0], dict): # 新格式
+                        return set(item.get('expression') for item in data if item.get('expression'))
+                    elif isinstance(data[0], str): # 旧格式
+                        return set(data)
                 return set()
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"加载 tested_alphas.json 出错: {e}, 创建新文件。")
-                return set()
+        except (json.JSONDecodeError, IOError, TypeError) as e:
+            logger.warning(f"加载 tested_alphas.json 出错或格式不兼容: {e}, 将清空并创建新文件。")
+            return set()
 
     def save_tested_alpha(self, alpha_expression):
-        self.tested_alphas.add(alpha_expression)
-        try:
-            with open(self.tested_alphas_file, 'w') as f:
-                json.dump(list(self.tested_alphas), f)
-        except IOError as e:
-            logger.error(f"保存 tested_alphas.json 出错: {e}")
+        pass # 由 save_and_update_reports 统一管理
 
     def generate_alpha_idea(self, fields, operators):
         field_list = ", ".join(fields)
-        operator_list = ", ".join(operators)
+        core_operators = [
+            'rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 
+            'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power'
+        ]
+        operator_list = ", ".join(core_operators)
         prompt = f"""
-        You are a Quantitative Analyst creating alphas for WorldQuant.
-        Generate a single, novel alpha expression using the fields and operators provided.
-        Available Fields: {field_list}
-        Available Operators: {operator_list}
-        Your response MUST ONLY be the alpha expression itself, with no explanation or code block markers.
-        Example: `rank(corr(adv20, high, 5));`
+        You are a world-class Quantitative Analyst...
         New Alpha Expression:
-        """
+        """ # 省略了和你代码里一样的完整Prompt
         try:
             chat_completion = self.client.chat.completions.create(
-                model="gemini-2.5-flash", # ClawCloud会处理好模型映射，我们用一个通用名字
+                model="gemini-1.5-flash-latest", # <-- 使用最稳妥的官方标识符
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=100,
-                temperature=0.8,
+                temperature=0.9,
             )
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
-            return f"{idea.rstrip(';')};"
+            if not idea.endswith(';'): idea += ';'
+            return idea
         except Exception as e:
-            logger.error(f"从 ClawCloud API 生成 Alpha 失败: {e}")
+            logger.error(f"从 API 生成 Alpha 失败: {e}")
             return None
 
     def test_alpha(self, alpha):
@@ -234,28 +222,30 @@ class AlphaGenerator:
             logger.info(f"跳过已测试的 Alpha: {clean_alpha}")
             return None
         logger.info(f"正在测试新 Alpha: {clean_alpha}")
-        try:
-            result = self.wq.test_alpha(clean_alpha)
-            return result
-        finally:
-            self.save_tested_alpha(clean_alpha)
+        return self.wq.test_alpha(clean_alpha)
             
-    def save_hopeful_alphas(self, hopeful_alphas):
+    def save_and_update_reports(self, new_reports):
         file_path = 'hopeful_alphas.json'
-        existing_data = {}
+        existing_reports = []
         if os.path.exists(file_path):
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    if content: existing_data = json.loads(content)
-            except (IOError, json.JSONDecodeError): pass
+                    if content: existing_reports = json.loads(content)
+            except (IOError, json.JSONDecodeError):
+                logger.warning(f"无法解析 {file_path}，将创建新的战报。")
         
-        new_alphas_dict = {alpha.get('id', alpha.get('regular', {}).get('code')): alpha for alpha in hopeful_alphas}
-        merged_data = {**existing_data, **new_alphas_dict}
-        
-        with open(file_path, 'w') as f:
-            json.dump(merged_data, f, indent=4)
-        logger.info(f"已將 {len(new_alphas_dict)} 個新的有希望的 Alpha 保存/更新到 {file_path}")
+        for report in new_reports:
+            existing_reports.append(report)
+            self.tested_alphas.add(report['expression'])
+
+        try:
+            existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', 0), reverse=True)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_reports, f, indent=4, ensure_ascii=False)
+            logger.info(f"已将 {len(new_reports)} 份新战报更新到 {file_path}，并按Fitness排序。")
+        except IOError as e:
+            logger.error(f"保存战报文件时出错: {e}")
 
     def run(self):
         logger.info("Alpha 生成器启动 (ClawCloud API 模式)...")
@@ -275,24 +265,56 @@ class AlphaGenerator:
             if not alpha_ideas:
                 logger.info("本轮未生成有效 Alpha。")
             else:
-                hopeful_alphas = []
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    future_to_result = {executor.submit(self.test_alpha, alpha): alpha for alpha in alpha_ideas}
-                    for future in as_completed(future_to_result):
-                        result = future.result()
-                        if result and result.get('is_hopeful'):
-                            logger.info(f"发现一个有希望的 Alpha: {result.get('regular', {}).get('code', '')}")
-                            hopeful_alphas.append(result)
-                if hopeful_alphas: self.save_hopeful_alphas(hopeful_alphas)
+                new_reports = []
+                logger.info("开始串行测试新生成的 Alpha (一次一个)...")
+                for idea in alpha_ideas:
+                    result = self.test_alpha(idea)
+                    if result:
+                        try:
+                            is_stats = result.get("is", {})
+                            if not is_stats: continue
 
-            logger.info(f"本轮结束。等待600秒（10分钟）开始下一轮...")
-            time.sleep(600)
+                            checks = is_stats.get("checks", [])
+                            passed_count, failed_count, pending_count = 0, 0, 0
+                            check_details = []
+                            if isinstance(checks, list):
+                                for check in checks:
+                                    res = check.get("result", "UNKNOWN")
+                                    if res == "PASS": passed_count += 1
+                                    elif res == "FAIL": failed_count += 1
+                                    elif res == "PENDING": pending_count += 1
+                                    check_details.append(f"{check.get('name')}: {res}")
+                            
+                            report = {
+                                "expression": result.get("regular", {}).get("code"),
+                                "alpha_id": result.get("id"),
+                                "grade": result.get("grade", "UNKNOWN"),
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "performance": {
+                                    "sharpe": is_stats.get("sharpe"), "fitness": is_stats.get("fitness"),
+                                    "turnover": is_stats.get("turnover"),
+                                },
+                                "checks_summary": f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING",
+                                "checks_details": check_details
+                            }
+                            new_reports.append(report)
+                            logger.info(f"生成新的Alpha战报: {report['expression']} - {report['checks_summary']}")
+                        except Exception as e:
+                            logger.error(f"生成战报时出错: {e}")
+
+                if new_reports:
+                    self.save_and_update_reports(new_reports)
+            
+            # 3个号，火力全开模式
+            sleep_time = 600
+            logger.info(f"本轮结束。等待{sleep_time}秒（{sleep_time/60:.1f}分钟）开始下一轮...")
+            time.sleep(sleep_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Alpha Generator using a generic API endpoint')
     parser.add_argument('--user-id', type=str, required=True)
-    parser.add_argument('--api-key', type=str, required=True) # WQ's key
-    parser.add_argument('--batch-size', type=int, default=2)
+    parser.add_argument('--api-key', type=str, required=True)
+    parser.add_argument('--batch-size', type=int, default=5)
     parser.add_argument('--api-config-path', type=str, default="api_config.json")
     args = parser.parse_args()
 

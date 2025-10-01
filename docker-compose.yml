@@ -19,6 +19,6 @@ services:
       sh -c "python -u Web仪表盘.py &
       python -u alpha_orchestrator.py
       --credentials credential.txt
-      --batch-size 2 
+      --batch-size 5 
       --mode continuous"
     restart: always

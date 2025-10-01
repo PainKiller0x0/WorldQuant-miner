@@ -47,25 +47,25 @@ class ModelFleetManager:
         # Prioritize DeepSeek-R1 8B by default; keep smaller models as fallbacks
         self.model_fleet = [
             ModelInfo(
-		"qwen3:4b",4096,0,"Qwen3:4b - my preferred model",
-	    ),
-            ModelInfo(
-                "deepseek-r1:8b",
-                5200,
-                1,
-                "DeepSeek-R1 8B - Preferred default reasoning model",
+                "qwen3:0.6b", 700, 0, "Qwen3 0.6B - Fastest model"
             ),
             ModelInfo(
-                "llama3.2:3b", 2048, 2, "Llama 3.2 3B - Stable fallback (low VRAM)"
+                "qwen3:1.7b", 1400, 1, "Qwen3:1.5b - New preferred fast model"
+            ),
+            ModelInfo(
+		      "qwen3:4b", 4096, 2,"Qwen3:4b - my preferred model",
+	        ),
+            ModelInfo(
+                "deepseek-r1:8b",5200,2,"DeepSeek-R1 8B - Preferred default reasoning model",
+            ),
+            ModelInfo(
+                "llama3.2:3b", 2048, 3, "Llama 3.2 3B - Stable fallback (low VRAM)"
             ),
             # Intentionally keep a much smaller reasoning fallback and an emergency tiny model
             ModelInfo(
-                "deepseek-r1:1.5b",
-                1100,
-                3,
-                "DeepSeek-R1 1.5B - Small reasoning fallback",
+                "deepseek-r1:1.5b", 1100, 4,"DeepSeek-R1 1.5B - Small reasoning fallback",
             ),
-            ModelInfo("phi3:mini", 2200, 4, "Phi3 mini - Emergency fallback"),
+            ModelInfo("phi3:mini", 2200, 5, "Phi3 mini - Emergency fallback"),
         ]
 
         # State file to persist current model selection
@@ -905,7 +905,7 @@ class AlphaOrchestrator:
                         )
 
                     # 下次循环前的小延迟
-                    time.sleep(60)
+                    time.sleep(1860)
 
                 except KeyboardInterrupt:
                     logger.info("收到中断信号，正在停止...")

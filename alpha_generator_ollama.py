@@ -39,43 +39,83 @@ class WorldQuant:
         except requests.exceptions.RequestException as e:
             logger.error(f"WorldQuant Brain authentication failed: {e}")
             raise
-
     def get_data_fields(self):
-        url = f"{self.base_url}/data-fields"
-        params = {
-            "limit": 100,
-            "offset": 0,
-            "universe": "TOP3000",
-            "region": "USA"
-        }
-        try:
-            logger.info(f"正在從 {url} 獲取數據字段，參數: {params}")
-            response = self.session.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            if 'results' in data and isinstance(data['results'], list):
-                fields = [field['id'] for field in data['results'] if 'id' in field]
-                logger.info(f"成功獲取 {len(fields)} 個數據字段。")
-                return fields
-            else:
-                logger.error(f"從 get_data_fields 收到了意外的格式: {data}")
-                return []
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get data fields: {e}")
-            return []
+            # =================================================================
+            # == 终极解决方案 V3.0：硬编码标准新手数据字段 ==
+            # =================================================================
+            # 不再调用API，直接使用最可能的新手教学字段列表。
+            
+            logger.info("正在使用硬编码的标准新手数据字段列表 (TUTORIAL模式)")
+            
+            tutorial_fields = [
+                # --- 核心量价数据 ---
+                "open", 
+                "high", 
+                "low", 
+                "close", 
+                "volume",
+                "vwap",  # 成交量加权平均价
+                
+                # --- 常用衍生数据 ---
+                "adv5",  # 过去5天的日均成交量
+                "adv10",
+                "adv20",
+                "adv30",
+                "adv60",
+                "adv120",
+                "turnover", # 换手率
+                
+                # --- 可能包含的基础财务数据 ---
+                "market_cap", # 市值
+            ]
+            
+            logger.info(f"成功加載 {len(tutorial_fields)} 個手動設定的數據字段。")
+            return tutorial_fields
+    # def get_data_fields(self):
+    #     url = f"{self.base_url}/data-fields"
+    #     params = {"limit": 100, "offset": 0}
+    #     try:
+    #         logger.info(f"正在從 {url} 獲取數據字段，參數: {params}")
+    #         response = self.session.get(url, params=params)
+    #         response.raise_for_status()
+    #         data = response.json()
+    #         # 更具防御性的解析代码
+    #         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict) and 'id' in data[0]:
+    #              fields = [field['id'] for field in data if 'id' in field]
+    #         elif isinstance(data, dict) and 'results' in data and isinstance(data['results'], list):
+    #              fields = [field['id'] for field in data['results'] if 'id' in field]
+    #         else:
+    #              # 假设它是一个简单的字符串列表
+    #              fields = [str(item) for item in data]
+
+    #         logger.info(f"成功獲取 {len(fields)} 個數據字段。")
+    #         return fields
+    #     except requests.exceptions.RequestException as e:
+    #         # 打印出服务器返回的原始文本内容
+    #         error_content = e.response.text if e.response else "No response content"
+    #         logger.error(f"Failed to get data fields: {e} - Response: {error_content}")
+    #         return []
 
     def get_operators(self):
         url = f"{self.base_url}/operators"
         try:
             response = self.session.get(url)
             response.raise_for_status()
-            operators = [op['name'] for op in response.json() if 'name' in op]
+            data = response.json()
+            # 更具防御性的解析代码
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict) and 'name' in data[0]:
+                operators = [op['name'] for op in data if 'name' in op]
+            else:
+                # 假设它是一个简单的字符串列表
+                operators = [str(item) for item in data]
+    
             logger.info(f"成功獲取 {len(operators)} 個操作符。")
             return operators
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logger.error(f"Failed to get operators: {e}")
+            error_content = e.response.text if hasattr(e, 'response') and e.response else "No response content"
+            logger.error(f"Failed to get operators: {e} - Response: {error_content}")
             return []
-
+    
     def test_alpha(self, alpha_expression):
         url = f"{self.base_url}/alphas"
         payload = {"code": alpha_expression}
@@ -131,7 +171,7 @@ class AlphaGenerator:
         """
         payload = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": self.temperature}}
         try:
-            response = requests.post(self.ollama_url, json=payload, timeout=120)
+            response = requests.post(self.ollama_url, json=payload, timeout=1800)
             response.raise_for_status()
             idea = response.json()['response'].strip().replace('`', '')
             return f"{idea.rstrip(';')};"
@@ -167,7 +207,7 @@ class AlphaGenerator:
         while True:
             logger.info(f"開始新一輪 Alpha 生成，目標數量: {self.batch_size}")
             alpha_ideas = []
-            with ThreadPoolExecutor(max_workers=5) as executor:
+            with ThreadPoolExecutor(max_workers=1) as executor:
                 futures = {executor.submit(self.generate_alpha_idea, fields, operators) for _ in range(self.batch_size)}
                 for future in as_completed(futures):
                     idea = future.result()

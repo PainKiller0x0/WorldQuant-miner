@@ -1,0 +1,18 @@
+Generate a single, unique FASTEXPR alpha expression.
+
+Available Data Fields:
+{field_list}
+
+Available Operators:
+{operator_list}
+
+Instructions:
+1. Output ONLY the alpha expression.
+2. The expression must end with a semicolon ';'.
+3. Do not use comments, variables, or explanations.
+4. Combine several operators and fields to create a non-trivial expression.
+
+Example:
+ts_rank(rank(ts_corr(low, volume, 10)), 5);
+
+New Alpha Expression:

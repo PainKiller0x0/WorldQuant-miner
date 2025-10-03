@@ -15,11 +15,11 @@ LOG_DIR = "logs"
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler(os.path.join(LOG_DIR, "alpha_generator.log")),
-                        logging.StreamHandler()
-                    ])
+                      format='%(asctime)s - %(levelname)s - %(message)s',
+                      handlers=[
+                          logging.FileHandler(os.path.join(LOG_DIR, "alpha_generator.log")),
+                          logging.StreamHandler()
+                      ])
 logger = logging.getLogger(__name__)
 
 # --- WorldQuant API 部分 ---
@@ -160,7 +160,6 @@ class AlphaGenerator:
         self.tested_alphas = self.load_tested_alphas()
 
     def load_tested_alphas(self):
-        # 增加了对旧格式（字符串列表）的兼容性
         if not os.path.exists(self.tested_alphas_file):
             return set()
             
@@ -176,11 +175,10 @@ class AlphaGenerator:
                 if not content: return set()
                 
                 data = json.loads(content)
-                # 判断是新格式（字典列表）还是旧格式（字符串列表）
                 if isinstance(data, list) and len(data) > 0:
-                    if isinstance(data[0], dict): # 新格式
+                    if isinstance(data[0], dict):
                         return set(item.get('expression') for item in data if item.get('expression'))
-                    elif isinstance(data[0], str): # 旧格式
+                    elif isinstance(data[0], str):
                         return set(data)
                 return set()
         except (json.JSONDecodeError, IOError, TypeError) as e:
@@ -188,7 +186,7 @@ class AlphaGenerator:
             return set()
 
     def save_tested_alpha(self, alpha_expression):
-        pass # 由 save_and_update_reports 统一管理
+        pass
 
     def generate_alpha_idea(self, fields, operators):
         field_list = ", ".join(fields)
@@ -203,12 +201,17 @@ class AlphaGenerator:
         """ # 省略了和你代码里一样的完整Prompt
         try:
             chat_completion = self.client.chat.completions.create(
-                model="gemini-1.5-flash-latest", # <-- 使用最稳妥的官方标识符
+                model="gemini-2.5-flash",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=100,
                 temperature=0.9,
             )
-            idea = chat_completion.choices[0].message.content.strip().replace('`', '')
+
+            # <--- [修改 1] 增加原始输出日志，用于诊断AI返回内容
+            raw_idea = chat_completion.choices[0].message.content
+            logger.info(f"AI Model Raw Output: '{raw_idea}'")
+
+            idea = raw_idea.strip().replace('`', '')
             if not idea.endswith(';'): idea += ';'
             return idea
         except Exception as e:
@@ -259,9 +262,19 @@ class AlphaGenerator:
         while True:
             logger.info(f"开始新一轮 Alpha 生成，目标数量: {self.batch_size}")
             alpha_ideas = [self.generate_alpha_idea(fields, operators) for _ in range(self.batch_size)]
-            alpha_ideas = [idea for idea in alpha_ideas if idea]
             
-            logger.info(f"成功生成 {len(alpha_ideas)} 个新 Alpha 表达式。")
+            # <--- [修改 2] 增加对AI生成内容的验证过滤
+            valid_ideas = []
+            for idea in alpha_ideas:
+                # 检查 idea 是否有效 (不是None, 不是空字符串, 剥离空格后也不是单个分号)
+                if idea and idea.strip() and idea.strip() != ';':
+                    valid_ideas.append(idea)
+                else:
+                    logger.warning(f"过滤掉由AI生成的无效 Alpha: '{idea}'")
+            alpha_ideas = valid_ideas
+            # <--- [修改 2] 结束
+
+            logger.info(f"成功生成 {len(alpha_ideas)} 个有效的新 Alpha 表达式。")
             if not alpha_ideas:
                 logger.info("本轮未生成有效 Alpha。")
             else:
@@ -305,8 +318,7 @@ class AlphaGenerator:
                 if new_reports:
                     self.save_and_update_reports(new_reports)
             
-            # 3个号，火力全开模式
-            sleep_time = 600
+            sleep_time = 900
             logger.info(f"本轮结束。等待{sleep_time}秒（{sleep_time/60:.1f}分钟）开始下一轮...")
             time.sleep(sleep_time)
 

@@ -1,4 +1,4 @@
-# === 最终版，替换 alpha_generator_ollama.py 的所有内容 ===
+# alpha_generator_ollama.py (已修正)
 import argparse
 import logging
 import json
@@ -42,7 +42,6 @@ class WorldQuant:
             raise
 
     def get_data_fields(self):
-        # --- 最终修正：回归硬编码的“安全名单”，确保100%稳定 ---
         logger.info("正在使用硬编码的、绝对安全的官方核心数据字段列表...")
         safe_fields = [
             "open", "high", "low", "close", "volume", "vwap"
@@ -145,13 +144,10 @@ class WorldQuant:
         logger.warning(f"Alpha 模拟超时（超过10分钟）。")
         return None
 
-# --- 最终版 AlphaGenerator ---
 class AlphaGenerator:
     def __init__(self, wq, api_config_path, batch_size=5):
         self.wq = wq
         self.batch_size = batch_size
-        
-        # --- 最终修正：使用您验证过的唯一正确的模型名称 ---
         self.model_name = "gemini-2.5-flash-lite"
         logger.info(f"将使用您指定的模型: {self.model_name}")
 
@@ -169,12 +165,10 @@ class AlphaGenerator:
     def load_tested_alphas(self):
         if not os.path.exists(self.hopeful_alphas_file):
             return set()
-            
         try:
             with open(self.hopeful_alphas_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 if not content: return set()
-                
                 data = json.loads(content)
                 if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
                     return set(item.get('expression') for item in data if item.get('expression'))
@@ -192,20 +186,16 @@ class AlphaGenerator:
         operator_list = ", ".join(core_operators)
         prompt = f"""
         You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.
-
         Follow these rules strictly:
         1.  **Use ONLY the provided fields and operators.** Do not invent new ones.
         2.  **The expression MUST end with a semicolon (;).**
         3.  **Structure:** Combine multiple operators and fields. Simple expressions like `close;` or `rank(close);` are not useful.
         4.  **Logic:** The alpha should represent a plausible financial logic (e.g., momentum, mean-reversion, value).
         5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression. Do NOT include any explanations, markdown like \`\`\`alpha\`\`\`, or any other text.
-
         **Available Data Fields:** {field_list}
         **Core Allowed Operators:** {operator_list}
-
         **Example of a valid, complex expression:**
         `rank(ts_corr(vwap, ts_mean(volume, 20), 5)) - rank(ts_delta(close, 7));`
-
         New Alpha Expression:
         """
         try:
@@ -279,29 +269,23 @@ class AlphaGenerator:
                         try:
                             is_stats = result.get("is", {})
                             if not is_stats: continue
+                            alpha_id = result.get("id")
+                            if not alpha_id: continue
 
-                            checks = is_stats.get("checks", [])
-                            passed_count, failed_count, pending_count = 0, 0, 0
-                            check_details = []
-                            if isinstance(checks, list):
-                                for check in checks:
-                                    res = check.get("result", "UNKNOWN")
-                                    if res == "PASS": passed_count += 1
-                                    elif res == "FAIL": failed_count += 1
-                                    elif res == "PENDING": pending_count += 1
-                                    check_details.append(f"{check.get('name')}: {res}")
-                            
+                            # --- [核心修正 2] ---
+                            # 构建 Alpha 详情页链接并添加到报告中
+                            result_url = f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}"
+
                             report = {
                                 "expression": result.get("regular", {}).get("code"),
-                                "alpha_id": result.get("id"),
+                                "alpha_id": alpha_id,
+                                "result_url": result_url, # <--- 新增字段
                                 "grade": result.get("grade", "UNKNOWN"),
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "performance": {
                                     "sharpe": is_stats.get("sharpe"), "fitness": is_stats.get("fitness"),
                                     "turnover": is_stats.get("turnover"),
                                 },
-                                "checks_summary": f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING",
-                                "checks_details": check_details
                             }
                             new_reports.append(report)
                             logger.info(f"生成新的Alpha战报: {report['expression']} - Fitness: {report['performance']['fitness']}")

@@ -1,4 +1,4 @@
-# Web仪表盘.py
+# Web仪表盘.py (已修正)
 from flask import Flask, render_template, jsonify, request
 import json
 import os
@@ -155,7 +155,6 @@ class AlphaDashboard:
         except Exception as e:
             return [f"Error reading log file: {e}"]
 
-    # ---------- 新增：获取最近 N 个 alpha ----------
     def get_recent_alphas(self, n: int = 10) -> list:
         """返回最近的 n 个 alpha（按文件顺序末尾为最新）"""
         if not os.path.exists(self.hopeful_alphas_file):
@@ -168,16 +167,16 @@ class AlphaDashboard:
             alphas = json.loads(content)
             if not isinstance(alphas, list):
                 return []
-            # 取最后 n 条（如果n大于长度则返回全部），并按时间倒序（最新在前）
             recent = alphas[-n:][::-1]
             out = []
             for idx, a in enumerate(recent):
                 perf = a.get("performance", {}) or {}
-                # 优先字段选择策略
-                name = a.get("name") or a.get("alpha_id") or a.get("id") or f"Alpha_{int(time.time())}_{idx}"
-                created_at = a.get("created_at") or a.get("timestamp") or a.get("ts") or "N/A"
-                formula = a.get("formula") or a.get("expr") or a.get("source") or "N/A"
-                result_url = a.get("result_url") or a.get("url") or a.get("simulation_url") or None
+                name = a.get("name") or a.get("alpha_id") or f"Alpha_{int(time.time())}_{idx}"
+                created_at = a.get("created_at") or a.get("timestamp") or "N/A"
+                # --- [核心修正 1] ---
+                # 增加对 "expression" 键的识别
+                formula = a.get("formula") or a.get("expression") or "N/A"
+                result_url = a.get("result_url") or None
 
                 out.append({
                     "name": name,
@@ -207,7 +206,6 @@ def api_status():
 
 @app.route("/api/logs")
 def api_logs():
-    # 支持 ?lines=100 这样的参数
     try:
         lines = int(request.args.get("lines", 200))
     except ValueError:
@@ -215,14 +213,13 @@ def api_logs():
     return jsonify({"logs": dashboard.get_logs(lines=lines)})
 
 
-# ---------- 新增路由：最近 Alphas ----------
 @app.route("/api/recent_alphas")
 def api_recent_alphas():
     try:
         n = int(request.args.get("n", 10))
     except ValueError:
         n = 10
-    n = max(1, min(100, n))  # 限制 n 在 [1,100]
+    n = max(1, min(100, n))
     return jsonify({"recent": dashboard.get_recent_alphas(n)})
 
 
@@ -230,6 +227,6 @@ if __name__ == "__main__":
     if not os.path.exists("templates/dashboard_v3.html"):
         print("ERROR: templates/dashboard_v3.html not found!")
     else:
-        print("Starting Alpha Miner Dashboard v3.4...")
+        print("Starting Alpha Miner Dashboard v3.5...")
         print("Access at: http://localhost:5000")
         app.run(host="0.0.0.0", port=5000, debug=False)

@@ -44,6 +44,72 @@
         ]
     },
     {
+        "expression": "rank(ts_decay_linear(ts_delta(close, 3), 10)) - rank(ts_corr(vwap, volume, 5));",
+        "alpha_id": "d52n5xJJ",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 18:58:11",
+        "performance": {
+            "sharpe": -0.51,
+            "fitness": -0.13,
+            "turnover": 0.4339
+        },
+        "checks_summary": "5 PASS / 2 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: PASS",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
+        "expression": "rank(ts_delta(close, 10)) * rank(ts_std_dev(volume, 5));",
+        "alpha_id": "JjVnj0WE",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 18:56:48",
+        "performance": {
+            "sharpe": -0.62,
+            "fitness": -0.26,
+            "turnover": 0.2311
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
+        "expression": "rank(ts_delta(close, 3)) * rank(ts_corr(high, low, 10));",
+        "alpha_id": "P0JnN33J",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 19:12:33",
+        "performance": {
+            "sharpe": -0.82,
+            "fitness": -0.27,
+            "turnover": 0.4155
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
         "expression": "rank(ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5)) * rank(ts_delta(close, 3));",
         "alpha_id": "kqxnxVOd",
         "grade": "INFERIOR",
@@ -52,6 +118,50 @@
             "sharpe": -1.0,
             "fitness": -0.35,
             "turnover": 0.467
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 3), ts_mean(volume, 10), 5)) * rank(ts_delta(vwap, 1));",
+        "alpha_id": "d52nXVdw",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 19:17:20",
+        "performance": {
+            "sharpe": -1.21,
+            "fitness": -0.39,
+            "turnover": 0.6246
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
+        "expression": "rank(ts_delta(close, 3)) * rank(ts_std_dev(volume, 10));",
+        "alpha_id": "P0JnWXlL",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 19:19:22",
+        "performance": {
+            "sharpe": -1.04,
+            "fitness": -0.46,
+            "turnover": 0.3405
         },
         "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
         "checks_details": [
@@ -132,6 +242,28 @@
         ]
     },
     {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5)) * rank(ts_delta(vwap, 3));",
+        "alpha_id": "WjENjrdx",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 19:01:08",
+        "performance": {
+            "sharpe": -1.67,
+            "fitness": -0.79,
+            "turnover": 0.4592
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
         "expression": "rank(ts_delta(close, 3)) * rank(ts_corr(vwap, volume, 10));",
         "alpha_id": "vRKebrXa",
         "grade": "INFERIOR",
@@ -140,6 +272,28 @@
             "sharpe": -1.62,
             "fitness": -0.8,
             "turnover": 0.4295
+        },
+        "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
+        "checks_details": [
+            "LOW_SHARPE: FAIL",
+            "LOW_FITNESS: FAIL",
+            "LOW_TURNOVER: PASS",
+            "HIGH_TURNOVER: PASS",
+            "CONCENTRATED_WEIGHT: PASS",
+            "LOW_SUB_UNIVERSE_SHARPE: FAIL",
+            "SELF_CORRELATION: PENDING",
+            "MATCHES_COMPETITION: PASS"
+        ]
+    },
+    {
+        "expression": "rank(ts_corr(high, volume, 10)) * rank(ts_delta(close, 3));",
+        "alpha_id": "88mO1a2X",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-04 19:41:26",
+        "performance": {
+            "sharpe": -1.7,
+            "fitness": -0.86,
+            "turnover": 0.4326
         },
         "checks_summary": "4 PASS / 3 FAIL / 1 PENDING",
         "checks_details": [

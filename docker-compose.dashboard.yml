@@ -1,0 +1,22 @@
+version: '3.8'
+
+networks:
+  wq-network:
+    name: wq-network-shared
+    external: true
+
+services:
+  dashboard:
+    build: .
+    container_name: wq-dashboard
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./logs:/app/logs
+      - ./hopeful_alphas.json:/app/hopeful_alphas.json
+      - ./credential.txt:/app/credential.txt
+      - ./api_config.json:/app/api_config.json
+    command: python -u Web仪表盘.py
+    networks:
+      - wq-network
+    restart: always

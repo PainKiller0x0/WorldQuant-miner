@@ -1,4 +1,10 @@
-# === 粘贴替换掉旧的 docker-compose.yml ===
+version: '3.8'
+
+networks:
+  wq-network:
+    name: wq-network-shared
+    driver: bridge
+
 services:
   miner:
     build: .
@@ -6,19 +12,18 @@ services:
     environment:
       - WQ_USER_ID=${WQ_USER_ID}
       - WQ_API_KEY=${WQ_API_KEY}
-    ports:
-      - "5001:5001"
     volumes:
       - ./logs:/app/logs
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
       - ./提交日志.json:/app/提交日志.json
       - ./credential.txt:/app/credential.txt
       - ./tested_alphas.json:/app/tested_alphas.json
-      - ./api_config.json:/app/api_config.json # <-- 挂载新的API配置文件
+      - ./api_config.json:/app/api_config.json
     command: >
-      sh -c "python -u Web仪表盘.py &
-      python -u alpha_orchestrator.py
+      sh -c "python -u alpha_orchestrator.py
       --credentials credential.txt
-      --batch-size 5 
+      --batch-size 5
       --mode continuous"
+    networks:
+      - wq-network
     restart: always

@@ -1,4 +1,4 @@
-# Web仪表盘.py (已修正)
+# Web仪表盘.py (v1.1 - 排序修正版)
 from flask import Flask, render_template, jsonify, request
 import json
 import os
@@ -67,7 +67,6 @@ class AlphaDashboard:
             return {"status": "unknown", "last_activity": f"Could not read log file: {e}"}
 
     def _parse_credentials(self, content: str) -> tuple:
-        """智能解析凭证文件，兼容多种格式。"""
         try:
             data = json.loads(content)
             if isinstance(data, list) and len(data) == 2:
@@ -99,11 +98,9 @@ class AlphaDashboard:
             with open(self.credentials_file, 'r', encoding='utf-8') as f:
                 content = f.read()
             user_id, api_key = self._parse_credentials(content)
-
             session = requests.Session()
             session.auth = HTTPBasicAuth(user_id, api_key)
             response = session.post("https://api.worldquantbrain.com/authentication", timeout=10)
-
             if response.status_code == 201:
                 self.wq_status_cache = {"status": "connected", "message": "Authentication successful"}
             elif response.status_code == 429:
@@ -112,7 +109,6 @@ class AlphaDashboard:
                 self.wq_status_cache = {"status": "auth_failed", "message": f"Auth Failed: {response.status_code}"}
         except Exception as e:
             self.wq_status_cache = {"status": "error", "message": f"Check Failed: {str(e)}"}
-
         return self.wq_status_cache
 
     def get_statistics(self) -> dict:
@@ -127,22 +123,14 @@ class AlphaDashboard:
             alphas = json.loads(content)
             if not alphas:
                 return stats
-
             stats["hopeful_alphas_count"] = len(alphas)
             fitness = [a.get("performance", {}).get("fitness") for a in alphas if a.get("performance", {}).get("fitness") is not None]
             sharpe = [a.get("performance", {}).get("sharpe") for a in alphas if a.get("performance", {}).get("sharpe") is not None]
-
             if fitness:
-                try:
-                    stats["highest_fitness"] = round(max(fitness), 2)
-                except Exception:
-                    stats["highest_fitness"] = "N/A"
+                stats["highest_fitness"] = round(max(fitness), 2)
             if sharpe:
-                try:
-                    stats["avg_sharpe"] = round(sum(sharpe) / len(sharpe), 2)
-                except Exception:
-                    stats["avg_sharpe"] = "N/A"
-        except (IOError, json.JSONDecodeError):
+                stats["avg_sharpe"] = round(sum(sharpe) / len(sharpe), 2)
+        except (IOError, json.JSONDecodeError, TypeError):
             pass
         return stats
 
@@ -156,7 +144,7 @@ class AlphaDashboard:
             return [f"Error reading log file: {e}"]
 
     def get_recent_alphas(self, n: int = 10) -> list:
-        """返回最近的 n 个 alpha（按文件顺序末尾为最新）"""
+        """返回最近的 n 个 alpha（按时间戳倒序）"""
         if not os.path.exists(self.hopeful_alphas_file):
             return []
         try:
@@ -167,66 +155,55 @@ class AlphaDashboard:
             alphas = json.loads(content)
             if not isinstance(alphas, list):
                 return []
-            recent = alphas[-n:][::-1]
+
+            # --- [核心修正] ---
+            # 不再依赖文件顺序，而是显式地按时间戳排序
+            alphas.sort(key=lambda x: x.get('timestamp', '1970-01-01 00:00:00'), reverse=True)
+            
+            # 取排序后的前 n 个，即最新的 n 个
+            recent = alphas[:n]
+            
             out = []
             for idx, a in enumerate(recent):
                 perf = a.get("performance", {}) or {}
-                name = a.get("name") or a.get("alpha_id") or f"Alpha_{int(time.time())}_{idx}"
-                created_at = a.get("created_at") or a.get("timestamp") or "N/A"
-                # --- [核心修正 1] ---
-                # 增加对 "expression" 键的识别
-                formula = a.get("formula") or a.get("expression") or "N/A"
-                result_url = a.get("result_url") or None
-
                 out.append({
-                    "name": name,
+                    "name": a.get("alpha_id") or f"Alpha_{idx}",
                     "fitness": perf.get("fitness"),
                     "sharpe": perf.get("sharpe"),
-                    "created_at": created_at,
-                    "formula": formula,
-                    "result_url": result_url
+                    "created_at": a.get("timestamp", "N/A"),
+                    "formula": a.get("expression", "N/A"),
+                    "result_url": a.get("result_url"),
+                    "checks_summary": a.get("checks_summary", "") # 传递检查摘要
                 })
             return out
         except Exception as e:
+            app.logger.error(f"Error in get_recent_alphas: {e}")
             return [{"error": str(e)}]
 
-
 dashboard = AlphaDashboard()
-
 
 @app.route("/")
 def index():
     return render_template("dashboard_v3.html")
 
-
 @app.route("/api/status")
 def api_status():
     return jsonify(dashboard.get_system_status())
 
-
 @app.route("/api/logs")
 def api_logs():
-    try:
-        lines = int(request.args.get("lines", 200))
-    except ValueError:
-        lines = 200
+    lines = request.args.get("lines", 200, type=int)
     return jsonify({"logs": dashboard.get_logs(lines=lines)})
-
 
 @app.route("/api/recent_alphas")
 def api_recent_alphas():
-    try:
-        n = int(request.args.get("n", 10))
-    except ValueError:
-        n = 10
-    n = max(1, min(100, n))
-    return jsonify({"recent": dashboard.get_recent_alphas(n)})
-
+    n = request.args.get("n", 10, type=int)
+    return jsonify({"recent": dashboard.get_recent_alphas(n=n)})
 
 if __name__ == "__main__":
     if not os.path.exists("templates/dashboard_v3.html"):
         print("ERROR: templates/dashboard_v3.html not found!")
     else:
-        print("Starting Alpha Miner Dashboard v3.5...")
-        print("Access at: http://localhost:5000")
+        print("Starting Alpha Miner Dashboard v3.7...")
+        print("Access at: http://localhost:5001")
         app.run(host="0.0.0.0", port=5000, debug=False)

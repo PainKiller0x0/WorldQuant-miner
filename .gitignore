@@ -1,6 +1,7 @@
 # Credentials and sensitive data
 credential.txt
 credential.example.txt
+api_config.json
 *.key
 *.pem
 *.p12

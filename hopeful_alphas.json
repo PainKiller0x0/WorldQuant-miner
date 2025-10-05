@@ -1,5 +1,17 @@
 [
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(open, 5));",
+        "alpha_id": "d52xj6nJ",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/d52xj6nJ",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:16:50",
+        "performance": {
+            "sharpe": 1.68,
+            "fitness": 0.88,
+            "turnover": 0.3703
+        }
+    },
+    {
         "expression": "rank(ts_corr(high, low, 10)) - rank(ts_delta(close, 5));",
         "alpha_id": "KPKXZGpl",
         "grade": "INFERIOR",
@@ -106,6 +118,18 @@
         }
     },
     {
+        "expression": "rank(ts_decay_linear(signed_power(divide(vwap, close), 2), 10)) * rank(ts_std_dev(volume, 5));",
+        "alpha_id": "ZYRppPZd",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/ZYRppPZd",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:40:40",
+        "performance": {
+            "sharpe": 0.8,
+            "fitness": 0.41,
+            "turnover": 0.2546
+        }
+    },
+    {
         "expression": "rank(ts_corr(ts_mean(close, 10), volume, 5)) - rank(ts_delta(vwap, 3));",
         "alpha_id": "88mnnG2z",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/88mnnG2z",
@@ -198,6 +222,18 @@
             "SELF_CORRELATION: PENDING",
             "MATCHES_COMPETITION: PASS"
         ]
+    },
+    {
+        "expression": "rank(ts_decay_linear(vwap, 10) - ts_mean(close, 5)) * rank(ts_std_dev(volume, 20));",
+        "alpha_id": "E5ZwkPWL",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/E5ZwkPWL",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:31:42",
+        "performance": {
+            "sharpe": 0.53,
+            "fitness": 0.23,
+            "turnover": 0.2296
+        }
     },
     {
         "expression": "rank(ts_decay_linear(ts_corr(close, vwap, 10), 15)) * rank(ts_delta(volume, 5));",
@@ -308,6 +344,42 @@
         }
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 5));",
+        "alpha_id": "MPjpKW3k",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/MPjpKW3k",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:10:14",
+        "performance": {
+            "sharpe": 0.45,
+            "fitness": 0.14,
+            "turnover": 0.2569
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(close, 20)) * rank(ts_corr(high, low, 10));",
+        "alpha_id": "P0JppVax",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/P0JppVax",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:47:39",
+        "performance": {
+            "sharpe": 0.35,
+            "fitness": 0.13,
+            "turnover": 0.2084
+        }
+    },
+    {
+        "expression": "rank(ts_corr(high, low, 10)) - rank(ts_std_dev(close, 20));",
+        "alpha_id": "E5ZwEA5K",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/E5ZwEA5K",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:49:27",
+        "performance": {
+            "sharpe": 0.35,
+            "fitness": 0.11,
+            "turnover": 0.2343
+        }
+    },
+    {
         "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5)) - rank(ts_delta(open, 3));",
         "alpha_id": "gJYmXqPe",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/gJYmXqPe",
@@ -389,6 +461,18 @@
             "sharpe": 0.25,
             "fitness": 0.06,
             "turnover": 0.2713
+        }
+    },
+    {
+        "expression": "rank(ts_corr(high, low, 10)) - rank(ts_decay_linear(ts_mean(volume, 5), 3));",
+        "alpha_id": "MPjpbO6n",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/MPjpbO6n",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:17:36",
+        "performance": {
+            "sharpe": 0.23,
+            "fitness": 0.05,
+            "turnover": 0.2307
         }
     },
     {
@@ -485,6 +569,42 @@
             "sharpe": 0.09,
             "fitness": 0.01,
             "turnover": 0.5289
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(multiply(close, 0.7) + multiply(vwap, 0.3), 10)) - rank(ts_std_dev(volume, 20));",
+        "alpha_id": "RRJpZWj0",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/RRJpZWj0",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:33:22",
+        "performance": {
+            "sharpe": 0.05,
+            "fitness": 0.01,
+            "turnover": 0.0429
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, volume, 10), 5)) - rank(ts_zscore(vwap, 20));",
+        "alpha_id": "9qzw60Pr",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/9qzw60Pr",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:55:59",
+        "performance": {
+            "sharpe": 0.05,
+            "fitness": 0.01,
+            "turnover": 0.2966
+        }
+    },
+    {
+        "expression": "rank(ts_mean(close, 10)) * rank(ts_delta(volume, 5)) - rank(ts_std_dev(high, 20));",
+        "alpha_id": "blYLvlK6",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/blYLvlK6",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:24:57",
+        "performance": {
+            "sharpe": 0.08,
+            "fitness": 0.01,
+            "turnover": 0.3128
         }
     },
     {
@@ -608,6 +728,18 @@
         }
     },
     {
+        "expression": "rank(ts_decay_linear(ts_delta(close, 3), 10) - ts_decay_linear(ts_delta(open, 5), 15));",
+        "alpha_id": "om1KWn7v",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/om1KWn7v",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:36:36",
+        "performance": {
+            "sharpe": -0.26,
+            "fitness": -0.06,
+            "turnover": 0.3046
+        }
+    },
+    {
         "expression": "rank(ts_corr(ts_delta(close, 3), ts_std_dev(volume, 10), 5)) - rank(ts_mean(vwap, 20));",
         "alpha_id": "rK1bakb8",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/rK1bakb8",
@@ -617,6 +749,18 @@
             "sharpe": -0.27,
             "fitness": -0.07,
             "turnover": 0.3346
+        }
+    },
+    {
+        "expression": "rank(ts_mean(close, 10) - ts_mean(close, 30)) * rank(ts_std_dev(volume, 20));",
+        "alpha_id": "1Yq79alm",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/1Yq79alm",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 11:45:04",
+        "performance": {
+            "sharpe": -0.21,
+            "fitness": -0.07,
+            "turnover": 0.1006
         }
     },
     {
@@ -692,6 +836,18 @@
         }
     },
     {
+        "expression": "rank(ts_corr(close, volume, 10)) - rank(ts_mean(ts_delta(high, 5), 15));",
+        "alpha_id": "E5ZwlKmJ",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/E5ZwlKmJ",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:13:51",
+        "performance": {
+            "sharpe": -0.38,
+            "fitness": -0.11,
+            "turnover": 0.2906
+        }
+    },
+    {
         "expression": "rank(ts_mean(close, 10)) * rank(ts_corr(volume, vwap, 5)) - rank(ts_std_dev(open, 20));",
         "alpha_id": "leL0oN25",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/leL0oN25",
@@ -726,6 +882,18 @@
         ]
     },
     {
+        "expression": "rank(ts_decay_linear(rank(ts_corr(close, volume, 10)), 5)) - rank(ts_zscore(ts_mean(vwap, 20), 15));",
+        "alpha_id": "A1Rwn5jX",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/A1Rwn5jX",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:23:35",
+        "performance": {
+            "sharpe": -0.44,
+            "fitness": -0.13,
+            "turnover": 0.2744
+        }
+    },
+    {
         "expression": "rank(ts_decay_linear(vwap, 10)) * rank(ts_delta(close, 5)) - rank(ts_std_dev(volume, 20));",
         "alpha_id": "JjVdw0pW",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/JjVdw0pW",
@@ -735,6 +903,18 @@
             "sharpe": -0.36,
             "fitness": -0.16,
             "turnover": 0.1716
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_delta(close, 3), 10)) * rank(ts_corr(high, low, 5));",
+        "alpha_id": "58Zwq0WX",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/58Zwq0WX",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:02:44",
+        "performance": {
+            "sharpe": -0.57,
+            "fitness": -0.16,
+            "turnover": 0.3958
         }
     },
     {
@@ -846,6 +1026,18 @@
         }
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_mean(volume, 5)) + rank(ts_delta(high, 3));",
+        "alpha_id": "P0JpnrVw",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/P0JpnrVw",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:19:09",
+        "performance": {
+            "sharpe": -0.65,
+            "fitness": -0.23,
+            "turnover": 0.3343
+        }
+    },
+    {
         "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5)) - rank(ts_std_dev(open, 20));",
         "alpha_id": "WjE9AJbk",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/WjE9AJbk",
@@ -916,6 +1108,30 @@
         }
     },
     {
+        "expression": "rank(ts_corr(high, volume, 10)) - rank(ts_corr(low, volume, 5));",
+        "alpha_id": "0mb7dZAk",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/0mb7dZAk",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:54:10",
+        "performance": {
+            "sharpe": -0.98,
+            "fitness": -0.26,
+            "turnover": 0.5041
+        }
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(open, 5)) - rank(ts_mean(volume, 20));",
+        "alpha_id": "QP1aG9Lg",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/QP1aG9Lg",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:06:34",
+        "performance": {
+            "sharpe": -0.57,
+            "fitness": -0.26,
+            "turnover": 0.202
+        }
+    },
+    {
         "expression": "rank(ts_delta(close, 3)) * rank(ts_corr(high, low, 10));",
         "alpha_id": "P0JnN33J",
         "grade": "INFERIOR",
@@ -974,6 +1190,42 @@
         }
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(high, 5)) - rank(ts_mean(volume, 20));",
+        "alpha_id": "O01pawYb",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/O01pawYb",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:02:31",
+        "performance": {
+            "sharpe": -0.6,
+            "fitness": -0.28,
+            "turnover": 0.2009
+        }
+    },
+    {
+        "expression": "rank(ts_corr(high, volume, 10)) - rank(ts_mean(close, 5));",
+        "alpha_id": "zqv959bd",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/zqv959bd",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:20:41",
+        "performance": {
+            "sharpe": -0.56,
+            "fitness": -0.28,
+            "turnover": 0.2196
+        }
+    },
+    {
+        "expression": "rank(ts_corr(high, low, 10)) * rank(ts_delta(close, 5)) - rank(ts_mean(volume, 20));",
+        "alpha_id": "RRJp7Ewg",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/RRJp7Ewg",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:15:30",
+        "performance": {
+            "sharpe": -0.61,
+            "fitness": -0.28,
+            "turnover": 0.2086
+        }
+    },
+    {
         "expression": "rank(ts_mean(ts_delta(close, 3), 10)) * rank(ts_std_dev(volume, 20));",
         "alpha_id": "A1RkoQlX",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/A1RkoQlX",
@@ -983,6 +1235,54 @@
             "sharpe": -0.6,
             "fitness": -0.29,
             "turnover": 0.1673
+        }
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) - rank(ts_decay_linear(ts_mean(close, 5), 20));",
+        "alpha_id": "0mb7AYZK",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/0mb7AYZK",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:22:09",
+        "performance": {
+            "sharpe": -0.58,
+            "fitness": -0.29,
+            "turnover": 0.2165
+        }
+    },
+    {
+        "expression": "rank(ts_corr(high, low, 10)) * rank(ts_delta(close, 3)) - rank(ts_mean(volume, 15));",
+        "alpha_id": "leLVzgjO",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/leLVzgjO",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:59:56",
+        "performance": {
+            "sharpe": -0.68,
+            "fitness": -0.3,
+            "turnover": 0.2355
+        }
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(high, 5)) - rank(ts_mean(volume, 15));",
+        "alpha_id": "QP1aQMNG",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/QP1aQMNG",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:33:14",
+        "performance": {
+            "sharpe": -0.63,
+            "fitness": -0.3,
+            "turnover": 0.202
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(high, 10)) * rank(ts_decay_linear(low, 10)) - rank(ts_mean(close, 20));",
+        "alpha_id": "np1gwqv3",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/np1gwqv3",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:30:26",
+        "performance": {
+            "sharpe": -0.63,
+            "fitness": -0.31,
+            "turnover": 0.0265
         }
     },
     {
@@ -1222,6 +1522,30 @@
         }
     },
     {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_mean(ts_std_dev(close, 20), 10));",
+        "alpha_id": "mLP8Am8p",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/mLP8Am8p",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:51:40",
+        "performance": {
+            "sharpe": -0.83,
+            "fitness": -0.43,
+            "turnover": 0.2179
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(vwap, 10) - ts_mean(close, 20));",
+        "alpha_id": "vRKLmmn3",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/vRKLmmn3",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:36:05",
+        "performance": {
+            "sharpe": -0.73,
+            "fitness": -0.43,
+            "turnover": 0.1601
+        }
+    },
+    {
         "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(high, 5));",
         "alpha_id": "kqxQLqLO",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/kqxQLqLO",
@@ -1258,6 +1582,30 @@
         }
     },
     {
+        "expression": "rank(ts_corr(ts_delta(close, 3), ts_delta(volume, 3), 10)) * rank(ts_zscore(close, 20));",
+        "alpha_id": "QP1a2vLK",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/QP1a2vLK",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:14:26",
+        "performance": {
+            "sharpe": -0.89,
+            "fitness": -0.45,
+            "turnover": 0.2571
+        }
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_zscore(ts_std_dev(close, 20), 10));",
+        "alpha_id": "XgjpWqZl",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/XgjpWqZl",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 14:19:42",
+        "performance": {
+            "sharpe": -1.13,
+            "fitness": -0.45,
+            "turnover": 0.3516
+        }
+    },
+    {
         "expression": "rank(ts_delta(close, 3)) * rank(ts_std_dev(volume, 10));",
         "alpha_id": "P0JnWXlL",
         "grade": "INFERIOR",
@@ -1289,6 +1637,18 @@
             "sharpe": -0.84,
             "fitness": -0.46,
             "turnover": 0.2249
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(high, 10) - ts_decay_linear(low, 10)) * rank(ts_delta(close, 5));",
+        "alpha_id": "58ZwNgpk",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/58ZwNgpk",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:28:44",
+        "performance": {
+            "sharpe": -0.92,
+            "fitness": -0.46,
+            "turnover": 0.2958
         }
     },
     {
@@ -1395,6 +1755,18 @@
             "sharpe": -1.25,
             "fitness": -0.73,
             "turnover": 0.3196
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, volume, 10), 5)) * rank(ts_zscore(ts_delta(vwap, 3), 20));",
+        "alpha_id": "2r17KqN8",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/2r17KqN8",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 13:34:34",
+        "performance": {
+            "sharpe": -1.55,
+            "fitness": -0.75,
+            "turnover": 0.3996
         }
     },
     {
@@ -1613,6 +1985,18 @@
             "sharpe": -1.64,
             "fitness": -0.88,
             "turnover": 0.2794
+        }
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(high,volume,10),5)) * rank(ts_delta(close,3));",
+        "alpha_id": "ZYRpkPod",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/ZYRpkPod",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-05 12:24:24",
+        "performance": {
+            "sharpe": -1.69,
+            "fitness": -0.89,
+            "turnover": 0.3917
         }
     }
 ]

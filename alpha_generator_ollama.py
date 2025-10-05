@@ -8,6 +8,7 @@ from requests.adapters import HTTPAdapter, Retry
 from openai import OpenAI
 from datetime import datetime
 import threading
+import re
 
 # --- 日志配置 ---
 LOG_DIR = "logs"
@@ -21,7 +22,14 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
-# --- WorldQuant API 部分 ---
+def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
+    ts_functions_pattern = r'ts_([a-zA-Z_]+)\(([^,)]+)\)'
+    match = re.search(ts_functions_pattern, alpha_code)
+    if match:
+        logger.warning(f"本地预检失败: Alpha '{alpha_code}' 中的函数 '{match.group(0)}' 可能缺少 lookback 参数。已拒绝。")
+        return True
+    return False
+
 class WorldQuant:
     def __init__(self, user_id, api_key):
         self.user_id = user_id
@@ -185,33 +193,22 @@ class AlphaGenerator:
 
     def generate_alpha_idea(self, fields, operators):
         field_list = ", ".join(fields)
-        core_operators = [
-            'rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 
-            'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power'
-        ]
+        core_operators = ['rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power']
         operator_list = ", ".join(core_operators)
         prompt = f"""
         You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.
         Follow these rules strictly:
-        1.  **Use ONLY the provided fields and operators.** Do not invent new ones.
+        1.  **Use ONLY the provided fields and operators.**
         2.  **The expression MUST end with a semicolon (;).**
-        3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) are time-series operators and MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).
-        4.  **Structure:** Combine multiple operators and fields. Simple expressions like `close;` or `rank(close);` are not useful.
-        5.  **Logic:** The alpha should represent a plausible financial logic (e.g., momentum, mean-reversion, value).
-        6.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression. Do NOT include any explanations, markdown, or any other text.
+        3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).
+        4.  **Structure:** Combine multiple operators and fields.
+        5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression.
         **Available Data Fields:** {field_list}
         **Core Allowed Operators:** {operator_list}
-        **Example of a valid, complex expression:**
-        `rank(ts_corr(vwap, ts_mean(volume, 20), 5)) - rank(ts_delta(close, 7));`
         New Alpha Expression:
         """
         try:
-            chat_completion = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=100,
-                temperature=0.9,
-            )
+            chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=100, temperature=0.9)
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
             if idea and not idea.endswith(';'): idea += ';'
             return idea
@@ -231,7 +228,8 @@ class AlphaGenerator:
         
         for report in new_reports:
             existing_reports.append(report)
-            self.tested_alphas.add(report['expression'])
+            if 'expression' in report:
+                self.tested_alphas.add(report['expression'])
 
         try:
             existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
@@ -252,20 +250,23 @@ class AlphaGenerator:
         while True:
             logger.info(f"开始新一轮 Alpha 生成，目标数量: {self.batch_size}")
             alpha_ideas = [self.generate_alpha_idea(fields, operators) for _ in range(self.batch_size)]
-            alpha_ideas = [idea for idea in alpha_ideas if idea and idea not in self.tested_alphas]
             
-            logger.info(f"成功生成 {len(alpha_ideas)} 个待测试的新 Alpha 表达式。")
+            valid_ideas_to_test = []
+            for idea in alpha_ideas:
+                if idea and idea not in self.tested_alphas:
+                    if not is_alpha_syntactically_suspicious(idea):
+                        valid_ideas_to_test.append(idea)
+                    else:
+                        self.tested_alphas.add(idea) 
             
-            if alpha_ideas:
+            logger.info(f"成功生成 {len(valid_ideas_to_test)} 个通过预检且待测试的新 Alpha 表达式。")
+            
+            if valid_ideas_to_test:
                 new_reports = []
-                # --- [核心修正] 回归到稳定的串行测试模式 ---
                 logger.info("开始串行测试新生成的 Alpha (一次一个)...")
-                for idea in alpha_ideas:
-                    clean_alpha = idea.strip()
-                    if not clean_alpha: continue
-                    
-                    logger.info(f"正在测试新 Alpha: {clean_alpha}")
-                    result = self.wq.test_alpha(clean_alpha)
+                for idea in valid_ideas_to_test:
+                    logger.info(f"正在测试新 Alpha: {idea}")
+                    result = self.wq.test_alpha(idea)
                     
                     if result:
                         try:
@@ -273,19 +274,39 @@ class AlphaGenerator:
                             alpha_id = result.get("id")
                             if not is_stats or not alpha_id: continue
 
-                            result_url = f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}"
+                            # --- [核心修正] ---
+                            # 1. 解析详细的检查结果
+                            checks = is_stats.get("checks", [])
+                            passed_count, failed_count, pending_count = 0, 0, 0
+                            check_details = []
+                            if isinstance(checks, list):
+                                for check in checks:
+                                    res = check.get("result", "UNKNOWN")
+                                    if res == "PASS": passed_count += 1
+                                    elif res == "FAIL": failed_count += 1
+                                    elif res == "PENDING": pending_count += 1
+                                    # 保存详细的描述信息
+                                    check_details.append(check.get("details", f"{check.get('name')}: {res}"))
+                            
+                            checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
+
+                            # 2. 将检查结果存入报告
                             report = {
                                 "expression": result.get("regular", {}).get("code"),
                                 "alpha_id": alpha_id,
-                                "result_url": result_url,
+                                "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
                                 "grade": result.get("grade", "UNKNOWN"),
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "performance": {
-                                    "sharpe": is_stats.get("sharpe"), "fitness": is_stats.get("fitness"),
-                                    "turnover": is_stats.get("turnover"),
-                                },
+                                "performance": is_stats,
+                                "checks_summary": checks_summary,
+                                "checks_details": check_details,
                             }
-                            logger.info(f"生成新的Alpha战报: {report['expression']} - Fitness: {report['performance'].get('fitness')}")
+                            
+                            # 3. 生成更丰富的日志
+                            perf_items = is_stats.items()
+                            stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
+                            logger.info(f"生成新的Alpha战报 [{checks_summary}] -> {stats_str}")
+                            
                             new_reports.append(report)
                         except Exception as e:
                             logger.error(f"处理已完成的 Alpha 结果时出错: {e}")
@@ -293,7 +314,7 @@ class AlphaGenerator:
                 if new_reports:
                     self.save_and_update_reports(new_reports)
             
-            sleep_time = 300 # 你设置的5分钟
+            sleep_time = 300
             logger.info(f"本轮结束。等待{sleep_time}秒（{sleep_time/60:.1f}分钟）开始下一轮...")
             time.sleep(sleep_time)
 

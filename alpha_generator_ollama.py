@@ -1,14 +1,13 @@
-# alpha_generator_ollama.py (已修正)
 import argparse
 import logging
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
+from requests.adapters import HTTPAdapter, Retry
 from openai import OpenAI
 from datetime import datetime
-import shutil
+import threading
 
 # --- 日志配置 ---
 LOG_DIR = "logs"
@@ -28,24 +27,33 @@ class WorldQuant:
         self.user_id = user_id
         self.api_key = api_key
         self.base_url = "https://api.worldquantbrain.com"
-        self.session = requests.Session()
+        self.session = self._create_resilient_session()
+        self.auth_lock = threading.Lock()
         self._authenticate()
 
+    def _create_resilient_session(self):
+        session = requests.Session()
+        retries = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
+        adapter = HTTPAdapter(max_retries=retries)
+        session.mount('https://', adapter)
+        logger.info("创建了带有3次重试机制的API会话。")
+        return session
+
     def _authenticate(self):
-        url = f"{self.base_url}/authentication"
-        try:
-            response = self.session.post(url, auth=(self.user_id, self.api_key))
-            response.raise_for_status()
-            logger.info("WorldQuant Brain authentication successful.")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"WorldQuant Brain authentication failed: {e}")
-            raise
+        with self.auth_lock:
+            url = f"{self.base_url}/authentication"
+            try:
+                self.session.auth = (self.user_id, self.api_key)
+                response = self.session.post(url, timeout=30)
+                response.raise_for_status()
+                logger.info("WorldQuant Brain authentication successful.")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"WorldQuant Brain authentication failed: {e}")
+                raise
 
     def get_data_fields(self):
         logger.info("正在使用硬编码的、绝对安全的官方核心数据字段列表...")
-        safe_fields = [
-            "open", "high", "low", "close", "volume", "vwap"
-        ]
+        safe_fields = ["open", "high", "low", "close", "volume", "vwap"]
         logger.info(f"成功加载 {len(safe_fields)} 个核心数据字段。")
         return safe_fields
 
@@ -55,10 +63,12 @@ class WorldQuant:
             response = self.session.get(url)
             response.raise_for_status()
             data = response.json()
-            if 'results' in data and isinstance(data['results'], list):
-                operators = [str(op) for op in data['results']]
-            else:
-                operators = [str(op) for op in data]
+            op_list = []
+            if isinstance(data, dict):
+                op_list = data.get('results', [])
+            elif isinstance(data, list):
+                op_list = data
+            operators = [str(op) for op in op_list]
             logger.info(f"成功獲取 {len(operators)} 個操作符。")
             return operators
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
@@ -77,41 +87,38 @@ class WorldQuant:
             }
         }
         
-        progress_url = None
-        for attempt in range(2):
-            try:
+        try:
+            submit_response = self.session.post(submit_url, json=payload, timeout=120)
+            if submit_response.status_code == 401:
+                logger.warning("提交时认证失败 (401)，正在尝试重新认证...")
+                self._authenticate()
                 submit_response = self.session.post(submit_url, json=payload, timeout=120)
-                if submit_response.status_code == 401:
-                    logger.warning("第1步：提交时认证失败 (401)，正在尝试重新认证...")
-                    self._authenticate()
-                    if attempt == 0: continue
-                
-                submit_response.raise_for_status()
-                progress_url = submit_response.headers.get('location')
-                
-                if not progress_url:
-                    logger.error(f"提交模拟任务后，未能从Header获取 location。")
-                    return None
-                
-                logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
-                break
-            except requests.exceptions.RequestException as e:
-                error_content = "No response body"
-                if e.response is not None:
-                    try: error_content = e.response.json()
-                    except json.JSONDecodeError: error_content = e.response.text
-                logger.error(f"第1步：提交模拟任务失败 '{alpha_expression}': {e} - Response: {error_content}")
+            
+            submit_response.raise_for_status()
+            progress_url = submit_response.headers.get('location')
+            
+            if not progress_url:
+                logger.error(f"提交模拟任务后，未能从Header获取 location。")
                 return None
-        else:
-            logger.error("重新认证后，提交模拟任务依然失败。")
+            
+            logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
+        
+        except requests.exceptions.RequestException as e:
+            error_content = "No response body"
+            if e.response is not None:
+                try: error_content = e.response.json()
+                except json.JSONDecodeError: error_content = e.response.text
+            logger.error(f"提交模拟任务失败 '{alpha_expression}': {e} - Response: {error_content}")
             return None
 
+        POLLING_TIMEOUT = 900
         polling_start_time = time.time()
-        while time.time() - polling_start_time < 600:
+        
+        while time.time() - polling_start_time < POLLING_TIMEOUT:
             try:
                 poll_response = self.session.get(progress_url, timeout=120)
                 if poll_response.status_code == 401:
-                    logger.warning("第2/3步：轮询时认证失败 (401)，正在尝试重新认证...")
+                    logger.warning("轮询时认证失败 (401)，正在尝试重新认证...")
                     self._authenticate()
                     continue
                 poll_response.raise_for_status()
@@ -125,7 +132,7 @@ class WorldQuant:
                         return None
                     
                     final_alpha_url = f"{self.base_url}/alphas/{alpha_id}"
-                    final_response = self.session.get(final_alpha_url)
+                    final_response = self.session.get(final_alpha_url, timeout=30)
                     final_data = final_response.json()
                     logger.info(f"Alpha '{alpha_id}' 模拟完成。")
                     return final_data
@@ -134,14 +141,15 @@ class WorldQuant:
                     return None
                 else:
                     logger.debug(f"Alpha 仍在模拟中... 状态: {status}")
-                    time.sleep(5)
+                    time.sleep(10)
             except requests.exceptions.RequestException as e:
-                logger.error(f"第2/3步：轮询结果失败: {e}")
-                time.sleep(10)
+                logger.error(f"轮询结果失败: {e}，将在15秒后重试...")
+                time.sleep(15)
             except Exception as e:
                 logger.error(f"处理轮询结果时发生未知错误: {e}")
                 return None
-        logger.warning(f"Alpha 模拟超时（超过10分钟）。")
+        
+        logger.warning(f"Alpha 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
         return None
 
 class AlphaGenerator:
@@ -170,11 +178,9 @@ class AlphaGenerator:
                 content = f.read()
                 if not content: return set()
                 data = json.loads(content)
-                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-                    return set(item.get('expression') for item in data if item.get('expression'))
-                return set()
-        except (json.JSONDecodeError, IOError, TypeError) as e:
-            logger.warning(f"加载 {self.hopeful_alphas_file} 出错或格式不兼容: {e}, 将创建一个新的记录文件。")
+                return set(item.get('expression') for item in data if item.get('expression'))
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"加载 {self.hopeful_alphas_file} 出错: {e}, 将创建一个新的记录文件。")
             return set()
 
     def generate_alpha_idea(self, fields, operators):
@@ -189,9 +195,10 @@ class AlphaGenerator:
         Follow these rules strictly:
         1.  **Use ONLY the provided fields and operators.** Do not invent new ones.
         2.  **The expression MUST end with a semicolon (;).**
-        3.  **Structure:** Combine multiple operators and fields. Simple expressions like `close;` or `rank(close);` are not useful.
-        4.  **Logic:** The alpha should represent a plausible financial logic (e.g., momentum, mean-reversion, value).
-        5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression. Do NOT include any explanations, markdown like \`\`\`alpha\`\`\`, or any other text.
+        3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) are time-series operators and MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).
+        4.  **Structure:** Combine multiple operators and fields. Simple expressions like `close;` or `rank(close);` are not useful.
+        5.  **Logic:** The alpha should represent a plausible financial logic (e.g., momentum, mean-reversion, value).
+        6.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression. Do NOT include any explanations, markdown, or any other text.
         **Available Data Fields:** {field_list}
         **Core Allowed Operators:** {operator_list}
         **Example of a valid, complex expression:**
@@ -206,21 +213,12 @@ class AlphaGenerator:
                 temperature=0.9,
             )
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
-            if not idea.endswith(';'): idea += ';'
+            if idea and not idea.endswith(';'): idea += ';'
             return idea
         except Exception as e:
             logger.error(f"从 API 生成 Alpha 失败: {e}")
             return None
 
-    def test_alpha(self, alpha):
-        clean_alpha = alpha.strip()
-        if not clean_alpha: return None
-        if clean_alpha in self.tested_alphas:
-            logger.info(f"跳过已测试的 Alpha: {clean_alpha}")
-            return None
-        logger.info(f"正在测试新 Alpha: {clean_alpha}")
-        return self.wq.test_alpha(clean_alpha)
-            
     def save_and_update_reports(self, new_reports):
         existing_reports = []
         if os.path.exists(self.hopeful_alphas_file):
@@ -236,7 +234,7 @@ class AlphaGenerator:
             self.tested_alphas.add(report['expression'])
 
         try:
-            existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', 0), reverse=True)
+            existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
             with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f:
                 json.dump(existing_reports, f, indent=4, ensure_ascii=False)
             logger.info(f"已将 {len(new_reports)} 份新战报更新到 {self.hopeful_alphas_file}，并按Fitness排序。")
@@ -249,37 +247,37 @@ class AlphaGenerator:
         operators = self.wq.get_operators()
         if not fields or not operators:
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
-            time.sleep(60)
-            return
+            time.sleep(60); return
 
         while True:
             logger.info(f"开始新一轮 Alpha 生成，目标数量: {self.batch_size}")
             alpha_ideas = [self.generate_alpha_idea(fields, operators) for _ in range(self.batch_size)]
-            alpha_ideas = [idea for idea in alpha_ideas if idea]
+            alpha_ideas = [idea for idea in alpha_ideas if idea and idea not in self.tested_alphas]
             
-            logger.info(f"成功生成 {len(alpha_ideas)} 个新 Alpha 表达式。")
-            if not alpha_ideas:
-                logger.info("本轮未生成有效 Alpha。")
-            else:
+            logger.info(f"成功生成 {len(alpha_ideas)} 个待测试的新 Alpha 表达式。")
+            
+            if alpha_ideas:
                 new_reports = []
+                # --- [核心修正] 回归到稳定的串行测试模式 ---
                 logger.info("开始串行测试新生成的 Alpha (一次一个)...")
                 for idea in alpha_ideas:
-                    result = self.test_alpha(idea)
+                    clean_alpha = idea.strip()
+                    if not clean_alpha: continue
+                    
+                    logger.info(f"正在测试新 Alpha: {clean_alpha}")
+                    result = self.wq.test_alpha(clean_alpha)
+                    
                     if result:
                         try:
                             is_stats = result.get("is", {})
-                            if not is_stats: continue
                             alpha_id = result.get("id")
-                            if not alpha_id: continue
+                            if not is_stats or not alpha_id: continue
 
-                            # --- [核心修正 2] ---
-                            # 构建 Alpha 详情页链接并添加到报告中
                             result_url = f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}"
-
                             report = {
                                 "expression": result.get("regular", {}).get("code"),
                                 "alpha_id": alpha_id,
-                                "result_url": result_url, # <--- 新增字段
+                                "result_url": result_url,
                                 "grade": result.get("grade", "UNKNOWN"),
                                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "performance": {
@@ -287,15 +285,15 @@ class AlphaGenerator:
                                     "turnover": is_stats.get("turnover"),
                                 },
                             }
+                            logger.info(f"生成新的Alpha战报: {report['expression']} - Fitness: {report['performance'].get('fitness')}")
                             new_reports.append(report)
-                            logger.info(f"生成新的Alpha战报: {report['expression']} - Fitness: {report['performance']['fitness']}")
                         except Exception as e:
-                            logger.error(f"生成战报时出错: {e}")
-
+                            logger.error(f"处理已完成的 Alpha 结果时出错: {e}")
+                
                 if new_reports:
                     self.save_and_update_reports(new_reports)
             
-            sleep_time = 600
+            sleep_time = 300 # 你设置的5分钟
             logger.info(f"本轮结束。等待{sleep_time}秒（{sleep_time/60:.1f}分钟）开始下一轮...")
             time.sleep(sleep_time)
 

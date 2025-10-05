@@ -22,7 +22,7 @@ services:
     command: >
       sh -c "python -u alpha_orchestrator.py
       --credentials credential.txt
-      --batch-size 5
+      --batch-size 10
       --mode continuous"
     networks:
       - wq-network

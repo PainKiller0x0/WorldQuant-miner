@@ -9,6 +9,7 @@ from openai import OpenAI
 from datetime import datetime
 import threading
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- 日志配置 ---
 LOG_DIR = "logs"
@@ -148,7 +149,7 @@ class WorldQuant:
                     logger.error(f"Alpha 模拟出错，服务器返回的完整错误报告: {result_data}")
                     return None
                 else:
-                    logger.debug(f"Alpha 仍在模拟中... 状态: {status}")
+                    logger.debug(f"Alpha '{alpha_expression}' 仍在模拟中... 状态: {status}")
                     time.sleep(10)
             except requests.exceptions.RequestException as e:
                 logger.error(f"轮询结果失败: {e}，将在15秒后重试...")
@@ -157,8 +158,8 @@ class WorldQuant:
                 logger.error(f"处理轮询结果时发生未知错误: {e}")
                 return None
         
-        logger.warning(f"Alpha 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
-        return None
+        logger.warning(f"Alpha '{alpha_expression}' 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
+        return "TIMEOUT"
 
 class AlphaGenerator:
     def __init__(self, wq, api_config_path, batch_size=5):
@@ -239,8 +240,8 @@ class AlphaGenerator:
         except IOError as e:
             logger.error(f"保存战报文件时出错: {e}")
 
-    def run(self):
-        logger.info("Alpha 生成器启动 (自建 API 模式)...")
+    def run(self, concurrency_level=2, sleep_time=10):
+        logger.info(f"Alpha 生成器启动 (自建 API 模式) | 并发等级: {concurrency_level} | 轮间间隔: {sleep_time}s")
         fields = self.wq.get_data_fields()
         operators = self.wq.get_operators()
         if not fields or not operators:
@@ -263,59 +264,68 @@ class AlphaGenerator:
             
             if valid_ideas_to_test:
                 new_reports = []
-                logger.info("开始串行测试新生成的 Alpha (一次一个)...")
-                for idea in valid_ideas_to_test:
-                    logger.info(f"正在测试新 Alpha: {idea}")
-                    result = self.wq.test_alpha(idea)
-                    
-                    if result:
-                        try:
-                            is_stats = result.get("is", {})
-                            alpha_id = result.get("id")
-                            if not is_stats or not alpha_id: continue
-
-                            # --- [核心修正] ---
-                            # 1. 解析详细的检查结果
-                            checks = is_stats.get("checks", [])
-                            passed_count, failed_count, pending_count = 0, 0, 0
-                            check_details = []
-                            if isinstance(checks, list):
-                                for check in checks:
-                                    res = check.get("result", "UNKNOWN")
-                                    if res == "PASS": passed_count += 1
-                                    elif res == "FAIL": failed_count += 1
-                                    elif res == "PENDING": pending_count += 1
-                                    # 保存详细的描述信息
-                                    check_details.append(check.get("details", f"{check.get('name')}: {res}"))
-                            
-                            checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
-
-                            # 2. 将检查结果存入报告
-                            report = {
-                                "expression": result.get("regular", {}).get("code"),
-                                "alpha_id": alpha_id,
-                                "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
-                                "grade": result.get("grade", "UNKNOWN"),
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "performance": is_stats,
-                                "checks_summary": checks_summary,
-                                "checks_details": check_details,
-                            }
-                            
-                            # 3. 生成更丰富的日志
-                            perf_items = is_stats.items()
-                            stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
-                            logger.info(f"生成新的Alpha战报 [{checks_summary}] -> {stats_str}")
-                            
-                            new_reports.append(report)
-                        except Exception as e:
-                            logger.error(f"处理已完成的 Alpha 结果时出错: {e}")
+                logger.info(f"开始并行测试 {len(valid_ideas_to_test)} 个新 Alpha，并发数: {concurrency_level}...")
                 
+                with ThreadPoolExecutor(max_workers=concurrency_level) as executor:
+                    future_to_alpha = {executor.submit(self.wq.test_alpha, idea): idea for idea in valid_ideas_to_test}
+                    
+                    for future in as_completed(future_to_alpha):
+                        idea = future_to_alpha[future]
+                        try:
+                            result = future.result()
+
+                            if result == "TIMEOUT":
+                                report = {
+                                    "expression": idea, "alpha_id": "TIMEOUT", "result_url": "",
+                                    "grade": "TIMEOUT", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "performance": {}, "checks_summary": "SIMULATION TIMED OUT",
+                                    "checks_details": ["Simulation Timed Out after 15 minutes"],
+                                }
+                                new_reports.append(report)
+                                logger.warning(f"已为超时的 Alpha 创建特殊战报: {idea}")
+                                continue
+
+                            if result:
+                                is_stats = result.get("is", {})
+                                alpha_id = result.get("id")
+                                if not is_stats or not alpha_id: continue
+                                
+                                checks = is_stats.get("checks", [])
+                                passed_count, failed_count, pending_count = 0, 0, 0
+                                check_details = []
+                                if isinstance(checks, list):
+                                    for check in checks:
+                                        res = check.get("result", "UNKNOWN")
+                                        if res == "PASS": passed_count += 1
+                                        elif res == "FAIL": failed_count += 1
+                                        elif res == "PENDING": pending_count += 1
+                                        check_details.append(check.get("details", f"{check.get('name')}: {res}"))
+                                
+                                checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
+
+                                report = {
+                                    "expression": result.get("regular", {}).get("code"),
+                                    "alpha_id": alpha_id,
+                                    "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
+                                    "grade": result.get("grade", "UNKNOWN"),
+                                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "performance": is_stats,
+                                    "checks_summary": checks_summary,
+                                    "checks_details": check_details,
+                                }
+                                
+                                perf_items = is_stats.items()
+                                stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
+                                logger.info(f"生成新的Alpha战报 [{checks_summary}] -> {stats_str}")
+                                
+                                new_reports.append(report)
+                        except Exception as exc:
+                            logger.error(f"处理 Alpha '{idea}' 的结果时发生意外错误: {exc}", exc_info=True)
+
                 if new_reports:
                     self.save_and_update_reports(new_reports)
             
-            sleep_time = 300
-            logger.info(f"本轮结束。等待{sleep_time}秒（{sleep_time/60:.1f}分钟）开始下一轮...")
+            logger.info(f"本轮结束。等待{sleep_time}秒开始下一轮...")
             time.sleep(sleep_time)
 
 if __name__ == "__main__":
@@ -324,11 +334,15 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle")
     parser.add_argument('--api-config-path', type=str, default="api_config.json", help="Path to the API configuration file")
+    # --- [新增] 新的命令行参数 ---
+    parser.add_argument('--concurrency', type=int, default=2, help="Number of alphas to test concurrently")
+    parser.add_argument('--sleep', type=int, default=10, help="Seconds to wait between generation cycles")
     args = parser.parse_args()
 
     try:
         wq_client = WorldQuant(user_id=args.user_id, api_key=args.api_key)
         generator = AlphaGenerator(wq_client, api_config_path=args.api_config_path, batch_size=args.batch_size)
-        generator.run()
+        # --- [修改] 将新参数传递给 run 方法 ---
+        generator.run(concurrency_level=args.concurrency, sleep_time=args.sleep)
     except Exception as e:
         logger.critical(f"启动 Alpha 生成器时发生致命错误: {e}", exc_info=True)

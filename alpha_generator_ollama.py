@@ -12,37 +12,32 @@ import threading
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- [核心修复] 日志配置现在由外部传入 ---
+# --- 日志配置 ---
 def setup_logging(log_file):
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    
-    # 移除所有旧的handlers，防止日志重复打印
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
-        
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[
                             logging.FileHandler(os.path.join(log_dir, log_file)),
                             logging.StreamHandler()
                         ])
-
 logger = logging.getLogger(__name__)
 
-# --- [核心修复] 补全缺失的函数 ---
 def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
     ts_functions_pattern = r'ts_([a-zA-Z_]+)\(([^,)]+)\)'
     match = re.search(ts_functions_pattern, alpha_code)
     if match:
-        # 检查是否只有一个参数且该参数不是数字
         params = match.group(2).split(',')
         if len(params) == 1 and not params[0].strip().isdigit():
             logger.warning(f"本地预检失败: Alpha '{alpha_code}' 中的函数 '{match.group(0)}' 可能缺少 lookback 参数。已拒绝。")
             return True
     return False
 
+# ... [WorldQuant Class 和 AlphaGenerator Class 的大部分代码与上一版相同] ...
 class WorldQuant:
     def __init__(self, user_id, api_key):
         self.user_id = user_id
@@ -303,38 +298,55 @@ class AlphaGenerator:
             with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f: json.dump(existing_reports, f, indent=4, ensure_ascii=False)
             logger.info(f"已将 {len(new_hopeful_reports)} 份新的高质量战报更新到 {self.hopeful_alphas_file}，并按Fitness排序。")
         except IOError as e: logger.error(f"保存精华战报文件时出错: {e}")
+
     def run(self, mode='discover', concurrency_level=2, sleep_time=10):
+        # --- [核心修改] “软启动”逻辑 ---
+        is_first_run = True
+        
         logger.info(f"Alpha 生成器启动 | 模式: {mode.upper()} | 并发等级: {concurrency_level} | 轮间间隔: {sleep_time}s")
         fields = self.wq.get_data_fields()
         operators = self.wq.get_operators()
         if not fields or not operators:
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
             time.sleep(60); return
+        
         evolution_seeds = []
         if mode == 'evolve':
             evolution_seeds = self.load_hopeful_alphas_for_evolution()
             if not evolution_seeds:
                 mode = 'discover'
                 logger.warning("进化模式无法启动（无可用种子），已自动切换到发现模式。")
+
         while True:
-            logger.info(f"[{mode.upper()}] 开始新一轮 Alpha 生成，目标数量: {self.batch_size}")
+            # --- “软启动”逻辑判断 ---
+            current_batch_size = 1 if is_first_run else self.batch_size
+            current_concurrency = 1 if is_first_run else concurrency_level
+
+            if is_first_run:
+                logger.info("***** 首次运行，进入安全模式 (batch=1, concurrency=1) *****")
+
+            logger.info(f"[{mode.upper()}] 开始新一轮 Alpha 生成，目标数量: {current_batch_size}")
+            
             strategies_to_test = []
             if mode == 'discover':
-                for _ in range(self.batch_size):
+                for _ in range(current_batch_size):
                     idea = self.generate_alpha_idea(fields, operators)
                     if idea: strategies_to_test.append(idea)
             elif mode == 'evolve':
-                for _ in range(self.batch_size):
+                for _ in range(current_batch_size):
                     base_alpha_obj = random.choice(evolution_seeds)
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, fields, operators)
                     if idea: strategies_to_test.append(idea)
+
             valid_strategies = [s for s in strategies_to_test if s and s.get("expression") and s.get("expression") not in self.tested_alphas and not is_alpha_syntactically_suspicious(s.get("expression"))]
             logger.info(f"成功生成 {len(valid_strategies)} 个通过预检且待测试的新策略。")
+            
             if valid_strategies:
                 new_hopeful_reports = []
                 reports_to_log = []
-                logger.info(f"开始并行测试 {len(valid_strategies)} 个新策略，并发数: {concurrency_level}...")
-                with ThreadPoolExecutor(max_workers=concurrency_level) as executor:
+                logger.info(f"开始并行测试 {len(valid_strategies)} 个新策略，并发数: {current_concurrency}...")
+                
+                with ThreadPoolExecutor(max_workers=current_concurrency) as executor:
                     future_to_strategy = {executor.submit(self.wq.test_alpha, s['expression'], s['settings']): s for s in valid_strategies}
                     for future in as_completed(future_to_strategy):
                         strategy = future_to_strategy[future]
@@ -364,12 +376,7 @@ class AlphaGenerator:
                                     pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
                                     check_details = [check.get("details", f"{check.get('name')}: {check.get('result')}") for check in checks if isinstance(check, dict)]
                                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
-                                    hopeful_report = {
-                                        "expression": result.get("regular", {}).get("code"), "alpha_id": alpha_id,
-                                        "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
-                                        "grade": result.get("grade", "UNKNOWN"), "timestamp": log_report["timestamp"],
-                                        "performance": is_stats, "checks_summary": checks_summary, "checks_details": check_details,
-                                    }
+                                    hopeful_report = { "expression": result.get("regular", {}).get("code"), "alpha_id": alpha_id, "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}", "grade": result.get("grade", "UNKNOWN"), "timestamp": log_report["timestamp"], "performance": is_stats, "checks_summary": checks_summary, "checks_details": check_details, }
                                     perf_items = is_stats.items()
                                     stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
                                     logger.info(f"生成高质量策略战报 [{checks_summary}] -> {stats_str}")
@@ -387,6 +394,11 @@ class AlphaGenerator:
                     self.save_hopeful_reports(new_hopeful_reports)
                 else:
                     logger.info("本轮所有策略均未达到高质量标准，未更新精华战报文件。")
+            
+            if is_first_run:
+                logger.info("***** 安全模式运行结束，下轮将恢复正常 *****")
+                is_first_run = False # 关闭安全模式
+
             logger.info(f"本轮结束。等待{sleep_time}秒开始下一轮...")
             time.sleep(sleep_time)
 

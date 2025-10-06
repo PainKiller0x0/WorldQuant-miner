@@ -7,9 +7,9 @@ networks:
     driver: bridge
 
 services:
-  miner:
+  evolver:
     build: .
-    container_name: wq-miner
+    container_name: wq-evolver
     environment:
       - WQ_USER_ID=${WQ_USER_ID}
       - WQ_API_KEY=${WQ_API_KEY}
@@ -22,9 +22,10 @@ services:
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
-      --batch-size 6
-      --concurrency 2
-      --mode discover"
+      --batch-size 3
+      --concurrency 1
+      --mode evolve
+      --sleep 600"
     networks:
       - wq-network
     restart: always

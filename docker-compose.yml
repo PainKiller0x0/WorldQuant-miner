@@ -22,7 +22,8 @@ services:
       --batch-size 6
       --concurrency 2
       --mode discover
-      --log-file miner.log" # <--- 指定日志文件
+      --log-file miner.log
+      --sleep 60" 
     networks:
       - wq-network
     restart: always

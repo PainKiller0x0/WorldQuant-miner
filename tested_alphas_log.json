@@ -1,0 +1,30 @@
+[
+    {
+        "expression": "ts_corr(ts_delta(vwap, 5), ts_delta(volume, 10), 15) * rank(ts_mean(close, 20));",
+        "timestamp": "2025-10-06 18:13:08",
+        "status": "COMPLETE",
+        "fitness": -0.72,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(close - open, 15)) * rank(ts_std_dev(volume, 5)) - rank(ts_corr(vwap, volume, 3)) * rank(ts_delta(close, 2));",
+        "timestamp": "2025-10-06 18:13:56",
+        "status": "COMPLETE",
+        "fitness": 0.16,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(vwap, volume, 10), 5)) - rank(ts_delta(close, 4));",
+        "timestamp": "2025-10-06 18:27:55",
+        "status": "COMPLETE",
+        "fitness": 0.14,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10)) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-06 18:28:07",
+        "status": "COMPLETE",
+        "fitness": -0.7,
+        "passed_checks": 4
+    }
+]

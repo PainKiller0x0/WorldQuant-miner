@@ -22,7 +22,7 @@ services:
       --batch-size 3 
       --concurrency 1
       --mode evolve
-      --sleep 600
+      --sleep 300
       --log-file evolver.log" # <--- 指定日志文件
     networks:
       - wq-network

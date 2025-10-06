@@ -1,11 +1,8 @@
 version: '3.8'
-
-# --- [核心修正] 补上网络定义 ---
 networks:
   wq-network:
     name: wq-network-shared
     driver: bridge
-
 services:
   miner:
     build: .
@@ -24,7 +21,8 @@ services:
       --api-key ${WQ_API_KEY}
       --batch-size 6
       --concurrency 2
-      --mode discover"
+      --mode discover
+      --log-file miner.log" # <--- 指定日志文件
     networks:
       - wq-network
     restart: always

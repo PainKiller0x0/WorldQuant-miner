@@ -1,11 +1,8 @@
 version: '3.8'
-
-# --- [核心修正] 补上网络定义 ---
 networks:
   wq-network:
     name: wq-network-shared
     driver: bridge
-
 services:
   evolver:
     build: .
@@ -22,10 +19,11 @@ services:
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
-      --batch-size 3
+      --batch-size 3 
       --concurrency 1
       --mode evolve
-      --sleep 600"
+      --sleep 600
+      --log-file evolver.log" # <--- 指定日志文件
     networks:
       - wq-network
     restart: always

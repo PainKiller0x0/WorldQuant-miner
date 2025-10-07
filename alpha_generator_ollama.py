@@ -11,6 +11,7 @@ from datetime import datetime
 import threading
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 
 # --- 日志配置 ---
 def setup_logging(log_file):
@@ -37,7 +38,6 @@ def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
             return True
     return False
 
-# ... [WorldQuant Class 和 AlphaGenerator Class 的大部分代码与上一版相同] ...
 class WorldQuant:
     def __init__(self, user_id, api_key):
         self.user_id = user_id
@@ -52,6 +52,7 @@ class WorldQuant:
             'truncation': 0.1, 'pasteurization': 'ON', 'unitHandling': 'VERIFY',
             'nanHandling': 'ON', 'language': 'FASTEXPR', 'visualization': False,
         }
+
     def _create_resilient_session(self):
         session = requests.Session()
         retries = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
@@ -59,6 +60,7 @@ class WorldQuant:
         session.mount('https://', adapter)
         logger.info("创建了带有3次重试机制的API会话。")
         return session
+
     def _authenticate(self):
         with self.auth_lock:
             url = f"{self.base_url}/authentication"
@@ -70,11 +72,13 @@ class WorldQuant:
             except requests.exceptions.RequestException as e:
                 logger.error(f"WorldQuant Brain authentication failed: {e}")
                 raise
+
     def get_data_fields(self):
         logger.info("正在使用硬编码的、绝对安全的官方核心数据字段列表...")
         safe_fields = ["open", "high", "low", "close", "volume", "vwap"]
         logger.info(f"成功加载 {len(safe_fields)} 个核心数据字段。")
         return safe_fields
+
     def get_operators(self):
         url = f"{self.base_url}/operators"
         try:
@@ -88,13 +92,16 @@ class WorldQuant:
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             logger.error(f"Failed to get operators: {e}")
             return []
+
     def test_alpha(self, alpha_expression: str, custom_settings: dict = None):
         submit_url = f"{self.base_url}/simulations"
         current_settings = self.default_settings.copy()
         if custom_settings:
             current_settings.update(custom_settings)
             logger.info(f"使用自定义参数进行测试: {custom_settings}")
+
         payload = {'type': 'REGULAR', 'regular': alpha_expression, 'settings': current_settings}
+        
         try:
             submit_response = self.session.post(submit_url, json=payload, timeout=120)
             if submit_response.status_code == 401:
@@ -114,8 +121,10 @@ class WorldQuant:
                 except json.JSONDecodeError: error_content = e.response.text
             logger.error(f"提交模拟任务失败 '{alpha_expression}': {e} - Response: {error_content}")
             return None
-        POLLING_TIMEOUT = 900
+
+        POLLING_TIMEOUT = 1800
         polling_start_time = time.time()
+
         while time.time() - polling_start_time < POLLING_TIMEOUT:
             try:
                 poll_response = self.session.get(progress_url, timeout=120)
@@ -126,6 +135,7 @@ class WorldQuant:
                 poll_response.raise_for_status()
                 result_data = poll_response.json()
                 status = result_data.get("status")
+
                 if status == "COMPLETE":
                     alpha_id = result_data.get("alpha")
                     if not alpha_id:
@@ -148,6 +158,7 @@ class WorldQuant:
             except Exception as e:
                 logger.error(f"处理轮询结果时发生未知错误: {e}")
                 return None
+        
         logger.warning(f"Alpha '{alpha_expression}' 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
         return "TIMEOUT"
 
@@ -157,6 +168,7 @@ class AlphaGenerator:
         self.batch_size = batch_size
         self.model_name = "gemini-2.5-flash-lite"
         logger.info(f"将使用您指定的模型: {self.model_name}")
+
         try:
             with open(api_config_path, 'r') as f: config = json.load(f)
             self.client = OpenAI(api_key=config.get('api_key', 'painkiller0x0'), base_url=config['base_url'])
@@ -164,10 +176,12 @@ class AlphaGenerator:
         except Exception as e:
             logger.critical(f"加载 API 配置或初始化客户端失败: {e}")
             raise
+        
         self.hopeful_alphas_file = "hopeful_alphas.json"
         self.tested_alphas_logfile = "tested_alphas_log.json"
         self.tested_alphas = self.load_tested_alphas()
         self.hopeful_alphas_cache = []
+
     def load_tested_alphas(self):
         if not os.path.exists(self.tested_alphas_logfile): return set()
         try:
@@ -179,7 +193,8 @@ class AlphaGenerator:
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
             return set()
-    def load_hopeful_alphas_for_evolution(self):
+
+    def load_hopeful_alphas_for_evolution(self, pool_size=100, sample_size=20):
         if not os.path.exists(self.hopeful_alphas_file):
             logger.warning("进化模式：找不到 hopeful_alphas.json 文件，将退化为发现模式。")
             return []
@@ -187,27 +202,71 @@ class AlphaGenerator:
             with open(self.hopeful_alphas_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 if not content: return []
-                self.hopeful_alphas_cache = json.loads(content)
-                return self.hopeful_alphas_cache
+                
+                all_hopeful = json.loads(content)
+                sorted_alphas = sorted(all_hopeful, key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
+                
+                learning_pool = sorted_alphas[:pool_size]
+                self.hopeful_alphas_cache = learning_pool
+                
+                if len(learning_pool) < sample_size:
+                    evolution_seeds = learning_pool
+                else:
+                    evolution_seeds = random.sample(learning_pool, sample_size)
+                
+                logger.info(f"已加载 {len(all_hopeful)} 个高质量Alpha。")
+                logger.info(f"策略导师将从排名前 {len(learning_pool)} 的策略中学习模式。")
+                logger.info(f"已从学习池中随机抽取 {len(evolution_seeds)} 个作为本轮进化种子。")
+                
+                return evolution_seeds
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"加载 hopeful_alphas.json 用于进化时出错: {e}")
             return []
-    def generate_alpha_idea(self, fields, operators):
+
+    def analyze_successful_patterns(self, top_k=5):
+        if not self.hopeful_alphas_cache:
+            return []
+
+        all_expressions = [alpha.get('expression', '') for alpha in self.hopeful_alphas_cache]
+        operator_pattern = re.compile(r'([a-zA-Z_0-9]+)\s*\(')
+        all_operators = []
+        for expr in all_expressions:
+            if expr:
+                operators_in_expr = operator_pattern.findall(expr)
+                all_operators.extend(operators_in_expr)
+        
+        if not all_operators:
+            return []
+
+        most_common = [op for op, count in Counter(all_operators).most_common(top_k)]
+        logger.info(f"策略导师分析完成: 发现最常见的 {top_k} 个成功模式是 {most_common}")
+        return most_common
+
+    def generate_alpha_idea(self, fields, operators, guidance=None):
         field_list = ", ".join(fields)
         core_operators = ['rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power']
         operator_list = ", ".join(core_operators)
-        prompt = f"""
-        You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.
-        Follow these rules strictly:
-        1.  **Use ONLY the provided fields and operators.**
-        2.  **The expression MUST end with a semicolon (;).**
-        3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).
-        4.  **Structure:** Combine multiple operators and fields.
-        5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression.
-        **Available Data Fields:** {field_list}
-        **Core Allowed Operators:** {operator_list}
-        New Alpha Expression:
-        """
+        
+        prompt_lines = [
+            "You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.",
+            "Follow these rules strictly:",
+            "1.  **Use ONLY the provided fields and operators.**",
+            "2.  **The expression MUST end with a semicolon (;).**",
+            "3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).",
+            "4.  **Structure:** Combine multiple operators and fields.",
+            "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression."
+        ]
+        
+        if guidance:
+            prompt_lines.append(f"**Strategic Guidance:** Our analysis shows that expressions using `{', '.join(guidance)}` tend to be more successful. Try to incorporate these patterns.")
+
+        prompt_lines.extend([
+            f"**Available Data Fields:** {field_list}",
+            f"**Core Allowed Operators:** {operator_list}",
+            "New Alpha Expression:"
+        ])
+        prompt = "\n".join(prompt_lines)
+
         try:
             chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=100, temperature=0.9)
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
@@ -216,51 +275,62 @@ class AlphaGenerator:
         except Exception as e:
             logger.error(f"从 API 生成 Alpha 失败: {e}")
             return None
-    def generate_evolved_alpha_idea(self, base_alpha_obj, fields, operators):
+
+    def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         base_expression = base_alpha_obj.get('expression')
         base_settings = base_alpha_obj.get('performance', {}).get('settings', self.wq.default_settings)
-        prompt = f"""
-        You are a world-class Quantitative Analyst evolving alpha STRATEGIES (expression + settings) for WorldQuant.
-        Your goal is to take a proven, successful alpha strategy and create a new, improved variation.
 
-        **Base Successful Strategy:**
-        - **Expression:** `{base_expression}`
-        - **Current Settings:** `{json.dumps(base_settings)}`
+        prompt_lines = [
+            "You are a world-class Quantitative Analyst acting as a 'Strategy Mentor', evolving alpha STRATEGIES (expression + settings) for WorldQuant.",
+            "Your goal is to take a proven, successful alpha strategy and create a new, improved variation based on strategic insights.",
+            f"**Base Successful Strategy:**",
+            f"- **Expression:** `{base_expression}`",
+            f"- **Current Settings:** `{json.dumps(base_settings)}`"
+        ]
 
-        **Your Task:** Create a new strategy by applying ONE of the following evolution strategies:
-        1.  **Evolve Expression:** Make a small, creative change to the expression.
-        2.  **Evolve Settings:** Make a small, logical change to ONE of the tunable numeric settings (`delay`, `decay`, `truncation`).
+        if guidance:
+            prompt_lines.append(f"**Strategic Guidance:** Our analysis shows that expressions using `{', '.join(guidance)}` tend to be more successful. Your primary goal is to evolve the base expression by creatively incorporating one or more of these successful patterns.")
+        else:
+            prompt_lines.append("**Evolution Task:** No specific guidance is available. Please apply a creative and logical evolution to either the expression or the settings.")
 
-        **Strict Rules:**
-        - Your response MUST be a valid JSON object wrapped in a markdown code block.
-        - The JSON MUST contain two keys: "expression" (string) and "settings" (a dictionary object).
-        - If evolving expression, "settings" should be empty (`{{}}`).
-        - If evolving settings, "expression" MUST be identical to the base expression.
-        - The new strategy MUST be different from the base strategy.
+        prompt_lines.extend([
+            "\n**Your Task:** Create a new strategy by applying ONE of the following evolution strategies:",
+            "1.  **Evolve Expression:** Make a small, creative change to the expression. If you have guidance, prioritize using it.",
+            "2.  **Evolve Settings:** Make a small, logical change to ONE of the tunable numeric settings (`delay`, `decay`, `truncation`).",
+            "\n**Strict Rules:**",
+            "- Your response MUST be a valid JSON object wrapped in a markdown code block.",
+            "- The JSON MUST contain two keys: \"expression\" (string) and \"settings\" (a dictionary object).",
+            "- If evolving expression, \"settings\" should be empty (`{}`).",
+            "- If evolving settings, \"expression\" MUST be identical to the base expression.",
+            "- The new strategy MUST be different from the base strategy.",
+            "\n**Example Response (Evolving Settings):**",
+            "```json",
+            "{",
+            f'  "expression": "{base_expression}",',
+            '  "settings": {',
+            '    "decay": 5',
+            '  }',
+            "}",
+            "```",
+            "New Evolved Strategy (JSON in a markdown block):"
+        ])
+        prompt = "\n".join(prompt_lines)
 
-        **Example Response (Evolving Settings):**
-        ```json
-        {{
-          "expression": "{base_expression}",
-          "settings": {{
-            "decay": 5
-          }}
-        }}
-        ```
-        New Evolved Strategy (JSON in a markdown block):
-        """
         try:
             chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=300, temperature=0.7)
             response_text = chat_completion.choices[0].message.content.strip()
+            
             json_match = re.search(r'```json\s*([\s\S]+?)\s*```', response_text)
             if not json_match:
-                try: evolved_strategy = json.loads(response_text)
+                try: 
+                    evolved_strategy = json.loads(response_text)
                 except json.JSONDecodeError:
                     logger.error(f"进化返回的内容中既不是JSON代码块，也不是合法的JSON: {response_text}")
                     return None
             else:
                 json_str = json_match.group(1)
                 evolved_strategy = json.loads(json_str)
+
             if 'expression' not in evolved_strategy or 'settings' not in evolved_strategy:
                 logger.error("进化返回的JSON格式无效，缺少expression或settings键。")
                 return None
@@ -268,6 +338,7 @@ class AlphaGenerator:
         except Exception as e:
             logger.error(f"从 API '进化' Alpha 策略失败: {e}")
             return None
+
     def log_tested_alphas(self, reports_to_log):
         all_reports = []
         if os.path.exists(self.tested_alphas_logfile):
@@ -277,12 +348,15 @@ class AlphaGenerator:
                     if content: all_reports = json.loads(content)
             except (IOError, json.JSONDecodeError):
                 logger.warning(f"无法解析 {self.tested_alphas_logfile}，将创建新的日志文件。")
+
         all_reports.extend(reports_to_log)
         for report in reports_to_log:
             if 'expression' in report: self.tested_alphas.add(report['expression'])
+        
         try:
             with open(self.tested_alphas_logfile, 'w', encoding='utf-8') as f: json.dump(all_reports, f, indent=4, ensure_ascii=False)
         except IOError as e: logger.error(f"写入全量日志文件时出错: {e}")
+
     def save_hopeful_reports(self, new_hopeful_reports):
         existing_reports = []
         if os.path.exists(self.hopeful_alphas_file):
@@ -292,7 +366,9 @@ class AlphaGenerator:
                     if content: existing_reports = json.loads(content)
             except (IOError, json.JSONDecodeError):
                 logger.warning(f"无法解析 {self.hopeful_alphas_file}，将创建新的精华文件。")
+
         existing_reports.extend(new_hopeful_reports)
+        
         try:
             existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
             with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f: json.dump(existing_reports, f, indent=4, ensure_ascii=False)
@@ -300,7 +376,6 @@ class AlphaGenerator:
         except IOError as e: logger.error(f"保存精华战报文件时出错: {e}")
 
     def run(self, mode='discover', concurrency_level=2, sleep_time=10):
-        # --- [核心修改] “软启动”逻辑 ---
         is_first_run = True
         
         logger.info(f"Alpha 生成器启动 | 模式: {mode.upper()} | 并发等级: {concurrency_level} | 轮间间隔: {sleep_time}s")
@@ -311,14 +386,16 @@ class AlphaGenerator:
             time.sleep(60); return
         
         evolution_seeds = []
+        strategic_guidance = []
         if mode == 'evolve':
-            evolution_seeds = self.load_hopeful_alphas_for_evolution()
+            evolution_seeds = self.load_hopeful_alphas_for_evolution(pool_size=100, sample_size=20) 
             if not evolution_seeds:
                 mode = 'discover'
                 logger.warning("进化模式无法启动（无可用种子），已自动切换到发现模式。")
+            else:
+                strategic_guidance = self.analyze_successful_patterns()
 
         while True:
-            # --- “软启动”逻辑判断 ---
             current_batch_size = 1 if is_first_run else self.batch_size
             current_concurrency = 1 if is_first_run else concurrency_level
 
@@ -330,12 +407,12 @@ class AlphaGenerator:
             strategies_to_test = []
             if mode == 'discover':
                 for _ in range(current_batch_size):
-                    idea = self.generate_alpha_idea(fields, operators)
+                    idea = self.generate_alpha_idea(fields, operators, guidance=strategic_guidance)
                     if idea: strategies_to_test.append(idea)
             elif mode == 'evolve':
                 for _ in range(current_batch_size):
                     base_alpha_obj = random.choice(evolution_seeds)
-                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, fields, operators)
+                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance)
                     if idea: strategies_to_test.append(idea)
 
             valid_strategies = [s for s in strategies_to_test if s and s.get("expression") and s.get("expression") not in self.tested_alphas and not is_alpha_syntactically_suspicious(s.get("expression"))]
@@ -359,45 +436,74 @@ class AlphaGenerator:
                                 reports_to_log.append(log_report)
                                 logger.warning(f"Alpha 模拟{result}，已记录并丢弃: {idea_expr}")
                                 continue
+                            
                             if result:
                                 is_stats = result.get("is", {})
                                 alpha_id = result.get("id")
                                 if not is_stats or not alpha_id: continue
+                                
                                 checks = result.get("is", {}).get("checks", [])
                                 passed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PASS")
                                 fitness = is_stats.get('fitness', -999)
+
                                 log_report["status"] = "COMPLETE"
                                 log_report["fitness"] = fitness
                                 log_report["passed_checks"] = passed_count
                                 reports_to_log.append(log_report)
-                                if fitness > 0 and passed_count >= 4:
-                                    logger.info(f"发现一个高质量策略！ Fitness: {fitness:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+
+                                # --- v6.4: "破格录用"机制 ---
+                                is_high_quality = fitness > 0 and passed_count >= 4
+                                is_high_potential = fitness > -0.5 and passed_count >= 5
+
+                                if is_high_quality or is_high_potential:
+                                    if is_high_potential and not is_high_quality:
+                                        logger.info(f"发现一个高潜力策略 (Fitness < 0, 但 Checks >= 5)，破格录用！ Fitness: {fitness:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+                                    else:
+                                        logger.info(f"发现一个高质量策略！ Fitness: {fitness:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+                                    
                                     failed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "FAIL")
                                     pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
                                     check_details = [check.get("details", f"{check.get('name')}: {check.get('result')}") for check in checks if isinstance(check, dict)]
                                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
-                                    hopeful_report = { "expression": result.get("regular", {}).get("code"), "alpha_id": alpha_id, "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}", "grade": result.get("grade", "UNKNOWN"), "timestamp": log_report["timestamp"], "performance": is_stats, "checks_summary": checks_summary, "checks_details": check_details, }
+                                    
+                                    hopeful_report = {
+                                        "expression": result.get("regular", {}).get("code"),
+                                        "alpha_id": alpha_id,
+                                        "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
+                                        "grade": result.get("grade", "UNKNOWN"),
+                                        "timestamp": log_report["timestamp"],
+                                        "performance": is_stats,
+                                        "checks_summary": checks_summary,
+                                        "checks_details": check_details,
+                                    }
                                     perf_items = is_stats.items()
                                     stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
                                     logger.info(f"生成高质量策略战报 [{checks_summary}] -> {stats_str}")
                                     new_hopeful_reports.append(hopeful_report)
                                 else:
                                     logger.info(f"策略未达到高质量标准，已丢弃。Fitness: {fitness:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+
                         except Exception as exc:
                             logger.error(f"处理策略 '{idea_expr}' 的结果时发生意外错误: {exc}", exc_info=True)
                             log_report["status"] = "EXCEPTION"
                             reports_to_log.append(log_report)
+                
                 if reports_to_log:
                     self.log_tested_alphas(reports_to_log)
                     logger.info(f"已将 {len(reports_to_log)} 条测试记录更新到 {self.tested_alphas_logfile}")
+                
                 if new_hopeful_reports:
                     self.save_hopeful_reports(new_hopeful_reports)
+                    if mode == 'evolve':
+                        evolution_seeds = self.load_hopeful_alphas_for_evolution(pool_size=100, sample_size=20)
+                        if evolution_seeds:
+                            strategic_guidance = self.analyze_successful_patterns()
                 else:
                     logger.info("本轮所有策略均未达到高质量标准，未更新精华战报文件。")
             
             if is_first_run:
                 logger.info("***** 安全模式运行结束，下轮将恢复正常 *****")
-                is_first_run = False # 关闭安全模式
+                is_first_run = False
 
             logger.info(f"本轮结束。等待{sleep_time}秒开始下一轮...")
             time.sleep(sleep_time)
@@ -416,9 +522,31 @@ if __name__ == "__main__":
 
     setup_logging(args.log_file)
 
+    MAX_INIT_RETRIES = 5
+    SHORT_SLEEP = 30
+    LONG_SLEEP = 300
+
+    retry_count = 0
+    wq_client = None
+
+    while wq_client is None:
+        try:
+            wq_client = WorldQuant(user_id=args.user_id, api_key=args.api_key)
+            logger.info("WorldQuant 客户端初始化成功。")
+            retry_count = 0
+        except requests.exceptions.RequestException as e:
+            logger.error(f"初始化 WorldQuant 客户端失败: {e}")
+            retry_count += 1
+            if retry_count <= MAX_INIT_RETRIES:
+                logger.info(f"将在 {SHORT_SLEEP} 秒后重试... (尝试次数 {retry_count}/{MAX_INIT_RETRIES})")
+                time.sleep(SHORT_SLEEP)
+            else:
+                logger.warning(f"已达到最大初始重试次数。将在 {LONG_SLEEP/60:.0f} 分钟后再次尝试...")
+                time.sleep(LONG_SLEEP)
+                retry_count = 0
+    
     try:
-        wq_client = WorldQuant(user_id=args.user_id, api_key=args.api_key)
         generator = AlphaGenerator(wq_client, api_config_path=args.api_config_path, batch_size=args.batch_size)
         generator.run(mode=args.mode, concurrency_level=args.concurrency, sleep_time=args.sleep)
     except Exception as e:
-        logger.critical(f"启动 Alpha 生成器时发生致命错误: {e}", exc_info=True)
+        logger.critical(f"生成器运行时发生致命错误: {e}", exc_info=True)

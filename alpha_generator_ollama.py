@@ -179,6 +179,7 @@ class AlphaGenerator:
         
         self.hopeful_alphas_file = "hopeful_alphas.json"
         self.tested_alphas_logfile = "tested_alphas_log.json"
+        self.purged_alphas_archive_file = "purged_alphas_archive.json" # v6.6 新增
         self.tested_alphas = self.load_tested_alphas()
         self.hopeful_alphas_cache = []
 
@@ -357,7 +358,8 @@ class AlphaGenerator:
             with open(self.tested_alphas_logfile, 'w', encoding='utf-8') as f: json.dump(all_reports, f, indent=4, ensure_ascii=False)
         except IOError as e: logger.error(f"写入全量日志文件时出错: {e}")
 
-    def save_hopeful_reports(self, new_hopeful_reports):
+    # --- v6.6: 精英池动态维护与归档 ---
+    def save_hopeful_reports(self, new_hopeful_reports, max_pool_size=200):
         existing_reports = []
         if os.path.exists(self.hopeful_alphas_file):
             try:
@@ -367,13 +369,71 @@ class AlphaGenerator:
             except (IOError, json.JSONDecodeError):
                 logger.warning(f"无法解析 {self.hopeful_alphas_file}，将创建新的精华文件。")
 
-        existing_reports.extend(new_hopeful_reports)
+        # 合并新旧 Alpha
+        combined_reports = existing_reports + new_hopeful_reports
         
+        # --- 1. 标准清洗 (Purge) 与 归档 (Archive) ---
+        purged_reports = []
+        archived_reports = []
+        
+        # 创建一个set来存储所有已存在的表达式，用于快速去重
+        existing_expressions = {report.get('expression') for report in existing_reports}
+        
+        for report in combined_reports:
+            # 简单的去重，防止完全相同的报告被多次处理
+            if report.get('expression') in existing_expressions and report in existing_reports:
+                pass # 如果是旧报告，后面统一处理
+            
+            fitness = report.get('performance', {}).get('fitness', -999)
+            
+            checks_summary = report.get('checks_summary', '0 PASS')
+            try:
+                passed_count = int(checks_summary.split(' ')[0])
+            except (ValueError, IndexError):
+                passed_count = 0
+
+            is_high_quality = fitness > 0 and passed_count >= 4
+            is_high_potential = fitness > -0.5 and passed_count >= 5
+            
+            if is_high_quality or is_high_potential:
+                purged_reports.append(report)
+            elif report in existing_reports: # 只归档之前在池中的，而不是不合格的新报告
+                archived_reports.append(report)
+
+        logger.info(f"精英池清洗: {len(combined_reports)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时策略)")
+
+        # --- 2. 归档被淘汰的Alpha ---
+        if archived_reports:
+            all_archived = []
+            if os.path.exists(self.purged_alphas_archive_file):
+                try:
+                    with open(self.purged_alphas_archive_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if content: all_archived = json.loads(content)
+                except (IOError, json.JSONDecodeError):
+                    logger.warning(f"无法解析归档文件 {self.purged_alphas_archive_file}，将创建新文件。")
+            
+            all_archived.extend(archived_reports)
+            try:
+                with open(self.purged_alphas_archive_file, 'w', encoding='utf-8') as f: 
+                    json.dump(all_archived, f, indent=4, ensure_ascii=False)
+                logger.info(f"已将 {len(archived_reports)} 个被淘汰的策略存入归档文件 {self.purged_alphas_archive_file}")
+            except IOError as e:
+                logger.error(f"写入归档文件时出错: {e}")
+
+        # --- 3. 末位淘汰 (Elimination) ---
+        purged_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
+        final_pool = purged_reports[:max_pool_size]
+        if len(purged_reports) > max_pool_size:
+            logger.info(f"精英池末位淘汰: {len(purged_reports)} -> {len(final_pool)} (保留排名前 {max_pool_size} 的策略)")
+
         try:
-            existing_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
-            with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f: json.dump(existing_reports, f, indent=4, ensure_ascii=False)
-            logger.info(f"已将 {len(new_hopeful_reports)} 份新的高质量战报更新到 {self.hopeful_alphas_file}，并按Fitness排序。")
-        except IOError as e: logger.error(f"保存精华战报文件时出错: {e}")
+            with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f: 
+                json.dump(final_pool, f, indent=4, ensure_ascii=False)
+            logger.info(f"已将 {len(new_hopeful_reports)} 份新战报处理完毕，并完成了精英池的动态维护。当前池中共有 {len(final_pool)} 个策略。")
+        except IOError as e: 
+            logger.error(f"保存精华战报文件时出错: {e}")
+
 
     def run(self, mode='discover', concurrency_level=2, sleep_time=10):
         is_first_run = True
@@ -451,7 +511,10 @@ class AlphaGenerator:
                                 log_report["passed_checks"] = passed_count
                                 reports_to_log.append(log_report)
 
-                                # --- v6.4: "破格录用"机制 ---
+                                failed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "FAIL")
+                                pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
+                                checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
+
                                 is_high_quality = fitness > 0 and passed_count >= 4
                                 is_high_potential = fitness > -0.5 and passed_count >= 5
 
@@ -461,11 +524,6 @@ class AlphaGenerator:
                                     else:
                                         logger.info(f"发现一个高质量策略！ Fitness: {fitness:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
                                     
-                                    failed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "FAIL")
-                                    pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
-                                    check_details = [check.get("details", f"{check.get('name')}: {check.get('result')}") for check in checks if isinstance(check, dict)]
-                                    checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
-                                    
                                     hopeful_report = {
                                         "expression": result.get("regular", {}).get("code"),
                                         "alpha_id": alpha_id,
@@ -473,8 +531,7 @@ class AlphaGenerator:
                                         "grade": result.get("grade", "UNKNOWN"),
                                         "timestamp": log_report["timestamp"],
                                         "performance": is_stats,
-                                        "checks_summary": checks_summary,
-                                        "checks_details": check_details,
+                                        "checks_summary": checks_summary
                                     }
                                     perf_items = is_stats.items()
                                     stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])

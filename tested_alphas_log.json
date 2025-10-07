@@ -3830,5 +3830,33 @@
         "status": "COMPLETE",
         "fitness": -0.03,
         "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10) * ts_delta(ts_mean(vwap, 5), 5);",
+        "timestamp": "2025-10-07 16:03:19",
+        "status": "COMPLETE",
+        "fitness": 0.28,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_mean(close, 10)) - rank(ts_corr(vwap, close, 5)) * rank(ts_delta(close, 1));",
+        "timestamp": "2025-10-07 16:13:33",
+        "status": "COMPLETE",
+        "fitness": 0.12,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) * rank(ts_std_dev(volume, 20)) - ts_zscore(close, 30);",
+        "timestamp": "2025-10-07 16:15:04",
+        "status": "COMPLETE",
+        "fitness": 0.51,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, vwap, 10), 5)) * rank(ts_delta(ts_mean(volume, 5), 3) * close);",
+        "timestamp": "2025-10-07 16:15:57",
+        "status": "COMPLETE",
+        "fitness": 0.25,
+        "passed_checks": 5
     }
 ]

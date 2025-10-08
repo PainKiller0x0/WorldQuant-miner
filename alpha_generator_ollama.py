@@ -39,6 +39,7 @@ def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
     return False
 
 class WorldQuant:
+    # ... (这部分代码与上一版完全相同，为节省篇幅已省略) ...
     def __init__(self, user_id, api_key):
         self.user_id = user_id
         self.api_key = api_key
@@ -179,7 +180,7 @@ class AlphaGenerator:
         
         self.hopeful_alphas_file = "hopeful_alphas.json"
         self.tested_alphas_logfile = "tested_alphas_log.json"
-        self.purged_alphas_archive_file = "purged_alphas_archive.json" # v6.6 新增
+        self.purged_alphas_archive_file = "purged_alphas_archive.json"
         self.tested_alphas = self.load_tested_alphas()
         self.hopeful_alphas_cache = []
 
@@ -195,39 +196,90 @@ class AlphaGenerator:
             logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
             return set()
 
-    def load_hopeful_alphas_for_evolution(self, pool_size=100, sample_size=20):
-        if not os.path.exists(self.hopeful_alphas_file):
-            logger.warning("进化模式：找不到 hopeful_alphas.json 文件，将退化为发现模式。")
-            return []
+    # --- v7.0: 考古学家内置函数 ---
+    def excavate_one_pearl(self, sample_size=200):
+        if not os.path.exists(self.tested_alphas_logfile):
+            return None
+
         try:
-            with open(self.hopeful_alphas_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if not content: return []
-                
-                all_hopeful = json.loads(content)
-                sorted_alphas = sorted(all_hopeful, key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
-                
-                learning_pool = sorted_alphas[:pool_size]
-                self.hopeful_alphas_cache = learning_pool
-                
-                if len(learning_pool) < sample_size:
-                    evolution_seeds = learning_pool
-                else:
-                    evolution_seeds = random.sample(learning_pool, sample_size)
-                
-                logger.info(f"已加载 {len(all_hopeful)} 个高质量Alpha。")
-                logger.info(f"策略导师将从排名前 {len(learning_pool)} 的策略中学习模式。")
-                logger.info(f"已从学习池中随机抽取 {len(evolution_seeds)} 个作为本轮进化种子。")
-                
-                return evolution_seeds
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"加载 hopeful_alphas.json 用于进化时出错: {e}")
+            with open(self.tested_alphas_logfile, 'r') as f:
+                all_tested = json.load(f)
+        except (IOError, json.JSONDecodeError):
+            logger.error(f"考古挖掘失败：无法读取 {self.tested_alphas_logfile}")
+            return None
+
+        # 随机抽样，避免每次都读取整个大文件
+        if len(all_tested) > sample_size:
+            sample_records = random.sample(all_tested, sample_size)
+        else:
+            sample_records = all_tested
+
+        hopeful_expressions = {alpha.get('expression') for alpha in self.hopeful_alphas_cache}
+
+        potential_pearls = []
+        for record in sample_records:
+            if record.get('status') != 'COMPLETE' or record.get('expression') in hopeful_expressions:
+                continue
+            
+            passed_count = record.get('passed_checks', 0)
+            fitness = record.get('fitness', -999)
+
+            if passed_count == 3 and fitness > -1.0:
+                record['potential_score'] = self._calculate_potential_score(record)
+                potential_pearls.append(record)
+
+        if not potential_pearls:
+            return None
+
+        potential_pearls.sort(key=lambda x: x.get('potential_score', -999), reverse=True)
+        best_pearl = potential_pearls[0]
+        logger.info(f"考古学家在 {len(sample_records)} 条记录中发现一颗遗珠！潜力分: {best_pearl['potential_score']:.3f}, Expression: {best_pearl['expression']}")
+        return {"expression": best_pearl['expression'], "performance": best_pearl.get('performance', {})}
+        
+    def _calculate_potential_score(self, record):
+        try:
+            fitness = float(record.get('fitness', -999))
+            passed_count = int(record.get('passed_checks', 0))
+            performance = record.get('performance', {})
+            sharpe = float(performance.get('sharpe', 0.0))
+            turnover = float(performance.get('turnover', 1.0))
+            score = fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
+            return score
+        except (ValueError, TypeError):
+            return -999
+
+    def load_evolution_seeds(self, sample_size=20):
+        seeds = []
+        if os.path.exists(self.hopeful_alphas_file):
+            try:
+                with open(self.hopeful_alphas_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content:
+                        self.hopeful_alphas_cache = json.loads(content)
+                        seeds.extend(self.hopeful_alphas_cache)
+            except (IOError, json.JSONDecodeError):
+                logger.error(f"加载精英池 {self.hopeful_alphas_file} 失败。")
+        
+        logger.info(f"已加载 {len(self.hopeful_alphas_cache)} 个精英策略。")
+        
+        pearl = self.excavate_one_pearl()
+        if pearl:
+            seeds.append(pearl)
+        
+        if not seeds:
+            logger.warning("精英池为空，且未挖掘到遗珠，无法获取进化种子。")
             return []
+
+        final_sample_size = min(sample_size, len(seeds))
+        evolution_seeds = random.sample(seeds, final_sample_size)
+        
+        logger.info(f"策略导师将从 {len(self.hopeful_alphas_cache)} 个精英策略中学习模式。")
+        logger.info(f"已从总池（含遗珠）中随机抽取 {len(evolution_seeds)} 个作为本轮进化种子。")
+        return evolution_seeds
 
     def analyze_successful_patterns(self, top_k=5):
         if not self.hopeful_alphas_cache:
             return []
-
         all_expressions = [alpha.get('expression', '') for alpha in self.hopeful_alphas_cache]
         operator_pattern = re.compile(r'([a-zA-Z_0-9]+)\s*\(')
         all_operators = []
@@ -235,10 +287,8 @@ class AlphaGenerator:
             if expr:
                 operators_in_expr = operator_pattern.findall(expr)
                 all_operators.extend(operators_in_expr)
-        
         if not all_operators:
             return []
-
         most_common = [op for op, count in Counter(all_operators).most_common(top_k)]
         logger.info(f"策略导师分析完成: 发现最常见的 {top_k} 个成功模式是 {most_common}")
         return most_common
@@ -254,7 +304,7 @@ class AlphaGenerator:
             "1.  **Use ONLY the provided fields and operators.**",
             "2.  **The expression MUST end with a semicolon (;).**",
             "3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).",
-            "4.  **Structure:** Combine multiple operators and fields.",
+            "4.  **Complexity:** To ensure fast simulations, try to keep the total number of operators below 10.",
             "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression."
         ]
         
@@ -282,38 +332,29 @@ class AlphaGenerator:
         base_settings = base_alpha_obj.get('performance', {}).get('settings', self.wq.default_settings)
 
         prompt_lines = [
-            "You are a world-class Quantitative Analyst acting as a 'Strategy Mentor', evolving alpha STRATEGIES (expression + settings) for WorldQuant.",
-            "Your goal is to take a proven, successful alpha strategy and create a new, improved variation based on strategic insights.",
-            f"**Base Successful Strategy:**",
-            f"- **Expression:** `{base_expression}`",
-            f"- **Current Settings:** `{json.dumps(base_settings)}`"
+            "You are an AI machine that generates code. Your SOLE task is to evolve a given investment strategy for WorldQuant.",
+            "You MUST output ONLY a single, valid JSON object in a markdown code block. Do NOT include any explanations, analysis, or introductory text.",
+            f"**Base Strategy for Evolution:**",
+            f"- Expression: `{base_expression}`",
+            f"- Settings: `{json.dumps(base_settings)}`"
         ]
 
         if guidance:
-            prompt_lines.append(f"**Strategic Guidance:** Our analysis shows that expressions using `{', '.join(guidance)}` tend to be more successful. Your primary goal is to evolve the base expression by creatively incorporating one or more of these successful patterns.")
-        else:
-            prompt_lines.append("**Evolution Task:** No specific guidance is available. Please apply a creative and logical evolution to either the expression or the settings.")
-
+            prompt_lines.append(f"**Strategic Guidance:** Analysis suggests these patterns are successful: `{', '.join(guidance)}`. Your evolution should try to incorporate one of these patterns.")
+        
         prompt_lines.extend([
-            "\n**Your Task:** Create a new strategy by applying ONE of the following evolution strategies:",
-            "1.  **Evolve Expression:** Make a small, creative change to the expression. If you have guidance, prioritize using it.",
-            "2.  **Evolve Settings:** Make a small, logical change to ONE of the tunable numeric settings (`delay`, `decay`, `truncation`).",
-            "\n**Strict Rules:**",
-            "- Your response MUST be a valid JSON object wrapped in a markdown code block.",
-            "- The JSON MUST contain two keys: \"expression\" (string) and \"settings\" (a dictionary object).",
-            "- If evolving expression, \"settings\" should be empty (`{}`).",
-            "- If evolving settings, \"expression\" MUST be identical to the base expression.",
-            "- The new strategy MUST be different from the base strategy.",
-            "\n**Example Response (Evolving Settings):**",
+            "\n**Task:** Apply ONE of the following evolution strategies:",
+            "1.  **Evolve Expression:** Make a small, creative change to the expression. Prioritize using the strategic guidance if available. Keep the expression concise (under 10 operators if possible).",
+            "2.  **Evolve Settings:** Make a small, logical change to ONE numeric setting (`delay`, `decay`, `truncation`).",
+            "\n**MANDATORY OUTPUT FORMAT:**",
+            "Your entire response MUST be ONLY the raw JSON object inside a markdown code block. Example:",
             "```json",
             "{",
-            f'  "expression": "{base_expression}",',
-            '  "settings": {',
-            '    "decay": 5',
-            '  }',
+            '  "expression": "rank(ts_corr(close, vwap, 10));",',
+            '  "settings": {}',
             "}",
             "```",
-            "New Evolved Strategy (JSON in a markdown block):"
+            "Evolved Strategy:"
         ])
         prompt = "\n".join(prompt_lines)
 
@@ -358,7 +399,31 @@ class AlphaGenerator:
             with open(self.tested_alphas_logfile, 'w', encoding='utf-8') as f: json.dump(all_reports, f, indent=4, ensure_ascii=False)
         except IOError as e: logger.error(f"写入全量日志文件时出错: {e}")
 
-    # --- v6.6: 精英池动态维护与归档 ---
+    def archive_purged_alphas(self, purged_reports, reason="淘汰"):
+        if not purged_reports:
+            return
+        
+        all_archived = []
+        if os.path.exists(self.purged_alphas_archive_file):
+            try:
+                with open(self.purged_alphas_archive_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content: all_archived = json.loads(content)
+            except (IOError, json.JSONDecodeError):
+                logger.warning(f"无法解析归档文件 {self.purged_alphas_archive_file}，将创建新文件。")
+        
+        for report in purged_reports:
+            report['archive_reason'] = reason
+            report['archive_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        all_archived.extend(purged_reports)
+        try:
+            with open(self.purged_alphas_archive_file, 'w', encoding='utf-8') as f: 
+                json.dump(all_archived, f, indent=4)
+            logger.info(f"已将 {len(purged_reports)} 个被淘汰的策略 ({reason}) 存入归档文件。")
+        except IOError as e:
+            logger.error(f"写入归档文件时出错: {e}")
+    
     def save_hopeful_reports(self, new_hopeful_reports, max_pool_size=200):
         existing_reports = []
         if os.path.exists(self.hopeful_alphas_file):
@@ -369,23 +434,15 @@ class AlphaGenerator:
             except (IOError, json.JSONDecodeError):
                 logger.warning(f"无法解析 {self.hopeful_alphas_file}，将创建新的精华文件。")
 
-        # 合并新旧 Alpha
         combined_reports = existing_reports + new_hopeful_reports
         
-        # --- 1. 标准清洗 (Purge) 与 归档 (Archive) ---
         purged_reports = []
         archived_reports = []
         
-        # 创建一个set来存储所有已存在的表达式，用于快速去重
-        existing_expressions = {report.get('expression') for report in existing_reports}
+        unique_reports_map = {report.get('expression'): report for report in combined_reports}
         
-        for report in combined_reports:
-            # 简单的去重，防止完全相同的报告被多次处理
-            if report.get('expression') in existing_expressions and report in existing_reports:
-                pass # 如果是旧报告，后面统一处理
-            
+        for report in unique_reports_map.values():
             fitness = report.get('performance', {}).get('fitness', -999)
-            
             checks_summary = report.get('checks_summary', '0 PASS')
             try:
                 passed_count = int(checks_summary.split(' ')[0])
@@ -397,35 +454,32 @@ class AlphaGenerator:
             
             if is_high_quality or is_high_potential:
                 purged_reports.append(report)
-            elif report in existing_reports: # 只归档之前在池中的，而不是不合格的新报告
+            elif any(r['expression'] == report['expression'] for r in existing_reports):
                 archived_reports.append(report)
 
-        logger.info(f"精英池清洗: {len(combined_reports)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时策略)")
+        logger.info(f"精英池清洗: {len(unique_reports_map)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时策略)")
+        
+        self.archive_purged_alphas(archived_reports, reason="标准清洗")
 
-        # --- 2. 归档被淘汰的Alpha ---
-        if archived_reports:
-            all_archived = []
-            if os.path.exists(self.purged_alphas_archive_file):
-                try:
-                    with open(self.purged_alphas_archive_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        if content: all_archived = json.loads(content)
-                except (IOError, json.JSONDecodeError):
-                    logger.warning(f"无法解析归档文件 {self.purged_alphas_archive_file}，将创建新文件。")
+        def calculate_combined_score(report):
+            fitness = report.get('performance', {}).get('fitness', -999)
+            sharpe = report.get('performance', {}).get('sharpe', 0.0)
+            turnover = report.get('performance', {}).get('turnover', 1.0)
+            checks_summary = report.get('checks_summary', '0 PASS')
+            try: passed_count = int(checks_summary.split(' ')[0])
+            except (ValueError, IndexError): passed_count = 0
             
-            all_archived.extend(archived_reports)
-            try:
-                with open(self.purged_alphas_archive_file, 'w', encoding='utf-8') as f: 
-                    json.dump(all_archived, f, indent=4, ensure_ascii=False)
-                logger.info(f"已将 {len(archived_reports)} 个被淘汰的策略存入归档文件 {self.purged_alphas_archive_file}")
-            except IOError as e:
-                logger.error(f"写入归档文件时出错: {e}")
+            score = fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
+            return score
 
-        # --- 3. 末位淘汰 (Elimination) ---
-        purged_reports.sort(key=lambda x: x.get('performance', {}).get('fitness', -999), reverse=True)
+        purged_reports.sort(key=calculate_combined_score, reverse=True)
+        
         final_pool = purged_reports[:max_pool_size]
+        
         if len(purged_reports) > max_pool_size:
-            logger.info(f"精英池末位淘汰: {len(purged_reports)} -> {len(final_pool)} (保留排名前 {max_pool_size} 的策略)")
+            eliminated = purged_reports[max_pool_size:]
+            logger.info(f"精英池末位淘汰: {len(purged_reports)} -> {len(final_pool)} (保留综合评分排名前 {max_pool_size} 的策略)")
+            self.archive_purged_alphas(eliminated, reason="末位淘汰")
 
         try:
             with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f: 
@@ -433,7 +487,6 @@ class AlphaGenerator:
             logger.info(f"已将 {len(new_hopeful_reports)} 份新战报处理完毕，并完成了精英池的动态维护。当前池中共有 {len(final_pool)} 个策略。")
         except IOError as e: 
             logger.error(f"保存精华战报文件时出错: {e}")
-
 
     def run(self, mode='discover', concurrency_level=2, sleep_time=10):
         is_first_run = True
@@ -448,7 +501,7 @@ class AlphaGenerator:
         evolution_seeds = []
         strategic_guidance = []
         if mode == 'evolve':
-            evolution_seeds = self.load_hopeful_alphas_for_evolution(pool_size=100, sample_size=20) 
+            evolution_seeds = self.load_evolution_seeds(sample_size=20) 
             if not evolution_seeds:
                 mode = 'discover'
                 logger.warning("进化模式无法启动（无可用种子），已自动切换到发现模式。")
@@ -509,7 +562,7 @@ class AlphaGenerator:
                                 log_report["status"] = "COMPLETE"
                                 log_report["fitness"] = fitness
                                 log_report["passed_checks"] = passed_count
-                                reports_to_log.append(log_report)
+                                log_report["performance"] = is_stats
 
                                 failed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "FAIL")
                                 pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
@@ -551,13 +604,18 @@ class AlphaGenerator:
                 
                 if new_hopeful_reports:
                     self.save_hopeful_reports(new_hopeful_reports)
-                    if mode == 'evolve':
-                        evolution_seeds = self.load_hopeful_alphas_for_evolution(pool_size=100, sample_size=20)
-                        if evolution_seeds:
-                            strategic_guidance = self.analyze_successful_patterns()
                 else:
                     logger.info("本轮所有策略均未达到高质量标准，未更新精华战报文件。")
-            
+
+            # 无论是否有新策略，进化者都需要重新加载种子池
+            if mode == 'evolve':
+                evolution_seeds = self.load_evolution_seeds(sample_size=20)
+                if not evolution_seeds:
+                    mode = 'discover'
+                    logger.warning("进化模式无法启动（无可用种子），已自动切换到发现模式。")
+                else:
+                    strategic_guidance = self.analyze_successful_patterns()
+
             if is_first_run:
                 logger.info("***** 安全模式运行结束，下轮将恢复正常 *****")
                 is_first_run = False

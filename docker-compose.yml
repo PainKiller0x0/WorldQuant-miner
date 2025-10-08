@@ -20,7 +20,7 @@ services:
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
       --batch-size 6
-      --concurrency 2
+      --concurrency 3
       --mode discover
       --log-file miner.log
       --sleep 60" 

@@ -1,139 +1,168 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 指挥中心 v4</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v4.1</title>
     <style>
-        body { font-family: 'Roboto', sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; font-size: 14px; }
-        .container { max-width: 1600px; margin: auto; display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; }
-        .card { background-color: #1e1e1e; border-radius: 8px; padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; flex-direction: column; }
-        h2 { color: #bb86fc; border-bottom: 2px solid #3c3c3c; padding-bottom: 10px; margin-top: 0; font-weight: 400; }
-        .log-panel { white-space: pre-wrap; word-wrap: break-word; background-color: #2c2c2c; padding: 15px; border-radius: 4px; flex-grow: 1; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #c8c8c8; height: 350px; }
-        #alphas-table-container { max-height: 500px; overflow-y: auto; width: 100%; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #3c3c3c; }
-        th { background-color: #333333; position: sticky; top: 0; font-weight: 700; }
-        tr:nth-child(even) { background-color: #242424; }
-        .grid-col-12 { grid-column: span 12; }
-        .grid-col-6 { grid-column: span 6; }
-        .grid-col-4 { grid-column: span 4; }
-        .highlight-fitness { color: #03dac6; font-weight: bold; }
-        .highlight-sharpe { color: #cf6679; font-weight: bold; }
-        .highlight-checks-good { color: #76ff03; }
-        .highlight-checks-bad { color: #ffab00; }
-        .timestamp { font-size: 0.9em; color: #888; }
-        .alpha-expression { font-family: 'Courier New', Courier, monospace; word-break: break-all; max-width: 300px; }
-        .kpi-container { display: flex; justify-content: space-around; text-align: center; padding: 20px 0; }
-        .kpi-item { flex: 1; }
-        .kpi-value { font-size: 2.5em; font-weight: 700; color: #03dac6; }
-        .kpi-label { font-size: 0.9em; color: #888; margin-top: 5px; }
-
-        @media (max-width: 1200px) {
-            .grid-col-6 { grid-column: span 12; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+        /* v7.3 修改: 改回单列布局 */
+        .container { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .card { background-color: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; flex-direction: column; }
+        h1, h2 { color: #bb86fc; border-bottom: 2px solid #3700b3; padding-bottom: 10px; }
+        h1 { text-align: center; margin-bottom: 30px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .kpi { background-color: #2a2a2a; padding: 15px; border-radius: 6px; border-left: 5px solid #03dac6; }
+        .kpi-title { font-weight: bold; color: #03dac6; margin-bottom: 5px; }
+        .kpi-value { font-size: 1.5em; font-weight: bold; }
+        .log-container { 
+            background-color: #2c2c2c; 
+            border: 1px solid #444; 
+            border-radius: 4px; 
+            padding: 15px; 
+            height: 250px;
+            overflow: auto;
+            white-space: pre;
+            font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace; 
+            font-size: 0.9em; 
         }
-        @media (max-width: 768px) {
-            .grid-col-4 { grid-column: span 12; }
-            .kpi-container { flex-direction: column; }
-            .kpi-item { margin-bottom: 20px; }
+        /* v7.3 新增: Alpha列表的滚动容器 */
+        .alpha-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
         }
+        .alpha-list { list-style: none; padding: 0; }
+        .alpha-item { background-color: #2a2a2a; margin-bottom: 10px; padding: 15px; border-radius: 6px; border-left: 5px solid #bb86fc; }
+        .alpha-expression { font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace; font-size: 0.95em; color: #cfcfcf; background-color: #333; padding: 5px; border-radius: 4px; display: block; margin-bottom: 10px; white-space: pre-wrap; word-wrap: break-word; }
+        .alpha-stats { font-size: 0.9em; color: #aaa; }
+        /* v7.3 新增: 状态颜色 */
+        .pass { color: lightgreen; font-weight: bold; }
+        .fail { color: lightcoral; font-weight: bold; }
+        .pending { color: orange; font-weight: bold; }
+        .download-button { display: inline-block; padding: 8px 15px; background-color: #3700b3; color: #fff; text-decoration: none; border-radius: 5px; margin-bottom: 10px; text-align: center; }
+        .download-button:hover { background-color: #4a148c; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="card grid-col-12">
-        <h2>战果概览 (KPIs)</h2>
-        <div class="kpi-container">
-            <div class="kpi-item">
-                <div class="kpi-value" id="kpi-total-hopeful">0</div>
-                <div class="kpi-label">已发现高质量 Alpha 总数</div>
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v4.1</h1>
+
+    <div class="container">
+        <div class="card">
+            <h2>🕵️‍♂️ 发现者 (Miner)</h2>
+            <div class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-title">运行状态</div>
+                    <div class="kpi-value" id="miner-status">--</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-title">上次心跳</div>
+                    <div class="kpi-value" id="miner-last-seen">--</div>
+                </div>
             </div>
-            <div class="kpi-item">
-                <div class="kpi-value" id="kpi-best-fitness">0.000</div>
-                <div class="kpi-label">历史最佳 Fitness</div>
+            <h3>最新日志</h3>
+            <a href="/download_logs/miner.log" class="download-button" download>下载完整 Miner 日志</a>
+            <div class="log-container" id="miner-logs">正在加载日志...</div>
+        </div>
+
+        <div class="card">
+            <h2>👨‍🏫 进化者 (Evolver)</h2>
+            <div class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-title">运行状态</div>
+                    <div class="kpi-value" id="evolver-status">--</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-title">上次心跳</div>
+                    <div class="kpi-value" id="evolver-last-seen">--</div>
+                </div>
             </div>
-            <div class="kpi-item">
-                <div class="kpi-value" id="kpi-total-tested">0</div>
-                <div class="kpi-label">已测试 Alpha 总数</div>
+            <h3>最新日志</h3>
+            <a href="/download_logs/evolver.log" class="download-button" download>下载完整 Evolver 日志</a>
+            <div class="log-container" id="evolver-logs">正在加载日志...</div>
+        </div>
+
+        <div class="card">
+            <h2>🏆 精英 Alpha 池 (Hopeful Alphas)</h2>
+            <div class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-title">精英总数</div>
+                    <div class="kpi-value" id="hopeful-count">--</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-title">最高 Fitness</div>
+                    <div class="kpi-value" id="max-fitness">--</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-title">最高 Sharpe</div>
+                    <div class="kpi-value" id="max-sharpe">--</div>
+                </div>
+                 <div class="kpi">
+                    <div class="kpi-title">平均 Fitness</div>
+                    <div class="kpi-value" id="avg-fitness">--</div>
+                </div>
+            </div>
+            <div class="alpha-container">
+                <ul id="hopeful-alphas-list" class="alpha-list">
+                    </ul>
             </div>
         </div>
     </div>
 
-    <div class="card grid-col-6">
-        <h2>“发现者”矿机日志 (Discoverer)</h2>
-        <div id="miner-log" class="log-panel">正在加载日志...</div>
-    </div>
-    <div class="card grid-col-6">
-        <h2>“进化者”矿机日志 (Evolver)</h2>
-        <div id="evolver-log" class="log-panel">正在加载日志...</div>
-    </div>
+    <script>
+        // v7.3 新增: 格式化状态颜色函数
+        function formatChecks(checksString) {
+            if (!checksString) return 'N/A';
+            return checksString
+                .replace(/(\d+\s*PASS)/g, '<span class="pass">$1</span>')
+                .replace(/(\d+\s*FAIL)/g, '<span class="fail">$1</span>')
+                .replace(/(\d+\s*PENDING)/g, '<span class="pending">$1</span>');
+        }
 
-    <div class="card grid-col-12">
-        <h2>高质量 Alpha 策略列表</h2>
-        <div id="alphas-table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Alpha 表达式</th>
-                        <th>Fitness</th>
-                        <th>Sharpe</th>
-                        <th>Checks</th>
-                        <th>Delay</th>
-                        <th>Decay</th>
-                        <th>Trunc.</th>
-                        <th>生成时间</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-    </div>
-</div>
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('miner-status').textContent = data.miner.status;
+                    document.getElementById('miner-status').style.color = data.miner.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
+                    document.getElementById('miner-last-seen').textContent = data.miner.last_seen;
+                    document.getElementById('miner-logs').textContent = data.miner.logs;
 
-<script>
-    function fetchData() {
-        fetch('/api/data')
-            .then(response => response.json())
-            .then(data => {
-                // 更新 KPIs
-                document.getElementById('kpi-total-hopeful').textContent = data.kpis.total_hopeful;
-                document.getElementById('kpi-best-fitness').textContent = data.kpis.best_fitness;
-                document.getElementById('kpi-total-tested').textContent = data.kpis.total_tested;
-
-                // 更新日志
-                const minerLog = document.getElementById('miner-log');
-                minerLog.textContent = data.miner_log;
-                minerLog.scrollTop = minerLog.scrollHeight;
-
-                const evolverLog = document.getElementById('evolver-log');
-                evolverLog.textContent = data.evolver_log;
-                evolverLog.scrollTop = evolverLog.scrollHeight;
-                
-                // 更新Alphas表格
-                const tableBody = document.querySelector('#alphas-table-container tbody');
-                tableBody.innerHTML = ''; 
-
-                data.alphas.forEach(alpha => {
-                    const row = tableBody.insertRow();
-                    const settings = alpha.performance.settings || {};
+                    document.getElementById('evolver-status').textContent = data.evolver.status;
+                    document.getElementById('evolver-status').style.color = data.evolver.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
+                    document.getElementById('evolver-last-seen').textContent = data.evolver.last_seen;
+                    document.getElementById('evolver-logs').textContent = data.evolver.logs;
                     
-                    row.insertCell().textContent = alpha.expression || 'N/A';
-                    row.insertCell().innerHTML = `<span class="highlight-fitness">${(alpha.performance.fitness || 0).toFixed(3)}</span>`;
-                    row.insertCell().innerHTML = `<span class="highlight-sharpe">${(alpha.performance.sharpe || 0).toFixed(3)}</span>`;
-                    row.insertCell().textContent = alpha.checks_summary || 'N/A';
-                    row.insertCell().textContent = settings.delay !== undefined ? settings.delay : 'N/A';
-                    row.insertCell().textContent = settings.decay !== undefined ? settings.decay : 'N/A';
-                    row.insertCell().textContent = settings.truncation !== undefined ? settings.truncation : 'N/A';
-                    row.insertCell().textContent = alpha.timestamp || 'N/A';
-                });
-            })
-            .catch(error => console.error('Error fetching data:', error));
-    }
+                    document.getElementById('hopeful-count').textContent = data.hopeful_alphas.count;
+                    document.getElementById('max-fitness').textContent = data.hopeful_alphas.max_fitness.toFixed(3);
+                    document.getElementById('max-sharpe').textContent = data.hopeful_alphas.max_sharpe.toFixed(3);
+                    document.getElementById('avg-fitness').textContent = data.hopeful_alphas.avg_fitness.toFixed(3);
 
-    setInterval(fetchData, 3000); // 降低刷新频率以减少负载
-    window.onload = fetchData;
-</script>
+                    // v7.3 修改: 渲染完整列表
+                    const list = document.getElementById('hopeful-alphas-list');
+                    list.innerHTML = ''; 
+                    data.hopeful_alphas.all_alphas.forEach(alpha => {
+                        const item = document.createElement('li');
+                        item.className = 'alpha-item';
+                        item.innerHTML = `
+                            <code class="alpha-expression">${alpha.expression}</code>
+                            <div class="alpha-stats">
+                                <strong>Fitness:</strong> ${alpha.fitness.toFixed(3)} | 
+                                <strong>Sharpe:</strong> ${alpha.sharpe.toFixed(3)} | 
+                                <strong>Checks:</strong> ${formatChecks(alpha.checks)} | 
+                                <strong>Timestamp:</strong> ${alpha.timestamp}
+                            </div>
+                        `;
+                        list.appendChild(item);
+                    });
+                })
+                .catch(error => console.error('Error fetching status:', error));
+        }
 
+        setInterval(updateStatus, 5000);
+        window.onload = updateStatus;
+    </script>
 </body>
 </html>

@@ -6583,5 +6583,2298 @@
         "status": "COMPLETE",
         "fitness": 0.54,
         "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) + rank(ts_zscore(ts_std_dev(high, 10), 5));",
+        "timestamp": "2025-10-08 14:51:04",
+        "status": "COMPLETE",
+        "fitness": -0.27,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 5)) * ts_delta(vwap, 3) - ts_std_dev(high, 10);",
+        "timestamp": "2025-10-08 15:19:50",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * ts_delta(vwap, 3) - ts_std_dev(open, 15);",
+        "timestamp": "2025-10-08 15:20:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * ts_delta(close, 3) / ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-08 15:22:56",
+        "status": "COMPLETE",
+        "fitness": 0.07,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 3) - ts_mean(high, 10);",
+        "timestamp": "2025-10-08 15:27:55",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20);",
+        "timestamp": "2025-10-08 15:28:14",
+        "status": "COMPLETE",
+        "fitness": -0.32,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 15:28:22",
+        "status": "COMPLETE",
+        "fitness": -0.53,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10) * ts_mean(ts_delta(close, 5), 5) + ts_std_dev(close, 10));",
+        "timestamp": "2025-10-08 15:31:49",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10)) * ts_std_dev(close, 20);",
+        "timestamp": "2025-10-08 15:31:35",
+        "status": "COMPLETE",
+        "fitness": -0.01,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 15) * rank(ts_delta(vwap, 5)) - ts_std_dev(high, 10);",
+        "timestamp": "2025-10-08 15:31:50",
+        "status": "COMPLETE",
+        "fitness": 0.11,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_std_dev(open, 5), 10) * rank(ts_delta(vwap, 7));",
+        "timestamp": "2025-10-08 15:32:10",
+        "status": "COMPLETE",
+        "fitness": -0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * rank(ts_delta(close, 5)) - rank(ts_mean(close, 10)) * rank(ts_std_dev(volume, 20));",
+        "timestamp": "2025-10-08 15:33:25",
+        "status": "COMPLETE",
+        "fitness": -0.59,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 5) * ts_delta(vwap, 10);",
+        "timestamp": "2025-10-08 15:33:46",
+        "status": "COMPLETE",
+        "fitness": 0.17,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 7) - ts_zscore(ts_mean(open, 10));",
+        "timestamp": "2025-10-08 15:35:17",
+        "status": "ERROR"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * ts_std_dev(vwap, 15);",
+        "timestamp": "2025-10-08 15:36:38",
+        "status": "COMPLETE",
+        "fitness": 0.07,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, vwap, 10) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-08 15:39:24",
+        "status": "COMPLETE",
+        "fitness": -0.81,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_std_dev(volume, 20), 10) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-08 15:39:46",
+        "status": "COMPLETE",
+        "fitness": 0.02,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 5) * rank(ts_std_dev(vwap, 20));",
+        "timestamp": "2025-10-08 15:42:50",
+        "status": "COMPLETE",
+        "fitness": -0.22,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 5) + ts_zscore(ts_delta(vwap, 10), 20);",
+        "timestamp": "2025-10-08 15:45:18",
+        "status": "COMPLETE",
+        "fitness": -0.45,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 15:45:24",
+        "status": "COMPLETE",
+        "fitness": -0.38,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(vwap, 20) / ts_std_dev(close, 20)) * rank(ts_decay_linear(close - open, 15));",
+        "timestamp": "2025-10-08 15:47:59",
+        "status": "COMPLETE",
+        "fitness": -0.43,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(vwap, volume, 20), 10)) * rank(ts_delta(close, 5)) - rank(ts_std_dev(close, 30));",
+        "timestamp": "2025-10-08 15:48:04",
+        "status": "COMPLETE",
+        "fitness": -0.51,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_std_dev(volume, 10), 20);",
+        "timestamp": "2025-10-08 15:50:57",
+        "status": "COMPLETE",
+        "fitness": -0.19,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 15) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 20), 10);",
+        "timestamp": "2025-10-08 16:19:23",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 20)) * ts_delta(vwap, 3) - ts_std_dev(close, 15);",
+        "timestamp": "2025-10-08 16:19:24",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * ts_mean(vwap, 20) - ts_std_dev(close, 15);",
+        "timestamp": "2025-10-08 16:50:46",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10) * ts_mean(ts_delta(close, 5), 5) + ts_std_dev(close, 20));",
+        "timestamp": "2025-10-08 16:55:13",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15)) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-08 16:53:42",
+        "status": "COMPLETE",
+        "fitness": -0.66,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_delta(vwap, 7));",
+        "timestamp": "2025-10-08 16:53:45",
+        "status": "COMPLETE",
+        "fitness": -0.16,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10) * ts_zscore(ts_mean(close, 20), 30);",
+        "timestamp": "2025-10-08 16:55:30",
+        "status": "COMPLETE",
+        "fitness": 0.12,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 5) + ts_zscore(ts_std_dev(high, 10), 20);",
+        "timestamp": "2025-10-08 17:22:14",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 5) + ts_zscore(ts_delta(vwap, 3), 10);",
+        "timestamp": "2025-10-08 17:27:19",
+        "status": "COMPLETE",
+        "fitness": -0.65,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(vwap, 10), ts_decay_linear(close, 10), 5)) + ts_mean(close, 5);",
+        "timestamp": "2025-10-08 17:37:36",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * rank(ts_delta(vwap, 3)) - ts_std_dev(open, 15);",
+        "timestamp": "2025-10-08 17:32:21",
+        "status": "COMPLETE",
+        "fitness": 0.02,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) + rank(ts_mean(high, 15) - ts_mean(low, 15));",
+        "timestamp": "2025-10-08 17:34:13",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 15), 10);",
+        "timestamp": "2025-10-08 17:58:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * ts_delta(vwap, 3) - ts_std_dev(open, 15);",
+        "timestamp": "2025-10-08 17:58:41",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, vwap, 10) * ts_std_dev(volume, 5) - ts_mean(high, 20);",
+        "timestamp": "2025-10-08 18:29:59",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5) * ts_delta(vwap, 3) - ts_std_dev(high, 7);",
+        "timestamp": "2025-10-08 18:30:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 12)) * ts_mean(ts_std_dev(volume, 3), 5) + ts_delta(close, 5);",
+        "timestamp": "2025-10-08 18:37:59",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 10), 15) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-08 18:32:41",
+        "status": "COMPLETE",
+        "fitness": 0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(open, 20)) * rank(ts_decay_linear(high, 15));",
+        "timestamp": "2025-10-08 18:33:01",
+        "status": "COMPLETE",
+        "fitness": -0.37,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 18:34:14",
+        "status": "COMPLETE",
+        "fitness": -0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_std_dev(high, 10), 5) * rank(ts_delta(vwap, 7)) - ts_zscore(volume, 20);",
+        "timestamp": "2025-10-08 18:35:03",
+        "status": "COMPLETE",
+        "fitness": -0.03,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, open, 10) * ts_delta(vwap, 5) - ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-08 19:01:21",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 10) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 19:03:57",
+        "status": "COMPLETE",
+        "fitness": -0.34,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_std_dev(volume, 10), 15);",
+        "timestamp": "2025-10-08 19:04:00",
+        "status": "COMPLETE",
+        "fitness": -0.18,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_std_dev(vwap, 15)) - ts_delta(open, 3);",
+        "timestamp": "2025-10-08 19:32:41",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(close, 3)) - ts_zscore(volume, 20);",
+        "timestamp": "2025-10-08 19:35:51",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 15) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 19:35:52",
+        "status": "COMPLETE",
+        "fitness": -0.19,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 20) * rank(ts_delta(close, 3)) + ts_zscore(volume, 15);",
+        "timestamp": "2025-10-08 19:35:54",
+        "status": "COMPLETE",
+        "fitness": -0.1,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 15)) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-08 19:37:24",
+        "status": "COMPLETE",
+        "fitness": -0.59,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(close, 10), ts_decay_linear(volume, 10), 5)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(open, 20));",
+        "timestamp": "2025-10-08 19:37:56",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 5) - ts_mean(high, 20);",
+        "timestamp": "2025-10-08 19:40:29",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(vwap, 3)) - ts_zscore(volume, 20);",
+        "timestamp": "2025-10-08 19:40:41",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, ts_mean(volume, 10), 5) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 19:42:09",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 10), ts_std_dev(volume, 20), 5)) * ts_mean(vwap, 30) - ts_zscore(open, 15);",
+        "timestamp": "2025-10-08 20:09:12",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(vwap, 10), ts_decay_linear(close, 10), 5) + ts_mean(close, 5));",
+        "timestamp": "2025-10-08 20:13:09",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 20) * ts_delta(vwap, 5) - ts_zscore(volume, 10);",
+        "timestamp": "2025-10-08 20:40:35",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * rank(ts_std_dev(vwap, 5)) - ts_delta(open, 7);",
+        "timestamp": "2025-10-08 20:40:44",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(volume, 10), 5) * rank(ts_delta(vwap, 7)) - ts_zscore(open, 30) * ts_mean(close, 5);",
+        "timestamp": "2025-10-08 20:50:31",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(close, 10), ts_delta(volume, 5), 15)) * rank(ts_zscore(vwap, 20)) - rank(ts_std_dev(high, 10)) * rank(ts_mean(low, 30));",
+        "timestamp": "2025-10-08 20:43:15",
+        "status": "COMPLETE",
+        "fitness": -0.25,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) * rank(ts_delta(vwap, 10));",
+        "timestamp": "2025-10-08 20:43:32",
+        "status": "COMPLETE",
+        "fitness": -0.47,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 10), 15) * ts_delta(vwap, 5) - ts_std_dev(open, 30);",
+        "timestamp": "2025-10-08 21:12:01",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 15), ts_std_dev(volume, 15), 5)) * rank(ts_delta(vwap, 3)) + rank(ts_zscore(ts_decay_linear(close, 10, 0.5), 20));",
+        "timestamp": "2025-10-08 21:13:15",
+        "status": "ERROR"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(volume, 10), 5) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 21:14:45",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 10), 15) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 21:17:35",
+        "status": "COMPLETE",
+        "fitness": -0.43,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, vwap, 20) * ts_zscore(ts_delta(volume, 5), 30);",
+        "timestamp": "2025-10-08 21:17:44",
+        "status": "COMPLETE",
+        "fitness": -0.13,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 10) * rank(ts_delta(vwap, 5)) - ts_std_dev(volume, 20) + ts_mean(close, 10);",
+        "timestamp": "2025-10-08 21:46:05",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_delta(close, 3) - ts_mean(open, 10);",
+        "timestamp": "2025-10-08 21:20:50",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 15), 5);",
+        "timestamp": "2025-10-08 21:49:31",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(vwap, 10), ts_decay_linear(volume, 10), 10)) * rank(ts_delta(close, 5));",
+        "timestamp": "2025-10-08 21:52:31",
+        "status": "COMPLETE",
+        "fitness": -0.75,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 15), 5)) * ts_delta(close, 3) - ts_std_dev(high, 10);",
+        "timestamp": "2025-10-08 22:20:49",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(open, 5), 20) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 22:23:36",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 1), ts_delta(volume, 1), 5)) * rank(ts_mean(vwap, 10)) - rank(ts_std_dev(high, 20));",
+        "timestamp": "2025-10-08 22:23:42",
+        "status": "COMPLETE",
+        "fitness": -0.07,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 10), ts_delta(volume, 10), 5)) * rank(ts_mean(vwap, 20) - close);",
+        "timestamp": "2025-10-08 22:23:47",
+        "status": "COMPLETE",
+        "fitness": 0.1,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(open, 5), 15) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-08 22:30:03",
+        "status": "COMPLETE",
+        "fitness": -0.05,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(high, 20), 10) * rank(ts_delta(vwap, 5)) - ts_zscore(volume, 30);",
+        "timestamp": "2025-10-08 22:30:04",
+        "status": "COMPLETE",
+        "fitness": -0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 15) * ts_delta(vwap, 5) + ts_std_dev(close, 10));",
+        "timestamp": "2025-10-08 22:59:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * rank(ts_std_dev(close, 30));",
+        "timestamp": "2025-10-08 22:32:55",
+        "status": "COMPLETE",
+        "fitness": -0.11,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_decay_linear(vwap, 20)) - rank(ts_std_dev(open, 30));",
+        "timestamp": "2025-10-08 22:32:57",
+        "status": "COMPLETE",
+        "fitness": -0.1,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 5) * rank(ts_std_dev(vwap, 20)) - ts_delta(close, 10);",
+        "timestamp": "2025-10-08 23:01:25",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 15) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 20), 5);",
+        "timestamp": "2025-10-08 23:03:14",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10) * ts_std_dev(vwap, 5);",
+        "timestamp": "2025-10-08 23:05:50",
+        "status": "COMPLETE",
+        "fitness": 0.13,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 15) * ts_delta(vwap, 5) - ts_zscore(ts_std_dev(high, 10), 5);",
+        "timestamp": "2025-10-08 23:34:35",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 5) * rank(ts_delta(vwap, 3)) - ts_zscore(ts_std_dev(high, 20), 20);",
+        "timestamp": "2025-10-08 23:37:18",
+        "status": "COMPLETE",
+        "fitness": -0.13,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 20), 10) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 23:37:21",
+        "status": "COMPLETE",
+        "fitness": -0.0,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_std_dev(open, 30)) * ts_mean(ts_delta(close, 1), 3);",
+        "timestamp": "2025-10-09 00:03:22",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 5), 20) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-08 23:39:54",
+        "status": "COMPLETE",
+        "fitness": -0.19,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10) * rank(ts_delta(vwap, 5)) - ts_zscore(ts_std_dev(high, 15), 10);",
+        "timestamp": "2025-10-08 23:40:04",
+        "status": "COMPLETE",
+        "fitness": -0.07,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 20)) * ts_std_dev(close, 15) - ts_delta(open, 5);",
+        "timestamp": "2025-10-09 00:08:34",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 15) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-09 00:11:28",
+        "status": "COMPLETE",
+        "fitness": -0.55,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 20) + ts_zscore(ts_delta(vwap, 3), 15);",
+        "timestamp": "2025-10-09 00:11:32",
+        "status": "COMPLETE",
+        "fitness": -0.73,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) + rank(ts_decay_linear(ts_std_dev(high, 20), 15));",
+        "timestamp": "2025-10-09 00:14:09",
+        "status": "COMPLETE",
+        "fitness": -0.31,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_delta(vwap, 3)) - ts_std_dev(close, 15);",
+        "timestamp": "2025-10-09 00:14:18",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) + ts_zscore(ts_mean(high, 20), 20);",
+        "timestamp": "2025-10-09 00:14:52",
+        "status": "COMPLETE",
+        "fitness": -0.36,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(vwap, 7));",
+        "timestamp": "2025-10-09 00:17:28",
+        "status": "COMPLETE",
+        "fitness": -0.48,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 20) * ts_delta(vwap, 7);",
+        "timestamp": "2025-10-09 00:18:03",
+        "status": "COMPLETE",
+        "fitness": -0.77,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 10), ts_delta(volume, 5), 20)) * ts_mean(close, 15);",
+        "timestamp": "2025-10-09 00:21:26",
+        "status": "COMPLETE",
+        "fitness": 0.1,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 5) * ts_std_dev(vwap, 20) - ts_delta(open, 10));",
+        "timestamp": "2025-10-09 00:49:30",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, vwap, 15) * ts_delta(ts_mean(high, 5), 3);",
+        "timestamp": "2025-10-09 00:52:30",
+        "status": "COMPLETE",
+        "fitness": -0.82,
+        "passed_checks": 3
+    },
+    {
+        "expression": "(ts_corr(close, volume, 10) * ts_delta(vwap, 5)) / ts_mean(rank(ts_std_dev(high, 20)), 5) + rank(close);",
+        "timestamp": "2025-10-09 00:54:05",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 20) * ts_delta(vwap, 3) - ts_std_dev(high, 15);",
+        "timestamp": "2025-10-09 01:23:58",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * ts_delta(vwap, 5) - ts_std_dev(high, 30);",
+        "timestamp": "2025-10-09 01:23:58",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(volume, 15), 10) * rank(ts_std_dev(close, 20));",
+        "timestamp": "2025-10-09 01:28:09",
+        "status": "COMPLETE",
+        "fitness": -0.43,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 5), 10) * ts_delta(vwap, 7);",
+        "timestamp": "2025-10-09 01:28:09",
+        "status": "COMPLETE",
+        "fitness": 0.28,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 15) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-09 01:28:59",
+        "status": "COMPLETE",
+        "fitness": -0.2,
+        "passed_checks": 5
+    },
+    {
+        "expression": "(ts_corr(vwap, volume, 5) * ts_mean(ts_delta(close, 3), 5)) / ts_std_dev(high, 10) + rank(ts_mean(close, 5));",
+        "timestamp": "2025-10-09 01:36:28",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * rank(ts_std_dev(close, 5)) - rank(ts_delta(high, 3)) * rank(ts_mean(open, 20));",
+        "timestamp": "2025-10-09 01:32:50",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 15)) * ts_std_dev(high, 20) - ts_delta(open, 5);",
+        "timestamp": "2025-10-09 02:00:15",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20) * rank(ts_delta(vwap, 3)) - ts_zscore(open, 15);",
+        "timestamp": "2025-10-09 02:02:48",
+        "status": "COMPLETE",
+        "fitness": 0.37,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_decay_linear(vwap, 20)) - rank(ts_std_dev(high, 30));",
+        "timestamp": "2025-10-09 02:03:05",
+        "status": "COMPLETE",
+        "fitness": -0.08,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 10), 15) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 02:03:21",
+        "status": "COMPLETE",
+        "fitness": -0.26,
+        "passed_checks": 4
+    },
+    {
+        "expression": "(ts_corr(vwap, volume, 5) * ts_mean(ts_delta(close, 3), 5)) / ts_std_dev(high, 10) + rank(ts_delta(close, 1));",
+        "timestamp": "2025-10-09 02:26:25",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 10)) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-09 02:06:00",
+        "status": "COMPLETE",
+        "fitness": -0.61,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 7) * rank(ts_delta(vwap, 3)) - ts_zscore(ts_std_dev(high, 20), 15);",
+        "timestamp": "2025-10-09 02:07:40",
+        "status": "COMPLETE",
+        "fitness": -0.05,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * ts_delta(vwap, 3) - ts_zscore(close, 30);",
+        "timestamp": "2025-10-09 02:34:37",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5) * ts_delta(vwap, 2) - ts_std_dev(close, 20);",
+        "timestamp": "2025-10-09 02:35:16",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 5) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 10), 10);",
+        "timestamp": "2025-10-09 03:06:31",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5)) * ts_zscore(ts_std_dev(volume, 20), 30) - ts_delta(close, 5);",
+        "timestamp": "2025-10-09 03:08:53",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 10), ts_delta(volume, 5), 20) * ts_std_dev(vwap, 15);",
+        "timestamp": "2025-10-09 03:09:34",
+        "status": "COMPLETE",
+        "fitness": -0.36,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_zscore(vwap, 20)) - rank(ts_std_dev(high, 15));",
+        "timestamp": "2025-10-09 03:12:12",
+        "status": "COMPLETE",
+        "fitness": -0.24,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 10), 5) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 20), 10);",
+        "timestamp": "2025-10-09 03:40:57",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 15) * rank(ts_std_dev(close, 20)) - ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 03:40:58",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_std_dev(vwap, 30)) - ts_delta(open, 15);",
+        "timestamp": "2025-10-09 03:42:24",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) * rank(ts_std_dev(volume, 20)) - ts_delta(close, 30);",
+        "timestamp": "2025-10-09 03:46:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * rank(ts_delta(vwap, 5));",
+        "timestamp": "2025-10-09 03:45:30",
+        "status": "COMPLETE",
+        "fitness": -0.36,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) + ts_delta(vwap, 5) * rank(ts_std_dev(close, 30));",
+        "timestamp": "2025-10-09 04:13:38",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 10), ts_std_dev(volume, 5), 20) * ts_mean(vwap, 15) - ts_zscore(open, 30);",
+        "timestamp": "2025-10-09 04:13:50",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * rank(ts_delta(close, 3));",
+        "timestamp": "2025-10-09 04:16:10",
+        "status": "COMPLETE",
+        "fitness": -0.66,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5) * rank(ts_delta(vwap, 3)) - ts_zscore(open, 15);",
+        "timestamp": "2025-10-09 04:18:45",
+        "status": "COMPLETE",
+        "fitness": 0.39,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 20)) * rank(ts_delta(close, 10)) + rank(ts_mean(high, 5) - ts_mean(low, 5));",
+        "timestamp": "2025-10-09 04:19:44",
+        "status": "COMPLETE",
+        "fitness": -0.33,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5) - ts_std_dev(close, 10)) / rank(ts_mean(high, 20)) * ts_delta(low, 7);",
+        "timestamp": "2025-10-09 04:23:25",
+        "status": "COMPLETE",
+        "fitness": 0.14,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(vwap, volume, 10), 5)) * rank(ts_delta(close, 3)) - rank(ts_std_dev(open, 20));",
+        "timestamp": "2025-10-09 04:26:19",
+        "status": "COMPLETE",
+        "fitness": -0.44,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10)) * rank(ts_mean(close, 20) - low) - rank(ts_std_dev(open, 15));",
+        "timestamp": "2025-10-09 04:26:53",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(high, low, 10)) - rank(ts_delta(close, 5)) + ts_mean(rank(ts_std_dev(close, 20)), 5) + rank(ts_std_dev(volume, 10)) + ts_mean(close, 5);",
+        "timestamp": "2025-10-09 04:31:58",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_std_dev(high, 20)) * rank(ts_mean(low, 15));",
+        "timestamp": "2025-10-09 04:30:07",
+        "status": "COMPLETE",
+        "fitness": -0.41,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 1), ts_delta(volume, 1), 5) * ts_std_dev(vwap, 10);",
+        "timestamp": "2025-10-09 04:31:39",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(close, ts_mean(volume, 20), 15) * ts_std_dev(vwap, 30);",
+        "timestamp": "2025-10-09 04:32:04",
+        "status": "COMPLETE",
+        "fitness": 0.07,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_delta(volume, 10), 15) * ts_mean(high, 20) - ts_std_dev(low, 7);",
+        "timestamp": "2025-10-09 04:58:15",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, ts_mean(volume, 5), 10) * ts_std_dev(vwap, 20);",
+        "timestamp": "2025-10-09 05:00:59",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 5);",
+        "timestamp": "2025-10-09 05:01:10",
+        "status": "COMPLETE",
+        "fitness": -0.2,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_mean(open, 30)) * rank(ts_std_dev(close, 1));",
+        "timestamp": "2025-10-09 05:14:14",
+        "status": "EXCEPTION",
+        "fitness": null,
+        "passed_checks": 2,
+        "performance": {
+            "pnl": 0,
+            "bookSize": 0,
+            "longCount": 0,
+            "shortCount": 0,
+            "turnover": 0.0,
+            "returns": 0.0,
+            "drawdown": 0.0,
+            "margin": 0.0,
+            "sharpe": 0.0,
+            "fitness": null,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "FAIL",
+                    "limit": 1.25,
+                    "value": 0.0
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "ERROR",
+                    "limit": 1.0
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "FAIL",
+                    "limit": 0.01,
+                    "value": 0.0
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.0
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "FAIL"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "ERROR"
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * rank(ts_delta(vwap, 5)) - ts_zscore(ts_std_dev(high, 10), 30);",
+        "timestamp": "2025-10-09 05:04:53",
+        "status": "COMPLETE",
+        "fitness": -0.2,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_std_dev(volume, 10), 5) + ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 05:32:44",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5) * ts_delta(vwap, 15);",
+        "timestamp": "2025-10-09 05:35:34",
+        "status": "COMPLETE",
+        "fitness": 0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10) * ts_zscore(close, 20);",
+        "timestamp": "2025-10-09 05:35:55",
+        "status": "COMPLETE",
+        "fitness": 0.45,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * ts_std_dev(vwap, 5);",
+        "timestamp": "2025-10-09 05:38:25",
+        "status": "COMPLETE",
+        "fitness": 0.08,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_std_dev(close, 20)) - ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 06:07:14",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(vwap, volume, 10), 5)) * rank(ts_delta(close, 3)) - rank(ts_decay_linear(close, 20));",
+        "timestamp": "2025-10-09 06:09:41",
+        "status": "COMPLETE",
+        "fitness": -0.27,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(volume, 10), 5) * rank(ts_delta(vwap, 7)) - ts_zscore(open, 30) + ts_mean(close, 10);",
+        "timestamp": "2025-10-09 06:31:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 10), 5)) * rank(ts_delta(close, 3)) + rank(ts_zscore(open, 20));",
+        "timestamp": "2025-10-09 06:12:29",
+        "status": "COMPLETE",
+        "fitness": -0.63,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5)) * ts_delta(close, 3) - ts_zscore(volume, 20);",
+        "timestamp": "2025-10-09 06:40:57",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5) * ts_std_dev(vwap, 20);",
+        "timestamp": "2025-10-09 06:43:25",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 5), 10)) * rank(ts_delta(close, 3)) - rank(ts_std_dev(high, 20)) * rank(ts_zscore(low, 15));",
+        "timestamp": "2025-10-09 06:43:57",
+        "status": "COMPLETE",
+        "fitness": -0.11,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 7) * ts_std_dev(high, 20);",
+        "timestamp": "2025-10-09 06:46:27",
+        "status": "COMPLETE",
+        "fitness": -0.03,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 20) * rank(ts_delta(close, 5)) - ts_zscore(volume, 15);",
+        "timestamp": "2025-10-09 06:46:38",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 10), 5) * rank(ts_delta(vwap, 7));",
+        "timestamp": "2025-10-09 06:49:25",
+        "status": "COMPLETE",
+        "fitness": -0.24,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(close, volume, 10), 20) * ts_delta(vwap, 5)) - rank(ts_std_dev(open, 15));",
+        "timestamp": "2025-10-09 06:49:25",
+        "status": "COMPLETE",
+        "fitness": 0.0,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_delta(volume, 10), 15) * rank(ts_std_dev(vwap, 20)) - ts_mean(high, 10);",
+        "timestamp": "2025-10-09 07:17:54",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 10) * rank(ts_delta(vwap, 5));",
+        "timestamp": "2025-10-09 07:20:35",
+        "status": "COMPLETE",
+        "fitness": -0.13,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 15) * rank(ts_delta(vwap, 5)) - ts_zscore(ts_decay_linear(high, 30), 10);",
+        "timestamp": "2025-10-09 07:20:40",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_std_dev(close, 5) - ts_std_dev(open, 5));",
+        "timestamp": "2025-10-09 07:20:40",
+        "status": "COMPLETE",
+        "fitness": -0.22,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 5), 15) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 07:23:13",
+        "status": "COMPLETE",
+        "fitness": -0.18,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * ts_delta(close, 3) - ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-09 07:52:01",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 10) * rank(ts_delta(close, 5)) + ts_zscore(volume, 20);",
+        "timestamp": "2025-10-09 07:54:37",
+        "status": "COMPLETE",
+        "fitness": -0.09,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5) + ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 08:23:18",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 5), 20) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 08:25:43",
+        "status": "COMPLETE",
+        "fitness": -0.16,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_delta(close, 3) + ts_zscore(ts_std_dev(high, 10), 20);",
+        "timestamp": "2025-10-09 08:54:43",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-09 08:57:17",
+        "status": "COMPLETE",
+        "fitness": -0.08,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(vwap, volume, 5), 10)) * ts_delta(close, 3);",
+        "timestamp": "2025-10-09 08:57:30",
+        "status": "COMPLETE",
+        "fitness": -0.5,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_std_dev(volume, 20), 15)) * ts_zscore(vwap, 10);",
+        "timestamp": "2025-10-09 09:00:08",
+        "status": "COMPLETE",
+        "fitness": -0.38,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-09 09:00:20",
+        "status": "COMPLETE",
+        "fitness": 0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10) * rank(ts_delta(vwap, 3)) - ts_zscore(ts_std_dev(high, 20), 5);",
+        "timestamp": "2025-10-09 09:03:03",
+        "status": "COMPLETE",
+        "fitness": -0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * rank(ts_delta(vwap, 3)) - ts_zscore(ts_std_dev(high, 15), 5);",
+        "timestamp": "2025-10-09 09:06:20",
+        "status": "COMPLETE",
+        "fitness": -0.03,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10) * ts_mean(ts_delta(close, 5), 5) + ts_std_dev(close, 5));",
+        "timestamp": "2025-10-09 09:24:00",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(close, 20)) - rank(ts_mean(open, 10)) * rank(ts_zscore(high, 30));",
+        "timestamp": "2025-10-09 09:09:22",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 10) * ts_delta(vwap, 5) - ts_std_dev(close, 20);",
+        "timestamp": "2025-10-09 09:37:43",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, vwap, 10), 5)) * rank(ts_delta(ts_mean(volume, 5), 3) + ts_std_dev(close, 5));",
+        "timestamp": "2025-10-09 10:08:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, open, 5) * ts_std_dev(volume, 20) - ts_zscore(vwap, 15);",
+        "timestamp": "2025-10-09 09:40:20",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) * ts_delta(vwap, 7) - ts_std_dev(high, 20);",
+        "timestamp": "2025-10-09 10:09:18",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) - rank(ts_std_dev(high, 10)) + rank(ts_zscore(low, 20));",
+        "timestamp": "2025-10-09 10:12:03",
+        "status": "COMPLETE",
+        "fitness": -0.62,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 20), 10);",
+        "timestamp": "2025-10-09 10:40:56",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(volume, 3) * ts_mean(close, 12) + ts_std_dev(close, 5));",
+        "timestamp": "2025-10-09 11:07:46",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 5) * rank(ts_std_dev(vwap, 20));",
+        "timestamp": "2025-10-09 10:43:40",
+        "status": "COMPLETE",
+        "fitness": -0.34,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) - rank(ts_std_dev(high, 20)) * rank(ts_zscore(low, 15));",
+        "timestamp": "2025-10-09 10:44:48",
+        "status": "COMPLETE",
+        "fitness": -0.09,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * ts_delta(close, 3) + rank(ts_zscore(volume, 20));",
+        "timestamp": "2025-10-09 11:12:20",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_mean(high, 20)) * rank(ts_std_dev(low, 15));",
+        "timestamp": "2025-10-09 11:14:58",
+        "status": "COMPLETE",
+        "fitness": -0.39,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(high, 10), 15) * rank(ts_delta(vwap, 20)) - ts_zscore(volume, 30);",
+        "timestamp": "2025-10-09 11:15:19",
+        "status": "COMPLETE",
+        "fitness": -0.03,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(vwap, 10), ts_delta(close, 5), 15)) * ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-09 11:17:43",
+        "status": "COMPLETE",
+        "fitness": -0.07,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 10), ts_delta(volume, 10), 10);",
+        "timestamp": "2025-10-09 11:18:01",
+        "status": "COMPLETE",
+        "fitness": -0.69,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 10), 5) * rank(ts_std_dev(vwap, 20)) - ts_delta(low, 3);",
+        "timestamp": "2025-10-09 11:46:40",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(vwap, 20)) - rank(ts_mean(close, 30)) * rank(ts_decay_linear(volume, 15));",
+        "timestamp": "2025-10-09 11:49:37",
+        "status": "COMPLETE",
+        "fitness": -0.39,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_delta(close, 3) + ts_mean(high, 10) - ts_zscore(low, 20);",
+        "timestamp": "2025-10-09 12:17:51",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10) * rank(ts_std_dev(close, 30)) - ts_delta(vwap, 5);",
+        "timestamp": "2025-10-09 12:18:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5)) * ts_delta(vwap, 3) - ts_zscore(open, 15);",
+        "timestamp": "2025-10-09 12:20:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_delta(vwap, 3), ts_delta(volume, 5), 10);",
+        "timestamp": "2025-10-09 12:21:17",
+        "status": "COMPLETE",
+        "fitness": -0.32,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 20), 10) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 12:21:27",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * ts_std_dev(close, 5) - ts_delta(high, 3);",
+        "timestamp": "2025-10-09 12:49:55",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(volume, 3) * ts_mean(close, 12)) * rank(ts_std_dev(close, 5)) * rank(ts_mean(volume, 10)) * rank(ts_delta(close, 5));",
+        "timestamp": "2025-10-09 12:54:42",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * rank(ts_delta(vwap, 3)) + ts_zscore(ts_std_dev(high, 15), 10);",
+        "timestamp": "2025-10-09 13:30:15",
+        "status": "COMPLETE",
+        "fitness": -0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_decay_linear(vwap, 20)) - rank(ts_std_dev(open, 15));",
+        "timestamp": "2025-10-09 13:30:46",
+        "status": "COMPLETE",
+        "fitness": -0.04,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10)) * rank(ts_delta(vwap, 5)) + rank(ts_std_dev(close, 15)) - rank(ts_zscore(open, 30));",
+        "timestamp": "2025-10-09 13:31:25",
+        "status": "COMPLETE",
+        "fitness": 0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_zscore(ts_std_dev(vwap, 20), 30));",
+        "timestamp": "2025-10-09 13:31:57",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 15) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-09 13:32:55",
+        "status": "COMPLETE",
+        "fitness": -0.02,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_delta(volume, 10), 15);",
+        "timestamp": "2025-10-09 13:35:45",
+        "status": "COMPLETE",
+        "fitness": -0.46,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 10) * ts_delta(vwap, 5) - ts_std_dev(open, 20);",
+        "timestamp": "2025-10-09 14:06:56",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, open, 10) * ts_delta(vwap, 5) - ts_mean(volume, 20);",
+        "timestamp": "2025-10-09 14:07:01",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10) * rank(ts_std_dev(vwap, 20)) - ts_delta(close, 3);",
+        "timestamp": "2025-10-09 14:07:04",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(open, 10), 5) * ts_delta(vwap, 7);",
+        "timestamp": "2025-10-09 14:09:43",
+        "status": "COMPLETE",
+        "fitness": 0.11,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) + ts_corr(ts_mean(close, 5), ts_mean(vwap, 5), 15) + ts_delta(ts_mean(close, 20), 1);",
+        "timestamp": "2025-10-09 14:14:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_mean(signed_power(divide(vwap, close), 2), 10)) - rank(ts_std_dev(volume, close, 5));",
+        "timestamp": "2025-10-09 14:32:07",
+        "status": "ERROR"
+    },
+    {
+        "expression": "ts_corr(close, vwap, 20) * ts_zscore(ts_delta(close, 5), 15);",
+        "timestamp": "2025-10-09 14:12:28",
+        "status": "COMPLETE",
+        "fitness": -0.66,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 10), 5) * rank(ts_delta(vwap, 3)) - ts_std_dev(close, 20);",
+        "timestamp": "2025-10-09 14:13:15",
+        "status": "COMPLETE",
+        "fitness": -0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 20) * ts_delta(close, 5) - ts_zscore(volume, 10);",
+        "timestamp": "2025-10-09 14:41:04",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10)) * rank(ts_delta(vwap, 3)) + rank(ts_std_dev(close, 20)) - rank(ts_zscore(open, 60));",
+        "timestamp": "2025-10-09 14:43:41",
+        "status": "COMPLETE",
+        "fitness": -0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10) * rank(ts_std_dev(vwap, 20)) - ts_delta(open, 3);",
+        "timestamp": "2025-10-09 15:12:21",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(vwap, volume, 10), 20) * ts_delta(close, 5) - ts_std_dev(high, 15));",
+        "timestamp": "2025-10-09 15:12:26",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) + ts_delta(ts_mean(close, 10), 3));",
+        "timestamp": "2025-10-09 15:13:35",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * ts_delta(vwap, 5) - ts_std_dev(high, 7);",
+        "timestamp": "2025-10-09 15:43:46",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, open, 5)) * ts_zscore(ts_mean(volume, 20), 10) + ts_mean(ts_delta(close, 1), 5);",
+        "timestamp": "2025-10-09 15:47:11",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(close, 7));",
+        "timestamp": "2025-10-09 15:46:13",
+        "status": "COMPLETE",
+        "fitness": -0.5,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 5), 20) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 15:46:41",
+        "status": "COMPLETE",
+        "fitness": -0.21,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 3), ts_delta(volume, 3), 5)) * rank(ts_mean(vwap, 10) - ts_mean(close, 10));",
+        "timestamp": "2025-10-09 15:48:03",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, ts_mean(volume, 20), 10) * ts_delta(vwap, 5) + ts_zscore(ts_std_dev(high, 30), 60);",
+        "timestamp": "2025-10-09 16:15:20",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_delta(volume, 10), 15) * ts_std_dev(vwap, 20);",
+        "timestamp": "2025-10-09 16:17:54",
+        "status": "COMPLETE",
+        "fitness": -0.13,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(vwap, 10), ts_delta(close, 5), 15) * rank(ts_std_dev(volume, 20));",
+        "timestamp": "2025-10-09 16:17:58",
+        "status": "COMPLETE",
+        "fitness": 0.16,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 5) * rank(ts_delta(vwap, 10));",
+        "timestamp": "2025-10-09 16:18:35",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 10) * ts_delta(vwap, 5);",
+        "timestamp": "2025-10-09 16:21:17",
+        "status": "COMPLETE",
+        "fitness": -0.72,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 10), 5)) * rank(ts_delta(close, 3) / ts_std_dev(close, 20));",
+        "timestamp": "2025-10-09 16:21:39",
+        "status": "COMPLETE",
+        "fitness": -0.59,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) - rank(ts_std_dev(high, 20)) + rank(ts_zscore(low, 15));",
+        "timestamp": "2025-10-09 16:24:42",
+        "status": "COMPLETE",
+        "fitness": -0.64,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) + rank(ts_mean(high, 10)) - rank(ts_std_dev(low, 20));",
+        "timestamp": "2025-10-09 16:24:58",
+        "status": "COMPLETE",
+        "fitness": -0.27,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) * rank(ts_std_dev(high, 20)) + rank(ts_mean(close, 15));",
+        "timestamp": "2025-10-09 16:29:25",
+        "status": "COMPLETE",
+        "fitness": -0.03,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) + rank(ts_std_dev(high, 10)) * rank(ts_zscore(low, 15));",
+        "timestamp": "2025-10-09 16:30:20",
+        "status": "COMPLETE",
+        "fitness": -0.62,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(vwap, volume, 20), 10)) * ts_std_dev(close, 5);",
+        "timestamp": "2025-10-09 16:33:16",
+        "status": "COMPLETE",
+        "fitness": -0.16,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(volume, 15), 10) * rank(ts_std_dev(vwap, 20));",
+        "timestamp": "2025-10-09 16:33:27",
+        "status": "COMPLETE",
+        "fitness": -0.44,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10) * rank(ts_std_dev(close, 20));",
+        "timestamp": "2025-10-09 16:36:10",
+        "status": "COMPLETE",
+        "fitness": -0.29,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(vwap, ts_mean(close, 10), 10) * ts_delta(volume, 5);",
+        "timestamp": "2025-10-09 16:36:26",
+        "status": "COMPLETE",
+        "fitness": 0.04,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * rank(ts_delta(close, 5)) - rank(ts_std_dev(high, 20)) * rank(ts_mean(low, 10));",
+        "timestamp": "2025-10-09 16:36:38",
+        "status": "COMPLETE",
+        "fitness": -0.41,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) * rank(ts_delta(vwap, 7)) - ts_std_dev(open, 20);",
+        "timestamp": "2025-10-09 16:39:21",
+        "status": "COMPLETE",
+        "fitness": 0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 5) * rank(ts_delta(vwap, 10));",
+        "timestamp": "2025-10-09 16:41:51",
+        "status": "COMPLETE",
+        "fitness": -0.28,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) + ts_zscore(ts_delta(vwap, 3), 15);",
+        "timestamp": "2025-10-09 16:42:07",
+        "status": "COMPLETE",
+        "fitness": -0.57,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(close, vwap, 10), 5) * ts_delta(vwap, 3)) * signed_power(ts_std_dev(volume, 20), 2);",
+        "timestamp": "2025-10-09 16:42:12",
+        "status": "COMPLETE",
+        "fitness": -0.55,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 7) * ts_std_dev(vwap, 15);",
+        "timestamp": "2025-10-09 16:43:24",
+        "status": "COMPLETE",
+        "fitness": -0.08,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20)) * ts_delta(vwap, 3) - ts_zscore(open, 15);",
+        "timestamp": "2025-10-09 16:56:57",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 10), ts_std_dev(volume, 20), 5)) * rank(ts_mean(high, 15) - ts_mean(low, 15));",
+        "timestamp": "2025-10-09 16:48:11",
+        "status": "COMPLETE",
+        "fitness": -0.1,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 10) * ts_delta(vwap, 5) - ts_zscore(close, 20);",
+        "timestamp": "2025-10-09 17:14:44",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, vwap, 10), 5)) * rank(ts_delta(ts_mean(volume, 5), 3) + ts_std_dev(close, 10));",
+        "timestamp": "2025-10-09 17:39:37",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 10), 5)) * rank(ts_delta(close, 3)) * rank(ts_std_dev(high, 20));",
+        "timestamp": "2025-10-09 17:17:28",
+        "status": "COMPLETE",
+        "fitness": -0.45,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_std_dev(volume, 10), 15)) * signed_power(vwap, 2);",
+        "timestamp": "2025-10-09 17:45:56",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * ts_delta(vwap, 3) - ts_std_dev(volume, 15);",
+        "timestamp": "2025-10-09 17:46:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(close, 20), ts_decay_linear(volume, 20), 10)) * rank(ts_delta(vwap, 5)) - rank(ts_std_dev(close, 15));",
+        "timestamp": "2025-10-09 17:48:50",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 7) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 17:48:53",
+        "status": "COMPLETE",
+        "fitness": -0.17,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(close, 10), ts_decay_linear(volume, 10), 5)) * rank(ts_std_dev(vwap, 20) - ts_std_dev(close, 20));",
+        "timestamp": "2025-10-09 17:51:40",
+        "status": "COMPLETE",
+        "fitness": -0.33,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_delta(close, 3) + ts_mean(high, 10) - ts_std_dev(low, 20);",
+        "timestamp": "2025-10-09 18:20:07",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 7) * ts_delta(vwap, 3) + ts_zscore(high, 20);",
+        "timestamp": "2025-10-09 18:51:25",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 5), 20) * ts_std_dev(close, 30) - ts_delta(vwap, 15);",
+        "timestamp": "2025-10-09 18:51:36",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 5), 20) * ts_delta(vwap, 10);",
+        "timestamp": "2025-10-09 18:54:36",
+        "status": "COMPLETE",
+        "fitness": 0.03,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, open, 5) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-09 18:54:47",
+        "status": "COMPLETE",
+        "fitness": -0.57,
+        "passed_checks": 3
+    },
+    {
+        "expression": "rank(ts_corr(ts_decay_linear(close, 10), ts_decay_linear(volume, 5), 15)) * rank(ts_delta(vwap, 7)) - rank(ts_std_dev(close, 20)) * rank(ts_zscore(open, 30));",
+        "timestamp": "2025-10-09 19:00:17",
+        "status": "COMPLETE",
+        "fitness": -0.12,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, vwap, 10), 5)) * rank(ts_delta(ts_mean(volume, 5), 3) * ts_std_dev(close, 5) * rank(ts_mean(close, 10)) + ts_mean(close, 5));",
+        "timestamp": "2025-10-09 18:57:59",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) * rank(ts_std_dev(vwap, 20));",
+        "timestamp": "2025-10-09 19:03:26",
+        "status": "COMPLETE",
+        "fitness": -0.33,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(close, vwap, 10) * ts_std_dev(volume, 5) - ts_delta(open, 3);",
+        "timestamp": "2025-10-09 19:34:40",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 7) * ts_delta(vwap, 3) - ts_std_dev(high, 15);",
+        "timestamp": "2025-10-09 19:34:45",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * ts_std_dev(high, 15);",
+        "timestamp": "2025-10-09 19:37:33",
+        "status": "COMPLETE",
+        "fitness": 0.12,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * ts_std_dev(close, 5) - ts_delta(open, 3);",
+        "timestamp": "2025-10-09 20:06:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10)) * rank(ts_zscore(close, 20)) - rank(ts_std_dev(high, 15)) * ts_mean(volume, 10);",
+        "timestamp": "2025-10-09 20:06:04",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(volume, 3) * ts_mean(close, 12) * ts_std_dev(close, 5)) + ts_mean(close, 20);",
+        "timestamp": "2025-10-09 19:54:55",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(volume, 3) + ts_std_dev(close, 12));",
+        "timestamp": "2025-10-09 20:25:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 3), ts_delta(volume, 3), 7)) * ts_zscore(ts_mean(vwap, 5), 20);",
+        "timestamp": "2025-10-09 20:08:49",
+        "status": "COMPLETE",
+        "fitness": -0.09,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 15) * rank(ts_delta(vwap, 5)) - ts_std_dev(close, 10);",
+        "timestamp": "2025-10-09 20:09:29",
+        "status": "COMPLETE",
+        "fitness": 0.05,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(open, 15), 10);",
+        "timestamp": "2025-10-09 20:37:30",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-09 20:40:06",
+        "status": "COMPLETE",
+        "fitness": -0.62,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) + rank(ts_std_dev(high, 10) - ts_std_dev(low, 10));",
+        "timestamp": "2025-10-09 20:40:31",
+        "status": "COMPLETE",
+        "fitness": -0.47,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_std_dev(close, 10) - ts_mean(open, 20);",
+        "timestamp": "2025-10-09 21:08:42",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(vwap, 20)) - rank(ts_mean(open, 15)) * rank(ts_zscore(high, 30));",
+        "timestamp": "2025-10-09 21:11:38",
+        "status": "COMPLETE",
+        "fitness": 0.03,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 20), 15) * ts_delta(vwap, 3) - ts_zscore(open, 10);",
+        "timestamp": "2025-10-09 21:39:54",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * rank(ts_std_dev(close, 20));",
+        "timestamp": "2025-10-09 21:42:31",
+        "status": "COMPLETE",
+        "fitness": 0.11,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 15) * ts_delta(vwap, 5) - ts_zscore(ts_std_dev(high, 30), 10);",
+        "timestamp": "2025-10-09 22:11:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * rank(ts_std_dev(vwap, 15));",
+        "timestamp": "2025-10-09 23:00:02",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 15), 5) * ts_delta(vwap, 3) + ts_std_dev(high, 20) - ts_mean(low, 10);",
+        "timestamp": "2025-10-09 23:31:15",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20)) * ts_delta(vwap, 3) - ts_zscore(open, 15) + rank(ts_mean(close, 10));",
+        "timestamp": "2025-10-09 23:24:44",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(vwap, 20)) - rank(ts_mean(high, 15)) + rank(ts_zscore(low, 30));",
+        "timestamp": "2025-10-09 23:34:03",
+        "status": "COMPLETE",
+        "fitness": -0.59,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 5), ts_delta(volume, 5), 10)) * rank(ts_std_dev(close, 20)) - rank(ts_mean(open, 15)) * rank(ts_zscore(high, 25));",
+        "timestamp": "2025-10-09 23:35:29",
+        "status": "COMPLETE",
+        "fitness": 0.06,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_std_dev(close, 5) - ts_mean(close, 5)) * rank(ts_delta(high, 3));",
+        "timestamp": "2025-10-10 00:02:27",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(vwap, volume, 20), 5)) * rank(ts_delta(close, 3)) - rank(ts_std_dev(high, 15)) + rank(ts_decay_linear(open, 10)) * rank(log(volume));",
+        "timestamp": "2025-10-10 00:02:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, open, 15) * ts_std_dev(volume, 20) - ts_mean(vwap, 10);",
+        "timestamp": "2025-10-10 00:05:43",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_decay_linear(vwap, 20)) - rank(ts_std_dev(close, 30));",
+        "timestamp": "2025-10-10 00:08:20",
+        "status": "COMPLETE",
+        "fitness": -0.12,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * ts_delta(vwap, 5) - ts_std_dev(open, 20);",
+        "timestamp": "2025-10-10 00:37:11",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 5), ts_mean(low, 5), 10) * rank(ts_std_dev(close, 20) / ts_mean(volume, 20));",
+        "timestamp": "2025-10-10 00:39:45",
+        "status": "COMPLETE",
+        "fitness": 0.0,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 5) - ts_mean(high, 10);",
+        "timestamp": "2025-10-10 00:39:50",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * rank(ts_delta(close, 5)) * rank(ts_std_dev(high, 10)) - rank(ts_mean(open, 20));",
+        "timestamp": "2025-10-10 00:41:41",
+        "status": "COMPLETE",
+        "fitness": -0.31,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, ts_mean(volume, 10), 20) * ts_delta(vwap, 5) - ts_std_dev(high, 15);",
+        "timestamp": "2025-10-10 01:08:34",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 20) * rank(ts_delta(vwap, 3)) - ts_zscore(open, 15) + ts_mean(close, 10);",
+        "timestamp": "2025-10-10 01:10:16",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) + ts_mean(high, 20) - ts_std_dev(low, 15);",
+        "timestamp": "2025-10-10 01:39:42",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 20) * ts_delta(vwap, 3) - ts_zscore(ts_std_dev(high, 15), 10);",
+        "timestamp": "2025-10-10 01:39:45",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 5) + ts_zscore(ts_std_dev(high, 20), 30);",
+        "timestamp": "2025-10-10 01:39:54",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_std_dev(high, 20));",
+        "timestamp": "2025-10-10 01:42:30",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "(ts_corr(close, volume, 10) * ts_delta(vwap, 5)) / ts_mean(rank(ts_std_dev(high, 20)), 5) + rank(ts_delta(close, 1));",
+        "timestamp": "2025-10-10 01:46:37",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 3), ts_std_dev(volume, 5), 10)) * ts_mean(vwap, 20) - ts_decay_linear(open, 7);",
+        "timestamp": "2025-10-10 01:45:10",
+        "status": "COMPLETE",
+        "fitness": -0.12,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_decay_linear(ts_corr(close, volume, 10), 5)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(open, 20));",
+        "timestamp": "2025-10-10 01:45:31",
+        "status": "COMPLETE",
+        "fitness": -0.41,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 3)) - rank(ts_std_dev(high, 10)) + rank(ts_mean(low, 20));",
+        "timestamp": "2025-10-10 01:46:59",
+        "status": "COMPLETE",
+        "fitness": -0.23,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 20), 10) * ts_delta(vwap, 3) - ts_std_dev(high, 7);",
+        "timestamp": "2025-10-10 02:13:40",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(vwap, 3)) + ts_zscore(volume, 20);",
+        "timestamp": "2025-10-10 02:16:13",
+        "status": "COMPLETE",
+        "fitness": -0.06,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_mean(high, 20) - ts_mean(low, 20));",
+        "timestamp": "2025-10-10 02:16:24",
+        "status": "COMPLETE",
+        "fitness": -0.32,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(close, 5) - ts_std_dev(high, 20);",
+        "timestamp": "2025-10-10 02:44:57",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_std_dev(volume, 10), 15);",
+        "timestamp": "2025-10-10 02:48:19",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * ts_delta(ts_mean(close, 5), 3) - ts_zscore(ts_std_dev(open, 20);",
+        "timestamp": "2025-10-10 02:49:37",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 5), ts_std_dev(close, 10), 15)) * ts_zscore(volume, 20);",
+        "timestamp": "2025-10-10 02:51:06",
+        "status": "COMPLETE",
+        "fitness": -0.06,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 20)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(open, 15));",
+        "timestamp": "2025-10-10 02:53:47",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_std_dev(volume, 20), 10)) * rank(ts_mean(vwap, 15) - open);",
+        "timestamp": "2025-10-10 02:53:49",
+        "status": "COMPLETE",
+        "fitness": 0.14,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5)) * rank(ts_std_dev(volume, 20)) - ts_zscore(close, 30) + ts_delta(close, 1);",
+        "timestamp": "2025-10-10 03:21:55",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 20)) * rank(ts_std_dev(close, 5)) - rank(ts_delta(high, 3)) * rank(ts_mean(low, 15));",
+        "timestamp": "2025-10-10 02:56:32",
+        "status": "COMPLETE",
+        "fitness": 0.03,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 10)) * rank(ts_decay_linear(vwap, 20) - ts_mean(close, 15));",
+        "timestamp": "2025-10-10 02:56:49",
+        "status": "COMPLETE",
+        "fitness": -0.46,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(close, open, 10) * ts_mean(volume, 20) - ts_std_dev(vwap, 5);",
+        "timestamp": "2025-10-10 03:25:04",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_mean(volume, 20), 10) * rank(ts_std_dev(vwap, 30));",
+        "timestamp": "2025-10-10 03:28:30",
+        "status": "COMPLETE",
+        "fitness": -0.47,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 10), ts_delta(volume, 5), 10);",
+        "timestamp": "2025-10-10 03:28:45",
+        "status": "COMPLETE",
+        "fitness": -0.15,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * ts_delta(close, 5) + ts_std_dev(high, 20) * ts_zscore(low, 15);",
+        "timestamp": "2025-10-10 03:59:53",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_std_dev(close, 10) - ts_delta(open, 3);",
+        "timestamp": "2025-10-10 04:00:06",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 5) * rank(ts_delta(vwap, 3));",
+        "timestamp": "2025-10-10 04:02:59",
+        "status": "COMPLETE",
+        "fitness": -0.3,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) - rank(ts_decay_linear(ts_std_dev(close, 20), 15));",
+        "timestamp": "2025-10-10 04:03:32",
+        "status": "COMPLETE",
+        "fitness": -0.43,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_delta(vwap, 3), ts_delta(volume, 3), 10)) * rank(ts_mean(close, 5)) - rank(ts_std_dev(high, 10));",
+        "timestamp": "2025-10-10 04:06:45",
+        "status": "COMPLETE",
+        "fitness": -0.09,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_delta(close, 5)) + rank(ts_zscore(high, 20) - ts_zscore(low, 20));",
+        "timestamp": "2025-10-10 04:06:46",
+        "status": "COMPLETE",
+        "fitness": -0.35,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * rank(ts_delta(vwap, 3)) - ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-10 04:10:16",
+        "status": "COMPLETE",
+        "fitness": 0.2,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(close, volume, 5)) * ts_delta(vwap, 10) - ts_std_dev(high, 20);",
+        "timestamp": "2025-10-10 04:37:58",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10)) * rank(ts_delta(vwap, 3)) - rank(ts_std_dev(high, 7)) * rank(ts_decay_linear(low, 15, 2));",
+        "timestamp": "2025-10-10 04:39:15",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(close, volume, 10), 5)) * ts_delta(vwap, 3) - ts_mean(high, 20);",
+        "timestamp": "2025-10-10 04:40:48",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(ts_mean(high, 15), ts_mean(low, 15), 7)) * ts_delta(vwap, 5) - ts_std_dev(volume, 20);",
+        "timestamp": "2025-10-10 05:09:08",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, vwap, 10) * ts_std_dev(close, 5);",
+        "timestamp": "2025-10-10 05:12:03",
+        "status": "COMPLETE",
+        "fitness": -0.14,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_std_dev(volume, 20), 5);",
+        "timestamp": "2025-10-10 05:12:31",
+        "status": "COMPLETE",
+        "fitness": -0.08,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(high, volume, 10), 20)) * rank(ts_delta(vwap, 5)) - rank(ts_std_dev(close, 15));",
+        "timestamp": "2025-10-10 05:15:20",
+        "status": "COMPLETE",
+        "fitness": -0.31,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_delta(close, 5), 10)) * rank(ts_std_dev(volume, 20) / ts_mean(volume, 20)) - rank(ts_decay_linear(open, 15));",
+        "timestamp": "2025-10-10 05:16:38",
+        "status": "COMPLETE",
+        "fitness": -0.07,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 15)) * ts_delta(ts_mean(close, 10), 5) - ts_zscore(ts_std_dev(high, 20), 30);",
+        "timestamp": "2025-10-10 05:43:42",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) + ts_delta(vwap, 3) * rank(ts_std_dev(high, 15));",
+        "timestamp": "2025-10-10 05:43:45",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) * rank(ts_std_dev(volume, 20)) - ts_zscore(ts_delta(close, 5), 30) + ts_mean(close, 10);",
+        "timestamp": "2025-10-10 06:02:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_delta(close, 3), 5)) * ts_zscore(volume, 10);",
+        "timestamp": "2025-10-10 05:46:26",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * rank(ts_delta(close, 10)) - rank(ts_std_dev(high, 20));",
+        "timestamp": "2025-10-10 05:46:33",
+        "status": "COMPLETE",
+        "fitness": -0.36,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 10), ts_mean(low, 10), 5) * ts_delta(close, 2) + ts_zscore(volume, 20);",
+        "timestamp": "2025-10-10 06:15:00",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * rank(ts_std_dev(close, 5)) + rank(ts_delta(high, 3)) - rank(ts_mean(low, 15));",
+        "timestamp": "2025-10-10 06:17:35",
+        "status": "COMPLETE",
+        "fitness": -0.56,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, ts_mean(volume, 20), 5)) * rank(ts_delta(close, 10)) + rank(ts_zscore(ts_std_dev(high, 15), 30));",
+        "timestamp": "2025-10-10 06:17:38",
+        "status": "COMPLETE",
+        "fitness": -0.27,
+        "passed_checks": 5
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_zscore(ts_delta(close, 3), 20);",
+        "timestamp": "2025-10-10 06:17:39",
+        "status": "COMPLETE",
+        "fitness": -0.42,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 5), 10) * ts_delta(vwap, 3) - ts_std_dev(high, 15);",
+        "timestamp": "2025-10-10 06:49:55",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 5), ts_mean(volume, 10), 15) + ts_delta(vwap, 3);",
+        "timestamp": "2025-10-10 06:49:57",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 5)) * ts_delta(close, 3) - ts_std_dev(open, 10);",
+        "timestamp": "2025-10-10 07:21:09",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, vwap, 10) * ts_delta(ts_mean(volume, 5), 3) - ts_zscore(ts_std_dev(high, 20), 15);",
+        "timestamp": "2025-10-10 07:21:16",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_delta(volume, 3) + ts_mean(close, 12));",
+        "timestamp": "2025-10-10 07:40:15",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_delta(vwap, 3)) - ts_std_dev(low, 15);",
+        "timestamp": "2025-10-10 07:23:53",
+        "status": "COMPLETE",
+        "fitness": -0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 15) * ts_delta(vwap, 3) + ts_zscore(high, 20) - ts_std_dev(low, 25);",
+        "timestamp": "2025-10-10 07:53:02",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 5), ts_delta(volume, 10), 20) * rank(ts_mean(vwap, 15));",
+        "timestamp": "2025-10-10 07:56:06",
+        "status": "COMPLETE",
+        "fitness": -0.4,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(high, 15), ts_mean(low, 15), 5) * rank(ts_std_dev(close, 20)) - ts_delta(vwap, 10);",
+        "timestamp": "2025-10-10 08:24:25",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 20), 5) * rank(ts_delta(vwap, 3)) - ts_zscore(ts_std_dev(high, 15), 5);",
+        "timestamp": "2025-10-10 08:27:38",
+        "status": "COMPLETE",
+        "fitness": -0.04,
+        "passed_checks": 5
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 10), ts_mean(volume, 5), 10) * ts_delta(vwap, 3);",
+        "timestamp": "2025-10-10 08:30:41",
+        "status": "COMPLETE",
+        "fitness": -0.11,
+        "passed_checks": 3
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 20), ts_std_dev(volume, 5), 10);",
+        "timestamp": "2025-10-10 08:33:55",
+        "status": "COMPLETE",
+        "fitness": -0.05,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_delta(close, 1), ts_delta(volume, 1), 10);",
+        "timestamp": "2025-10-10 08:36:58",
+        "status": "COMPLETE",
+        "fitness": -0.32,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(vwap, volume, 10)) * ts_delta(close, 5) + ts_zscore(ts_std_dev(high, 20), 30);",
+        "timestamp": "2025-10-10 09:05:13",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_zscore(ts_corr(close, vwap, 10), 20)) - rank(ts_delta(ts_mean(volume, 5), 15));",
+        "timestamp": "2025-10-10 09:07:49",
+        "status": "COMPLETE",
+        "fitness": -0.06,
+        "passed_checks": 4
+    },
+    {
+        "expression": "ts_corr(ts_mean(close, 15), ts_mean(volume, 5), 10) * rank(ts_delta(vwap, 5)) - ts_std_dev(close, 20);",
+        "timestamp": "2025-10-10 09:08:20",
+        "status": "COMPLETE",
+        "fitness": 0.01,
+        "passed_checks": 4
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 5) * ts_std_dev(volume, 20) - ts_delta(open, 10));",
+        "timestamp": "2025-10-10 09:36:20",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + ts_mean(close, 15);",
+        "timestamp": "2025-10-10 10:04:19",
+        "status": "TIMEOUT"
     }
 ]

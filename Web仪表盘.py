@@ -24,9 +24,15 @@ def get_service_status(log_file):
             else:
                 status = "STALLED"
 
-            with open(log_path, 'r', encoding='utf-8') as f:
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
-                logs = "".join(lines[-50:])
+                # **核心改动在这里**
+                # 1. 获取最后 50 行
+                latest_lines = lines[-50:]
+                # 2. 将这 50 行反转
+                latest_lines.reverse()
+                # 3. 合并成最终的日志字符串
+                logs = "".join(latest_lines)
         except Exception as e:
             logs = f"Error reading log file: {e}"
     
@@ -38,7 +44,7 @@ def get_hopeful_alphas_stats():
         "max_fitness": 0.0,
         "max_sharpe": 0.0,
         "avg_fitness": 0.0,
-        "all_alphas": [] # v7.3 修改: 从 top_5 改为 all_alphas
+        "all_alphas": []
     }
     
     hopeful_file = 'hopeful_alphas.json'
@@ -53,7 +59,6 @@ def get_hopeful_alphas_stats():
                 stats['max_sharpe'] = max(a.get('performance', {}).get('sharpe', 0) for a in alphas)
                 stats['avg_fitness'] = sum(a.get('performance', {}).get('fitness', 0) for a in alphas) / len(alphas)
 
-                # 按综合评分排序 (与 alpha_generator_ollama.py v6.8+ 保持一致)
                 def calculate_combined_score(report):
                     fitness = report.get('performance', {}).get('fitness', -999)
                     sharpe = report.get('performance', {}).get('sharpe', 0.0)
@@ -66,7 +71,6 @@ def get_hopeful_alphas_stats():
                 
                 alphas.sort(key=calculate_combined_score, reverse=True)
                 
-                # v7.3 修改: 发送所有alpha到前端
                 for alpha in alphas:
                     stats['all_alphas'].append({
                         "expression": alpha.get('expression'),

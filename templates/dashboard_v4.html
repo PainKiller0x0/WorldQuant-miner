@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ 自动化量化研究团队 - 监控仪表盘 v4.2 (修复版)</title>
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v4.3 (体验优化版)</title>
     <style>
         /* --- 全局重置与盒模型 --- */
         :root {
@@ -20,7 +20,7 @@
 
         html {
             box-sizing: border-box;
-            overflow-x: hidden; /* 根源上禁止水平滚动 */
+            overflow-x: hidden;
         }
 
         *, *:before, *:after {
@@ -38,10 +38,10 @@
         /* --- 布局 --- */
         .container {
             display: grid;
-            grid-template-columns: 1fr; /* 默认单列布局，更适合不同屏幕尺寸 */
+            grid-template-columns: 1fr;
             gap: 20px;
             width: 100%;
-            max-width: 1600px; /* 为超宽屏设置一个最大宽度 */
+            max-width: 1600px;
             margin: 0 auto;
         }
 
@@ -52,7 +52,7 @@
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            overflow: hidden; /* 防止内容溢出 */
+            overflow: hidden;
         }
 
         h1, h2 {
@@ -92,12 +92,12 @@
             font-weight: bold;
         }
 
-        /* --- 日志和 Alpha 列表 (解决宽度问题的核心) --- */
+        /* --- 日志和 Alpha 列表 --- */
         .log-container, .alpha-container {
             border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 10px;
-            overflow-y: auto; /* 仅允许垂直滚动 */
+            overflow-y: auto;
         }
 
         .log-container {
@@ -105,8 +105,8 @@
             height: 250px;
             font-family: var(--font-mono);
             font-size: 0.9em;
-            white-space: pre-wrap;   /* 允许文本换行 */
-            word-break: break-all;   /* 强制长字符串在任意位置断开 */
+            white-space: pre-wrap;
+            word-break: break-all;
         }
 
         .alpha-container {
@@ -136,20 +136,22 @@
             border-radius: 4px;
             display: block;
             margin-bottom: 10px;
-            white-space: pre-wrap;  /* 允许文本换行 */
-            word-break: break-all;  /* 强制长字符串在任意位置断开 */
+            white-space: pre-wrap;
+            word-break: break-all;
         }
 
         .alpha-stats {
             font-size: 0.9em;
             color: var(--text-muted-color);
-            word-break: normal; /* 统计数据部分不需要强制断词 */
+            word-break: normal;
         }
 
         /* --- 状态颜色与按钮 --- */
-        .pass { color: lightgreen; font-weight: bold; }
-        .fail { color: lightcoral; font-weight: bold; }
-        .pending { color: orange; font-weight: bold; }
+        /* v4.3 修改: 统一颜色定义，增加日志高亮样式 */
+        .pass, .log-pass { color: lightgreen; font-weight: bold; }
+        .fail, .log-fail { color: lightcoral; font-weight: bold; }
+        .pending, .log-pending { color: orange; font-weight: bold; }
+
 
         .download-button {
             display: inline-block;
@@ -170,7 +172,7 @@
     </style>
 </head>
 <body>
-    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v4.2</h1>
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v4.3</h1>
 
     <div class="container">
         <div class="card">
@@ -229,12 +231,22 @@
             </div>
             <div class="alpha-container">
                 <ul id="hopeful-alphas-list" class="alpha-list">
-                    </ul>
+                </ul>
             </div>
         </div>
     </div>
 
     <script>
+        // v4.3 新增: 日志高亮函数
+        function colorizeLogs(logText) {
+            if (!logText) return '';
+            // 使用正则表达式全局替换关键词为带样式的 span
+            return logText
+                .replace(/PASS/g, '<span class="log-pass">PASS</span>')
+                .replace(/FAIL/g, '<span class="log-fail">FAIL</span>')
+                .replace(/PENDING/g, '<span class="log-pending">PENDING</span>');
+        }
+
         function formatChecks(checksString) {
             if (!checksString) return 'N/A';
             return checksString
@@ -247,27 +259,27 @@
             fetch('/status')
                 .then(response => response.json())
                 .then(data => {
-                    // --- 更新 Miner ---
                     const minerStatusEl = document.getElementById('miner-status');
                     minerStatusEl.textContent = data.miner.status;
                     minerStatusEl.style.color = data.miner.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
                     document.getElementById('miner-last-seen').textContent = data.miner.last_seen;
-                    document.getElementById('miner-logs').textContent = data.miner.logs;
+                    
+                    // v4.3 修改: 使用 innerHTML 并调用高亮函数
+                    document.getElementById('miner-logs').innerHTML = colorizeLogs(data.miner.logs);
 
-                    // --- 更新 Evolver ---
                     const evolverStatusEl = document.getElementById('evolver-status');
                     evolverStatusEl.textContent = data.evolver.status;
                     evolverStatusEl.style.color = data.evolver.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
                     document.getElementById('evolver-last-seen').textContent = data.evolver.last_seen;
-                    document.getElementById('evolver-logs').textContent = data.evolver.logs;
+
+                    // v4.3 修改: 使用 innerHTML 并调用高亮函数
+                    document.getElementById('evolver-logs').innerHTML = colorizeLogs(data.evolver.logs);
                     
-                    // --- 更新精英池统计 ---
                     document.getElementById('hopeful-count').textContent = data.hopeful_alphas.count;
                     document.getElementById('max-fitness').textContent = data.hopeful_alphas.max_fitness.toFixed(3);
                     document.getElementById('max-sharpe').textContent = data.hopeful_alphas.max_sharpe.toFixed(3);
                     document.getElementById('avg-fitness').textContent = data.hopeful_alphas.avg_fitness.toFixed(3);
 
-                    // --- 渲染精英池 Alpha 列表 ---
                     const list = document.getElementById('hopeful-alphas-list');
                     list.innerHTML = ''; 
                     data.hopeful_alphas.all_alphas.forEach(alpha => {
@@ -288,7 +300,6 @@
                 .catch(error => console.error('Error fetching status:', error));
         }
 
-        // --- 启动自动刷新 ---
         setInterval(updateStatus, 5000);
         window.onload = updateStatus;
     </script>

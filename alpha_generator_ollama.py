@@ -13,22 +13,49 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 
+# --- BUG 修复: 将 logger 定义移至全局作用域 ---
+logger = logging.getLogger(__name__)
+# --- 修复结束 ---
+
 # --- 日志配置 ---
 def setup_logging(log_file):
     log_dir = "logs"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+    
+    # 清理旧的处理器，避免日志重复
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
+
+    # --- 基础配置 (INFO及以上，输出到文件和控制台) ---
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[
                             logging.FileHandler(os.path.join(log_dir, log_file)),
                             logging.StreamHandler()
                         ])
-logger = logging.getLogger(__name__)
+
+    base_name = os.path.splitext(log_file)[0] 
+    issue_log_file = f"{base_name}_issues.log" 
+    issue_log_path = os.path.join(log_dir, issue_log_file)
+
+    issue_handler = logging.FileHandler(issue_log_path)
+    issue_handler.setLevel(logging.WARNING) 
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    issue_handler.setFormatter(formatter)
+    
+    logging.getLogger('').addHandler(issue_handler)
+    
+    # --- BUG 修复: 移除此处的局部
+    # logger = logging.getLogger(__name__) # <-- 此行已删除
+    # --- 修复结束 ---
+
+    # 现在 logger 是全局的，可以直接使用
+    logger.info("日志系统初始化完成。INFO及以上信息将输出到控制台和主日志文件。")
+    logger.info(f"WARNING及以上的问题将额外记录到: {issue_log_path}")
 
 def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
+    # logger 现在是全局的，此函数可以正常工作
     ts_functions_pattern = r'ts_([a-zA-Z_]+)\(([^,)]+)\)'
     match = re.search(ts_functions_pattern, alpha_code)
     if match:
@@ -39,7 +66,6 @@ def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
     return False
 
 class WorldQuant:
-    # ... (这部分代码与上一版完全相同，为节省篇幅已省略) ...
     def __init__(self, user_id, api_key):
         self.user_id = user_id
         self.api_key = api_key
@@ -59,6 +85,7 @@ class WorldQuant:
         retries = Retry(total=3, backoff_factor=1, status_forcelist=[502, 503, 504])
         adapter = HTTPAdapter(max_retries=retries)
         session.mount('https://', adapter)
+        # logger 现在是全局的，此行可以正常工作
         logger.info("创建了带有3次重试机制的API会话。")
         return session
 
@@ -196,7 +223,6 @@ class AlphaGenerator:
             logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
             return set()
 
-    # --- v7.0: 考古学家内置函数 ---
     def excavate_one_pearl(self, sample_size=200):
         if not os.path.exists(self.tested_alphas_logfile):
             return None
@@ -208,7 +234,6 @@ class AlphaGenerator:
             logger.error(f"考古挖掘失败：无法读取 {self.tested_alphas_logfile}")
             return None
 
-        # 随机抽样，避免每次都读取整个大文件
         if len(all_tested) > sample_size:
             sample_records = random.sample(all_tested, sample_size)
         else:
@@ -607,7 +632,6 @@ class AlphaGenerator:
                 else:
                     logger.info("本轮所有策略均未达到高质量标准，未更新精华战报文件。")
 
-            # 无论是否有新策略，进化者都需要重新加载种子池
             if mode == 'evolve':
                 evolution_seeds = self.load_evolution_seeds(sample_size=20)
                 if not evolution_seeds:

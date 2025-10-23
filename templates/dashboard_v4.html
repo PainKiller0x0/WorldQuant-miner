@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ 自动化量化研究团队 - 监控仪表盘 v4.3 (体验优化版)</title>
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v4.8 (最终修复)</title>
     <style>
-        /* --- 全局重置与盒模型 --- */
+        /* --- 您的原版暗黑主题样式 --- */
         :root {
             --bg-color: #121212;
             --card-bg-color: #1e1e1e;
@@ -16,6 +16,9 @@
             --text-muted-color: #aaa;
             --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+            --success-color: lightgreen; 
+            --error-color: lightcoral; 
+            --pending-color: orange; 
         }
 
         html {
@@ -33,6 +36,7 @@
             color: var(--text-color);
             margin: 0;
             padding: 20px;
+            position: relative;
         }
 
         /* --- 布局 --- */
@@ -125,33 +129,13 @@
             padding: 15px;
             border-radius: 6px;
             border-left: 5px solid var(--primary-accent-color);
+            transition: all 0.2s ease-in-out; 
+            overflow: hidden; 
         }
 
-        .alpha-expression {
-            font-family: var(--font-mono);
-            font-size: 0.95em;
-            color: #cfcfcf;
-            background-color: #333;
-            padding: 5px;
-            border-radius: 4px;
-            display: block;
-            margin-bottom: 10px;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        .alpha-stats {
-            font-size: 0.9em;
-            color: var(--text-muted-color);
-            word-break: normal;
-        }
-
-        /* --- 状态颜色与按钮 --- */
-        /* v4.3 修改: 统一颜色定义，增加日志高亮样式 */
-        .pass, .log-pass { color: lightgreen; font-weight: bold; }
-        .fail, .log-fail { color: lightcoral; font-weight: bold; }
-        .pending, .log-pending { color: orange; font-weight: bold; }
-
+        .pass, .log-pass { color: var(--success-color); font-weight: bold; }
+        .fail, .log-fail { color: var(--error-color); font-weight: bold; }
+        .pending, .log-pending { color: var(--pending-color); font-weight: bold; }
 
         .download-button {
             display: inline-block;
@@ -163,90 +147,228 @@
             margin-bottom: 10px;
             text-align: center;
             transition: background-color 0.2s;
+            white-space: nowrap; 
         }
 
         .download-button:hover {
             background-color: #4a148c;
         }
+        
+        .log-download-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .download-button.issues {
+            background-color: #b00020; 
+        }
+        .download-button.issues:hover {
+            background-color: #c51162;
+        }
+
+        .alpha-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .alpha-expression { 
+            font-family: var(--font-mono);
+            font-size: 0.95em;
+            color: #cfcfcf;
+            background-color: #333;
+            padding: 5px;
+            border-radius: 4px;
+            display: block; 
+            margin-bottom: 10px; 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            flex-grow: 1; 
+        }
+
+        .copy-button {
+            background-color: var(--primary-accent-color);
+            color: #121212;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background-color 0.2s, color 0.2s;
+            flex-shrink: 0;
+            white-space: nowrap; 
+            line-height: 1.5; 
+            height: fit-content; 
+        }
+        .copy-button:hover {
+            background-color: var(--secondary-accent-color);
+        }
+        .copy-button.copied {
+            background-color: var(--success-color);
+            color: #121212;
+        }
+
+        .alpha-stats { 
+            font-size: 0.9em;
+            color: var(--text-muted-color);
+            word-break: normal; 
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-left: 10px;
+            color: #121212;
+            vertical-align: middle;
+        }
+        .badge-success { background-color: var(--success-color); }
+        .badge-primary { background-color: #6200ee; color: #fff; } 
+
+        .alpha-footer {
+            display: flex;
+            justify-content: flex-end; 
+            align-items: center;
+        }
+
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            color: var(--text-muted-color);
+            cursor: pointer;
+        }
+        .form-check-label {
+            cursor: pointer;
+            user-select: none; 
+        }
+        .form-check-input {
+            appearance: none;
+            width: 1.25em;
+            height: 1.25em;
+            border: 1px solid var(--primary-accent-color);
+            border-radius: 4px;
+            background-color: var(--card-bg-color);
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+        .form-check-input:checked {
+            background-color: var(--primary-accent-color);
+        }
+        
+        /* --- 勾选框 BUG 修复 --- */
+        .form-check-input:checked::after {
+            content: '\2713'; /* <-- 修复: 使用单反斜杠 */
+            position: absolute;
+            color: #121212;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1em;
+            font-weight: bold;
+        }
+        /* --- 修复结束 --- */
+        
+        .alpha-item.all-pass {
+            border-left-color: var(--success-color);
+            background-color: #2e3b2e; 
+        }
+        .alpha-item.submittable {
+            border-left-color: #6200ee; 
+            background-color: #2a2a3a; 
+        }
+
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--success-color);
+            color: #121212;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .toast-notification.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .toast-notification.error {
+             background-color: var(--error-color);
+        }
 
     </style>
 </head>
 <body>
-    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v4.3</h1>
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v4.8</h1>
 
     <div class="container">
         <div class="card">
             <h2>🕵️‍♂️ 发现者 (Miner)</h2>
             <div class="kpi-grid">
-                <div class="kpi">
-                    <div class="kpi-title">运行状态</div>
-                    <div class="kpi-value" id="miner-status">--</div>
-                </div>
-                <div class="kpi">
-                    <div class="kpi-title">上次心跳</div>
-                    <div class="kpi-value" id="miner-last-seen">--</div>
-                </div>
+                <div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="miner-status">--</div></div>
+                <div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="miner-last-seen">--</div></div>
             </div>
             <h3>最新日志</h3>
-            <a href="/download_logs/miner.log" class="download-button" download>下载完整 Miner 日志</a>
+            <div class="log-download-group">
+                <a href="/download_logs/miner.log" class="download-button" download>下载 Miner 日志</a>
+                <a href="/download_logs/miner_issues.log" class="download-button issues" download>下载 Miner 问题日志</a>
+            </div>
             <div class="log-container" id="miner-logs">正在加载日志...</div>
         </div>
 
         <div class="card">
             <h2>👨‍🏫 进化者 (Evolver)</h2>
             <div class="kpi-grid">
-                <div class="kpi">
-                    <div class="kpi-title">运行状态</div>
-                    <div class="kpi-value" id="evolver-status">--</div>
-                </div>
-                <div class="kpi">
-                    <div class="kpi-title">上次心跳</div>
-                    <div class="kpi-value" id="evolver-last-seen">--</div>
-                </div>
+                <div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="evolver-status">--</div></div>
+                <div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="evolver-last-seen">--</div></div>
             </div>
             <h3>最新日志</h3>
-            <a href="/download_logs/evolver.log" class="download-button" download>下载完整 Evolver 日志</a>
+            <div class="log-download-group">
+                <a href="/download_logs/evolver.log" class="download-button" download>下载 Evolver 日志</a>
+                <a href="/download_logs/evolver_issues.log" class="download-button issues" download>下载 Evolver 问题日志</a>
+            </div>
             <div class="log-container" id="evolver-logs">正在加载日志...</div>
         </div>
 
         <div class="card">
             <h2>🏆 精英 Alpha 池 (Hopeful Alphas)</h2>
             <div class="kpi-grid">
-                <div class="kpi">
-                    <div class="kpi-title">精英总数</div>
-                    <div class="kpi-value" id="hopeful-count">--</div>
-                </div>
-                <div class="kpi">
-                    <div class="kpi-title">最高 Fitness</div>
-                    <div class="kpi-value" id="max-fitness">--</div>
-                </div>
-                <div class="kpi">
-                    <div class="kpi-title">最高 Sharpe</div>
-                    <div class="kpi-value" id="max-sharpe">--</div>
-                </div>
-                 <div class="kpi">
-                    <div class="kpi-title">平均 Fitness</div>
-                    <div class="kpi-value" id="avg-fitness">--</div>
-                </div>
+                <div class="kpi"><div class="kpi-title">精英总数</div><div class="kpi-value" id="hopeful-count">--</div></div>
+                <div class="kpi"><div class="kpi-title">最高 Fitness</div><div class="kpi-value" id="max-fitness">--</div></div>
+                <div class="kpi"><div class="kpi-title">最高 Sharpe</div><div class="kpi-value" id="max-sharpe">--</div></div>
+                <div class="kpi"><div class="kpi-title">平均 Fitness</div><div class="kpi-value" id="avg-fitness">--</div></div>
             </div>
             <div class="alpha-container">
                 <ul id="hopeful-alphas-list" class="alpha-list">
-                </ul>
+                    </ul>
             </div>
         </div>
     </div>
 
+    <div id="toast-container" class="toast-notification"></div>
+
     <script>
-        // v4.3 新增: 日志高亮函数
+        // --- 日志高亮函数 (v4.7 不变) ---
         function colorizeLogs(logText) {
             if (!logText) return '';
-            // 使用正则表达式全局替换关键词为带样式的 span
+            logText = logText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             return logText
                 .replace(/PASS/g, '<span class="log-pass">PASS</span>')
                 .replace(/FAIL/g, '<span class="log-fail">FAIL</span>')
                 .replace(/PENDING/g, '<span class="log-pending">PENDING</span>');
         }
-
         function formatChecks(checksString) {
             if (!checksString) return 'N/A';
             return checksString
@@ -255,49 +377,215 @@
                 .replace(/(\d+\s*PENDING)/g, '<span class="pending">$1</span>');
         }
 
+        // --- Toast 函数 (v4.7 不变) ---
+        let toastTimeout;
+        function showToast(message, isError = false) {
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) return;
+
+            toastContainer.textContent = message;
+            toastContainer.classList.add('show');
+            if (isError) {
+                toastContainer.classList.add('error');
+            } else {
+                toastContainer.classList.remove('error');
+            }
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastContainer.classList.remove('show');
+            }, 2500);
+        }
+
+        // --- 复制功能 (v4.7 HTTP 回退修复, 不变) ---
+        function copyToClipboard(button, text) {
+            text = String(text || '');
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = '已复制!';
+                    button.classList.add('copied');
+                    showToast('Alpha 复制成功!'); 
+
+                    setTimeout(() => {
+                        if (button) { 
+                            button.textContent = originalText;
+                            button.classList.remove('copied');
+                        }
+                    }, 2000);
+                }).catch(err => {
+                    console.error('无法复制到剪贴板: ', err);
+                    showToast('复制失败!', true);
+                });
+            } else {
+                console.warn('Clipboard API 不可用 (可能是 HTTP 页面)。正在尝试回退方法...');
+                try {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    
+                    textArea.style.position = 'fixed';
+                    textArea.style.top = '-9999px';
+                    textArea.style.left = '-9999px';
+                    
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        const originalText = button.textContent;
+                        button.textContent = '已复制!';
+                        button.classList.add('copied');
+                        showToast('Alpha 复制成功 (回退模式)!');
+                        setTimeout(() => {
+                            if (button) {
+                                button.textContent = originalText;
+                                button.classList.remove('copied');
+                            }
+                        }, 2000);
+                    } else {
+                        throw new Error('execCommand failed');
+                    }
+                } catch (err) {
+                    console.error('回退复制方法失败: ', err);
+                    showToast('浏览器不支持自动复制', true);
+                }
+            }
+        }
+
+        // --- 勾选框 API 调用 (v4.7 不变) ---
+        function toggleSubmittedStatus(checkbox, expression) {
+            const isChecked = checkbox.checked;
+            const url = isChecked ? '/api/mark_submitted' : '/api/unmark_submitted';
+            expression = String(expression || '');
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expression: expression })
+            })
+            .then(response => response.ok ? response.json() : Promise.reject(`API error! status: ${response.status}`))
+            .then(data => {
+                if (data.status === 'success') {
+                    console.log(data.message);
+                } else {
+                    console.error('标记失败:', data.message);
+                    checkbox.checked = !isChecked; 
+                    showToast(`标记操作失败: ${data.message}`, true);
+                }
+            })
+            .catch(error => {
+                console.error('API 请求失败:', error);
+                checkbox.checked = !isChecked; 
+                showToast(`API 请求错误: ${error}`, true);
+            });
+        }
+
+        // --- 主更新函数 (v4.7 不变) ---
         function updateStatus() {
             fetch('/status')
-                .then(response => response.json())
+                .then(response => response.ok ? response.json() : Promise.reject(`HTTP error! status: ${response.status}`))
                 .then(data => {
+                    // --- Miner & Evolver 状态/日志更新 ---
                     const minerStatusEl = document.getElementById('miner-status');
                     minerStatusEl.textContent = data.miner.status;
-                    minerStatusEl.style.color = data.miner.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
+                    minerStatusEl.style.color = data.miner.status === 'RUNNING' ? 'var(--success-color)' : 'var(--error-color)';
                     document.getElementById('miner-last-seen').textContent = data.miner.last_seen;
-                    
-                    // v4.3 修改: 使用 innerHTML 并调用高亮函数
                     document.getElementById('miner-logs').innerHTML = colorizeLogs(data.miner.logs);
 
                     const evolverStatusEl = document.getElementById('evolver-status');
                     evolverStatusEl.textContent = data.evolver.status;
-                    evolverStatusEl.style.color = data.evolver.status === 'RUNNING' ? 'lightgreen' : 'lightcoral';
+                    evolverStatusEl.style.color = data.evolver.status === 'RUNNING' ? 'var(--success-color)' : 'var(--error-color)';
                     document.getElementById('evolver-last-seen').textContent = data.evolver.last_seen;
-
-                    // v4.3 修改: 使用 innerHTML 并调用高亮函数
                     document.getElementById('evolver-logs').innerHTML = colorizeLogs(data.evolver.logs);
                     
+                    // --- KPI 更新 ---
                     document.getElementById('hopeful-count').textContent = data.hopeful_alphas.count;
                     document.getElementById('max-fitness').textContent = data.hopeful_alphas.max_fitness.toFixed(3);
                     document.getElementById('max-sharpe').textContent = data.hopeful_alphas.max_sharpe.toFixed(3);
                     document.getElementById('avg-fitness').textContent = data.hopeful_alphas.avg_fitness.toFixed(3);
 
+                    // --- 动态构建 Alpha 列表 (v4.7 勾选框转义修复, 不变) ---
                     const list = document.getElementById('hopeful-alphas-list');
-                    list.innerHTML = ''; 
-                    data.hopeful_alphas.all_alphas.forEach(alpha => {
+                    list.innerHTML = '';
+                    
+                    const alphas = data.hopeful_alphas.all_alphas || [];
+
+                    alphas.forEach((alpha, index) => {
+                         if (typeof alpha !== 'object' || alpha === null) return;
+                        
                         const item = document.createElement('li');
                         item.className = 'alpha-item';
+
+                        if (alpha.is_all_pass) item.classList.add('all-pass');
+                        else if (alpha.is_submittable) item.classList.add('submittable');
+                        
+                        let badge = '';
+                        if (alpha.is_all_pass) badge = '<span class="badge badge-success">🏆 完美策略</span>';
+                        else if (alpha.is_submittable) badge = '<span class="badge badge-primary">🏅 可提交</span>';
+
+                        const isChecked = alpha.is_submitted ? 'checked' : '';
+                        const uniqueId = `check-alpha-${index}`; 
+                        
+                        const escapedExpr = String(alpha.expression || '')
+                                                .replace(/\\/g, '\\\\')
+                                                .replace(/'/g, "\\'")
+                                                .replace(/\n/g, "\\n")
+                                                .replace(/\r/g, "\\r");
+                        
+                        const checkboxHTML = `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" 
+                                       id="${uniqueId}" 
+                                       onchange="toggleSubmittedStatus(this, '${escapedExpr}')"
+                                       ${isChecked}>
+                                <label class="form-check-label" for="${uniqueId}">
+                                    标记为已提交
+                                </label>
+                            </div>
+                        `;
+
+                        const copyButtonHTML = `
+                            <button class="copy-button" onclick="copyToClipboard(this, '${escapedExpr}')">
+                                复制
+                            </button>
+                        `;
+
+                        const expressionText = String(alpha.expression || '表达式丢失');
+
                         item.innerHTML = `
-                            <code class="alpha-expression">${alpha.expression}</code>
+                            <div class="alpha-header">
+                                <code class="alpha-expression">${expressionText}</code>
+                                <div class="alpha-actions">
+                                    ${copyButtonHTML}
+                                </div>
+                            </div>
                             <div class="alpha-stats">
-                                <strong>Fitness:</strong> ${alpha.fitness.toFixed(3)} | 
-                                <strong>Sharpe:</strong> ${alpha.sharpe.toFixed(3)} | 
+                                <strong>Fitness:</strong> ${(alpha.fitness || 0).toFixed(3)} | 
+                                <strong>Sharpe:</strong> ${(alpha.sharpe || 0).toFixed(3)} | 
                                 <strong>Checks:</strong> ${formatChecks(alpha.checks)} | 
-                                <strong>Timestamp:</strong> ${alpha.timestamp}
+                                <strong>Timestamp:</strong> ${alpha.timestamp || 'N/A'}
+                                ${badge}
+                            </div>
+                            <div class="alpha-footer">
+                                ${checkboxHTML}
                             </div>
                         `;
                         list.appendChild(item);
                     });
                 })
-                .catch(error => console.error('Error fetching status:', error));
+                .catch(error => {
+                    console.error('Error fetching/processing status:', error);
+                    const list = document.getElementById('hopeful-alphas-list');
+                    list.innerHTML = `<li class="alpha-item fail">加载 Alpha 列表时出错: ${error.message || '未知错误'}</li>`;
+                    document.getElementById('hopeful-count').textContent = '错误';
+                    document.getElementById('max-fitness').textContent = '错误';
+                    document.getElementById('max-sharpe').textContent = '错误';
+                    document.getElementById('avg-fitness').textContent = '错误';
+                });
         }
 
         setInterval(updateStatus, 5000);

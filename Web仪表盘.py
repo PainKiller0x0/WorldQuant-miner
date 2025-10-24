@@ -1,5 +1,5 @@
-# --- Web仪表盘.py v5.3 (Merged Features & Debug Logging) ---
-from flask import Flask, render_template, jsonify, send_from_directory, request, make_response # v5.3: 导入 make_response
+# --- Web仪表盘.py v5.4 (Advanced Sorting Logic) ---
+from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
 import re
@@ -7,20 +7,17 @@ import threading
 from datetime import datetime, timedelta
 from collections import deque
 import os.path
-import logging # <-- v5.2-debug: 保留 logging 导入
+import logging 
 
 # --- 配置基础日志 ---
-# (确保日志级别足够低以看到 INFO 信息)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-# 获取 Flask 的 logger，或者使用 root logger
-logger = logging.getLogger(__name__) # v5.3: 明确使用 logger
+logger = logging.getLogger(__name__) 
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
 HOPEFUL_ALPHAS_FILE = os.path.join(BASE_DIR, 'hopeful_alphas.json')
-# --- 使用绝对路径确保一致性 ---
 SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas.json'))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
@@ -42,7 +39,6 @@ def load_submitted_alphas():
             logger.info(f"[Submit Load] File not found: {filepath}. Returning empty set.")
             return set()
         try:
-            # 检查文件是否为空或过小 (例如小于2个字符 '{}' 或 '[]')
             if os.path.getsize(filepath) < 2:
                 logger.info(f"[Submit Load] File is empty or too small: {filepath}. Returning empty set.")
                 return set()
@@ -51,7 +47,6 @@ def load_submitted_alphas():
                 data = json.load(f)
                 if isinstance(data, (list, set)):
                     loaded_set = set(data)
-                    # 只记录大小和少量样本，避免日志过长
                     sample = list(loaded_set)[:3]
                     logger.info(f"[Submit Load] Successfully loaded {len(loaded_set)} items from {filepath}. Sample: {sample}")
                     return loaded_set
@@ -60,15 +55,11 @@ def load_submitted_alphas():
                     return set()
         except json.JSONDecodeError as e:
             logger.error(f"[Submit Load] Error decoding JSON from {filepath}: {e}. Returning empty set.")
-            # 考虑备份损坏的文件
-            # backup_path = f"{filepath}.{datetime.now().strftime('%Y%m%d%H%M%S')}.corrupted"
-            # try: os.rename(filepath, backup_path)
-            # except OSError: logger.error(f"Could not backup corrupted file to {backup_path}")
             return set()
         except IOError as e:
             logger.error(f"[Submit Load] IOError reading {filepath}: {e}. Returning empty set.")
             return set()
-        except Exception as e: # 捕获其他潜在错误
+        except Exception as e: 
             logger.error(f"[Submit Load] Unexpected error loading {filepath}: {e}", exc_info=True)
             return set()
 # --- 日志加强结束 ---
@@ -77,7 +68,6 @@ def load_submitted_alphas():
 def save_submitted_alphas(submitted_set):
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
-        # 记录将要写入的数据大小
         logger.info(f"[Submit Save] Attempting to save {len(submitted_set)} items to {filepath}")
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
@@ -87,13 +77,12 @@ def save_submitted_alphas(submitted_set):
         except IOError as e:
             logger.error(f"[Submit Save] IOError saving {filepath}: {e}")
             return False
-        except Exception as e: # 捕获其他潜在错误
+        except Exception as e: 
             logger.error(f"[Submit Save] Unexpected error saving {filepath}: {e}", exc_info=True)
             return False
 # --- 日志加强结束 ---
 
 
-# ... (get_service_status 保持 v5.2-debug 不变) ...
 def get_service_status(log_file):
     status = "UNKNOWN"
     last_seen = "Never"
@@ -120,25 +109,22 @@ def get_service_status(log_file):
         except Exception as e:
             logs = f"Error reading log file: {e}"
             status = "ERROR"
-            # 使用 logging 记录错误
             logger.error(f"Error getting service status for {log_file}: {e}", exc_info=True)
     else:
         status = "NOT FOUND"
 
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
-# --- v5.3: 合并 get_hopeful_alphas_stats ---
+# --- v5.4: 优化 get_hopeful_alphas_stats (高级排序) ---
 def get_hopeful_alphas_stats():
     stats = {
         "count": 0,
         "max_fitness": 0.0,
         "max_sharpe": 0.0,
         "avg_fitness": 0.0,
-        "submittable_pending_count": 0, # <-- v5.3: 新增 KPI
+        "submittable_pending_count": 0, 
         "all_alphas": []
     }
-    # 在函数开始时加载一次，避免重复加载
-    # load_submitted_alphas 现在有更详细的日志
     submitted_set = load_submitted_alphas()
     logger.info(f"[Stats] Loaded submitted set with {len(submitted_set)} items for stats calculation.")
 
@@ -175,10 +161,10 @@ def get_hopeful_alphas_stats():
             all_sharpe = [a.get('performance', {}).get('sharpe', 0) for a in valid_alphas_list]
 
             if all_fitness:
-                stats['max_fitness'] = max(all_fitness) if all_fitness else 0.0 # 再次检查空列表
+                stats['max_fitness'] = max(all_fitness) if all_fitness else 0.0 
                 stats['avg_fitness'] = sum(all_fitness) / len(all_fitness) if all_fitness else 0.0
             if all_sharpe:
-                stats['max_sharpe'] = max(all_sharpe) if all_sharpe else 0.0 # 再次检查空列表
+                stats['max_sharpe'] = max(all_sharpe) if all_sharpe else 0.0 
 
             def calculate_combined_score(report):
                 if not isinstance(report, dict): return -float('inf')
@@ -199,57 +185,81 @@ def get_hopeful_alphas_stats():
                 except (ValueError, TypeError): sharpe, turnover = 0.0, 1.0
                 return fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
 
-            valid_alphas_list.sort(key=calculate_combined_score, reverse=True)
-
-            processed_count = 0 # 计数器
+            # --- v5.4: 排序逻辑修改 ---
+            # 1. 先创建一个包含所有计算字段的临时列表
+            processed_alphas_temp = []
+            processed_count = 0
+            
             for alpha in valid_alphas_list:
-                try: # 对每个 alpha 的处理也加上 try-except
-                    summary = alpha.get('checks_summary', '')
+                try: 
                     expression = alpha.get('expression')
+                    if not expression: # 跳过没有表达式的无效条目
+                        continue
+                        
+                    perf_data = alpha.get('performance', {})
+                    fitness_val = perf_data.get('fitness', 0)
+                    
+                    summary = alpha.get('checks_summary', '')
                     summary_str = summary if summary is not None else ''
 
                     fail_match = fail_pattern.search(summary_str)
                     has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
-
                     pending_match = pending_pattern.search(summary_str)
                     has_pending = bool(pending_match and int(pending_match.group(1)) > 0)
-
                     pass_match = pass_pattern.search(summary_str)
                     passed_count = int(pass_match.group(1)) if pass_match else 0
 
                     is_all_pass = passed_count >= 7 and not has_fail and not has_pending
                     is_submittable = passed_count >= 7 and not has_fail
+                    is_submitted = bool(expression in submitted_set)
 
-                    is_submitted = bool(expression and expression in submitted_set)
-                    perf_data = alpha.get('performance', {})
-
-                    # --- v5.3: 新增 KPI 逻辑 ---
                     if is_submittable and not is_submitted:
                         stats['submittable_pending_count'] += 1
-                    # --- v5.3 结束 ---
 
-                    stats['all_alphas'].append({
+                    processed_alphas_temp.append({
                         "expression": expression,
-                        "fitness": perf_data.get('fitness', 0),
+                        "fitness": fitness_val,
                         "sharpe": perf_data.get('sharpe', 0),
                         "checks": summary_str,
                         "timestamp": alpha.get('timestamp', 'N/A'),
                         "is_all_pass": is_all_pass,
                         "is_submittable": is_submittable,
-                        "is_submitted": is_submitted
+                        "is_submitted": is_submitted,
+                        # 计算并存储用于第三级排序的综合分
+                        "combined_score": calculate_combined_score(alpha) 
                     })
                     processed_count += 1
                 except Exception as e:
                     logger.error(f"[Stats Process] Error processing alpha: {alpha.get('expression', 'N/A')}. Error: {e}", exc_info=True)
-                    # 跳过这个 alpha 继续处理下一个
 
             logger.info(f"[Stats] Processed {processed_count}/{len(valid_alphas_list)} valid alphas for stats.")
+
+            # 2. 定义你的三级排序 key
+            def sort_key(alpha):
+                # 1. (fitness >= 1) -> True (1) or False (0). (True 优先)
+                sort_fitness = (alpha['fitness'] >= 1) 
+                
+                # 2. (not is_submitted) -> "Not Submitted" (True, 1) or "Submitted" (False, 0). (True 优先)
+                sort_submitted = (not alpha['is_submitted'])
+                
+                # 3. combined_score -> (Higher score 优先)
+                sort_combined = alpha['combined_score']
+                
+                # 我们将按此元组的顺序降序排序
+                return (sort_fitness, sort_submitted, sort_combined)
+                
+            # 3. 执行排序 (reverse=True 意味着降序, True(1) > False(0))
+            processed_alphas_temp.sort(key=sort_key, reverse=True)
+            
+            # 4. 将排序后的列表赋给 stats
+            stats['all_alphas'] = processed_alphas_temp
+            # --- v5.4 排序逻辑结束 ---
 
         except Exception as e:
              logger.error(f"[Stats] Unexpected error processing alphas list: {e}", exc_info=True)
 
     return stats
-# --- v5.3 结束 ---
+# --- v5.4 结束 ---
 
 # --- v5.3: 合并 get_file_versions ---
 def get_file_versions():
@@ -257,7 +267,6 @@ def get_file_versions():
     for name, filepath in FILES_TO_TRACK.items():
         try:
             if os.path.exists(filepath):
-                # --- v5.3 变更: 使用 os.stat().st_mtime 尝试绕过缓存 ---
                 mtime = os.stat(filepath).st_mtime
                 versions[name] = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
             else:
@@ -275,7 +284,7 @@ def dashboard():
 # --- v5.3: 合并 /status 路由 ---
 @app.route('/status')
 def status():
-    logger.info("[API /status] Request received.") # 记录请求开始
+    logger.info("[API /status] Request received.") 
     try:
         data = {
             "miner": get_service_status('miner.log'),
@@ -284,19 +293,16 @@ def status():
             "file_versions": get_file_versions()
         }
         
-        # --- v5.3 Cache-Busting 修复 ---
-        # 添加响应头，禁止浏览器和代理缓存此 /status 响应
         response = make_response(jsonify(data))
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate' # HTTP 1.1
-        response.headers['Pragma'] = 'no-cache' # HTTP 1.0
-        response.headers['Expires'] = '0' # Proxies
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate' 
+        response.headers['Pragma'] = 'no-cache' 
+        response.headers['Expires'] = '0' 
         
-        logger.info("[API /status] Request completed successfully with no-cache headers.") # 记录成功
+        logger.info("[API /status] Request completed successfully with no-cache headers.") 
         return response
-        # --- v5.3 修复结束 ---
         
     except Exception as e:
-        logger.critical(f"[API /status] CRITICAL Error: {e}", exc_info=True) # 使用 critical 级别
+        logger.critical(f"[API /status] CRITICAL Error: {e}", exc_info=True) 
         return jsonify({"error": "Failed to retrieve status data due to an internal server error."}), 500
 # --- v5.3 结束 ---
 
@@ -333,7 +339,7 @@ def mark_alpha_submitted():
 
     logger.info(f"[API /{operation.lower()}_submitted] Received expression (first 50 chars): {expression[:50]}...")
     try:
-        submitted_set = load_submitted_alphas() # Load has logging
+        submitted_set = load_submitted_alphas() 
         original_size = len(submitted_set)
         submitted_set.add(expression)
         new_size = len(submitted_set)
@@ -343,9 +349,9 @@ def mark_alpha_submitted():
         else:
             logger.info(f"[API /{operation.lower()}_submitted] Expression already in set. Attempting save (idempotent).")
 
-        if save_submitted_alphas(submitted_set): # Save has logging
+        if save_submitted_alphas(submitted_set): 
             logger.info(f"[API /{operation.lower()}_submitted] Operation successful for expression: {expression[:50]}...")
-            return jsonify(status='success', message=operation+'ed') # 返回更简洁的消息
+            return jsonify(status='success', message=operation+'ed') 
         else:
             logger.error(f"[API /{operation.lower()}_submitted] Save operation failed for expression: {expression[:50]}...")
             return jsonify(status='error', message='Failed to save submission status'), 500
@@ -355,7 +361,7 @@ def mark_alpha_submitted():
 
 @app.route('/api/unmark_submitted', methods=['POST'])
 def unmark_alpha_submitted():
-    operation = "Unmark" # 统一操作名称
+    operation = "Unmark" 
     logger.info(f"[API /{operation.lower()}_submitted] Request received.")
     if not request.is_json:
         logger.warning(f"[API /{operation.lower()}_submitted] Request is not JSON.")
@@ -368,9 +374,9 @@ def unmark_alpha_submitted():
 
     logger.info(f"[API /{operation.lower()}_submitted] Received expression (first 50 chars): {expression[:50]}...")
     try:
-        submitted_set = load_submitted_alphas() # Load has logging
+        submitted_set = load_submitted_alphas() 
         original_size = len(submitted_set)
-        submitted_set.discard(expression) # 使用 discard 更安全
+        submitted_set.discard(expression) 
         new_size = len(submitted_set)
 
         if new_size < original_size:
@@ -379,9 +385,9 @@ def unmark_alpha_submitted():
             logger.info(f"[API /{operation.lower()}_submitted] Expression was not in set. Attempting save (idempotent).")
 
 
-        if save_submitted_alphas(submitted_set): # Save has logging
+        if save_submitted_alphas(submitted_set): 
             logger.info(f"[API /{operation.lower()}_submitted] Operation successful for expression: {expression[:50]}...")
-            return jsonify(status='success', message=operation+'ed') # 返回更简洁的消息
+            return jsonify(status='success', message=operation+'ed') 
         else:
             logger.error(f"[API /{operation.lower()}_submitted] Save operation failed for expression: {expression[:50]}...")
             return jsonify(status='error', message='Failed to save submission status'), 500
@@ -395,17 +401,15 @@ if __name__ == '__main__':
     if not os.path.exists(LOG_DIR):
         try:
             os.makedirs(LOG_DIR)
-            logger.info(f"Created log directory: {LOG_DIR}") # 使用 logging
+            logger.info(f"Created log directory: {LOG_DIR}") 
         except OSError as e:
-            logger.error(f"Error creating log directory {LOG_DIR}: {e}") # 使用 logging
+            logger.error(f"Error creating log directory {LOG_DIR}: {e}") 
 
-    # --- v5.3: 补充修复: 启动时清除 os.stat 缓存 ---
     try:
         os.stat_cache.clear()
         logger.info("Cleared os.stat_cache() on startup.")
     except AttributeError:
         logger.info("os.stat_cache() not available on this platform, skipping.")
-    # --- v5.3 结束 ---
 
-    logger.info("Starting Flask application...") # 添加启动日志
+    logger.info("Starting Flask application...") 
     app.run(host='0.0.0.0', port=8080, threaded=True, debug=False)

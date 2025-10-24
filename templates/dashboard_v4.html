@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.0 (版本 & 健壮性修复)</title>
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.1 (新增KPI)</title>
     <style>
-        /* ... (v4.9 的所有 CSS 样式保持不变) ... */
+        /* ... (所有 CSS 样式保持不变) ... */
         :root {
             --bg-color: #121212;
             --card-bg-color: #1e1e1e;
@@ -81,6 +81,16 @@
             border-radius: 6px;
             border-left: 5px solid var(--secondary-accent-color);
         }
+        
+        /* --- v5.1: 为新 KPI 添加特殊颜色 --- */
+        .kpi.kpi-pending-submit {
+             border-left-color: var(--primary-accent-color);
+        }
+        .kpi.kpi-pending-submit .kpi-title {
+            color: var(--primary-accent-color);
+        }
+        /* --- v5.1 结束 --- */
+
 
         .kpi-title {
             font-weight: bold;
@@ -386,7 +396,7 @@
     </style>
 </head>
 <body>
-    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.0</h1>
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.1</h1>
 
     <button id="versionBtn" class="version-button" onclick="openVersionModal()">查看版本</button>
 
@@ -436,6 +446,7 @@
             <h2>🏆 精英 Alpha 池 (Hopeful Alphas)</h2>
             <div class="kpi-grid">
                 <div class="kpi"><div class="kpi-title">精英总数</div><div class="kpi-value" id="hopeful-count">--</div></div>
+                <div class="kpi kpi-pending-submit"><div class="kpi-title">🏅 待提交</div><div class="kpi-value" id="submittable-pending-count">--</div></div>
                 <div class="kpi"><div class="kpi-title">最高 Fitness</div><div class="kpi-value" id="max-fitness">--</div></div>
                 <div class="kpi"><div class="kpi-title">最高 Sharpe</div><div class="kpi-value" id="max-sharpe">--</div></div>
                 <div class="kpi"><div class="kpi-title">平均 Fitness</div><div class="kpi-value" id="avg-fitness">--</div></div>
@@ -450,7 +461,7 @@
     <div id="toast-container" class="toast-notification"></div>
 
     <script>
-        // ... (colorizeLogs, formatChecks, showToast, copyToClipboard, toggleSubmittedStatus 函数保持 v4.9 不变) ...
+        // ... (colorizeLogs, formatChecks, showToast, copyToClipboard, toggleSubmittedStatus, Modal functions 保持不变) ...
         function colorizeLogs(logText) {
             // 安全地处理 undefined 或 null
             if (!logText) return '';
@@ -596,6 +607,11 @@
                 if (data.status === 'success') {
                     console.log(data.message); // 后端现在只返回 'Marked' 或 'Unmarked'
                     showToast(`状态更新成功: ${data.message}`);
+                    
+                    // --- v5.1 优化: 立即更新 KPI ---
+                    // 勾选状态改变会影响 "待提交" 数量，立即重新获取状态
+                    updateStatus(); 
+                    
                 } else {
                     // 虽然我们预期 response.ok 会处理失败，但以防万一
                     console.error('标记失败:', data.message);
@@ -662,7 +678,12 @@
 
         // --- 主更新函数 ---
         function updateStatus() {
-            fetch('/status')
+            // --- v5.2 Cache-Busting 修复 ---
+            // 在 fetch URL 中添加一个唯一的查询参数（时间戳）
+            // 这将辅助后端的 no-cache 头，确保万无一失
+            const cacheBuster = new Date().getTime();
+            fetch(`/status?_=${cacheBuster}`)
+            // --- v5.2 修复结束 ---
                 .then(response => {
                     if (!response.ok) {
                          // 如果获取状态失败，也认为是错误
@@ -706,6 +727,11 @@
                     // --- KPI 更新 (添加检查) ---
                     const hopefulData = data.hopeful_alphas || {}; // 提供默认空对象
                     document.getElementById('hopeful-count').textContent = hopefulData.count ?? '--'; // 使用 ?? 提供默认值
+                    
+                    // --- v5.1 新 KPI 更新 ---
+                    document.getElementById('submittable-pending-count').textContent = hopefulData.submittable_pending_count ?? '--';
+                    // --- v5.1 结束 ---
+
                     // 对数字进行 toFixed 前检查是否为有效数字
                     document.getElementById('max-fitness').textContent = typeof hopefulData.max_fitness === 'number' ? hopefulData.max_fitness.toFixed(3) : '--';
                     document.getElementById('max-sharpe').textContent = typeof hopefulData.max_sharpe === 'number' ? hopefulData.max_sharpe.toFixed(3) : '--';
@@ -824,4 +850,3 @@
     </script>
 </body>
 </html>
-

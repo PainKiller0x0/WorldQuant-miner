@@ -1,3 +1,4 @@
+# --- alpha_generator_ollama.py v7.5 (Bolder Generation & Advanced Fields) ---
 import argparse
 import logging
 import json
@@ -16,6 +17,12 @@ from collections import Counter
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
 # --- 修复结束 ---
+
+# --- v7.4 调整: 区分不同 API 的冷却时间 ---
+LLM_API_COOLDOWN = 3600  # 1 小时 (针对 LLM API 500/429 错误)
+WQ_API_COOLDOWN = 60     # 1 分钟 (针对 WorldQuant 429 错误)
+# --- v7.4 结束 ---
+
 
 # --- 日志配置 ---
 def setup_logging(log_file):
@@ -98,14 +105,22 @@ class WorldQuant:
                 response.raise_for_status()
                 logger.info("WorldQuant Brain authentication successful.")
             except requests.exceptions.RequestException as e:
+                # v7.3 修改: 429 错误会在这里被捕获并抛出，由 __main__ 中的启动逻辑处理
                 logger.error(f"WorldQuant Brain authentication failed: {e}")
                 raise
 
     def get_data_fields(self):
-        logger.info("正在使用硬编码的、绝对安全的官方核心数据字段列表...")
-        safe_fields = ["open", "high", "low", "close", "volume", "vwap"]
-        logger.info(f"成功加载 {len(safe_fields)} 个核心数据字段。")
+        # --- v7.5 优化: 扩展数据字段列表 ---
+        logger.info("正在使用扩展的、针对高级用户的官方核心数据字段列表...")
+        safe_fields = [
+            "open", "high", "low", "close", "volume", "vwap", 
+            "cap", "returns", "turnover", "beta", "momentum", 
+            "adv20", "adv40", "adv60", "adv80", "adv120", 
+            "buy_turnover", "sell_turnover", "indneutral_beta"
+        ]
+        logger.info(f"成功加载 {len(safe_fields)} 个核心及高级数据字段。")
         return safe_fields
+        # --- v7.5 结束 ---
 
     def get_operators(self):
         url = f"{self.base_url}/operators"
@@ -118,6 +133,10 @@ class WorldQuant:
             logger.info(f"成功獲取 {len(operators)} 個操作符。")
             return operators
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            # v7.3 修改: 检查 429
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                logger.critical(f"获取操作符时检测到 WorldQuant 429 Rate Limit: {e}")
+                return "RATE_LIMIT"
             logger.error(f"Failed to get operators: {e}")
             return []
 
@@ -143,6 +162,11 @@ class WorldQuant:
                 return None
             logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
         except requests.exceptions.RequestException as e:
+            # --- v7.3 修改: 捕获 429 Rate Limit ---
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                logger.critical(f"提交模拟时检测到 WorldQuant 429 Rate Limit: {e}")
+                return "RATE_LIMIT"
+            # --- v7.3 结束 ---
             error_content = "No response body"
             if e.response is not None:
                 try: error_content = e.response.json()
@@ -181,6 +205,11 @@ class WorldQuant:
                     logger.debug(f"Alpha '{alpha_expression}' 仍在模拟中... 状态: {status}")
                     time.sleep(10)
             except requests.exceptions.RequestException as e:
+                # --- v7.3 修改: 捕获 429 Rate Limit ---
+                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                    logger.critical(f"轮询结果时检测到 WorldQuant 429 Rate Limit: {e}")
+                    return "RATE_LIMIT"
+                # --- v7.3 结束 ---
                 logger.error(f"轮询结果失败: {e}，将在15秒后重试...")
                 time.sleep(15)
             except Exception as e:
@@ -210,6 +239,20 @@ class AlphaGenerator:
         self.purged_alphas_archive_file = "purged_alphas_archive.json"
         self.tested_alphas = self.load_tested_alphas()
         self.hopeful_alphas_cache = []
+        
+        # --- v7.4 调整: 冷却状态 ---
+        self.llm_api_cooldown = LLM_API_COOLDOWN
+        self.wq_api_cooldown = WQ_API_COOLDOWN
+        self._rate_limit_until = 0
+        # --- v7.4 结束 ---
+
+    # --- v7.4 调整: 冷却触发器接受时长 ---
+    def _enter_cooldown(self, duration_seconds, reason="Rate Limit"):
+        """触发冷却期"""
+        self._rate_limit_until = time.time() + duration_seconds
+        duration_minutes = duration_seconds / 60
+        logger.warning(f"检测到 {reason}。脚本将进入冷却期 {duration_minutes:.0f} 分钟，直到 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')}")
+    # --- v7.4 结束 ---
 
     def load_tested_alphas(self):
         if not os.path.exists(self.tested_alphas_logfile): return set()
@@ -320,8 +363,19 @@ class AlphaGenerator:
 
     def generate_alpha_idea(self, fields, operators, guidance=None):
         field_list = ", ".join(fields)
+        
+        # --- v7.5 优化: 动态混合操作符 ---
         core_operators = ['rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power']
-        operator_list = ", ".join(core_operators)
+        
+        # 从完整列表中排除核心操作符，然后随机抽取
+        advanced_operators = [op for op in operators if op not in core_operators]
+        sample_size = min(len(advanced_operators), 20) # 最多抽取20个
+        extra_operators = random.sample(advanced_operators, sample_size)
+        
+        combined_operators = core_operators + extra_operators
+        operator_list = ", ".join(combined_operators)
+        logger.info(f"本轮 Discover 将使用 {len(combined_operators)} 个操作符 (13 核心 + {sample_size} 随机)。")
+        # --- v7.5 结束 ---
         
         prompt_lines = [
             "You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.",
@@ -329,8 +383,11 @@ class AlphaGenerator:
             "1.  **Use ONLY the provided fields and operators.**",
             "2.  **The expression MUST end with a semicolon (;).**",
             "3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).",
-            "4.  **Complexity:** To ensure fast simulations, try to keep the total number of operators below 10.",
-            "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression."
+            # --- v7.5 优化: 放宽复杂度 ---
+            "4.  **Complexity:** Try to keep operators below 15, but more complex and creative combinations are encouraged.",
+            "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression.",
+            "6.  **Be Creative:** Do not just combine `close` and `vwap`. Use other fields like `cap`, `adv20`, or `returns`."
+            # --- v7.5 结束 ---
         ]
         
         if guidance:
@@ -338,7 +395,7 @@ class AlphaGenerator:
 
         prompt_lines.extend([
             f"**Available Data Fields:** {field_list}",
-            f"**Core Allowed Operators:** {operator_list}",
+            f"**Allowed Operators:** {operator_list}", # v7.5
             "New Alpha Expression:"
         ])
         prompt = "\n".join(prompt_lines)
@@ -349,8 +406,21 @@ class AlphaGenerator:
             if idea and not idea.endswith(';'): idea += ';'
             return {"expression": idea, "settings": {}}
         except Exception as e:
-            logger.error(f"从 API 生成 Alpha 失败: {e}")
+            # --- v7.3 修改: 捕获 LLM API 错误 (500 或 429) ---
+            status_code = -1
+            if hasattr(e, 'status_code'): status_code = e.status_code
+            elif hasattr(e, 'response') and e.response: status_code = e.response.status_code
+
+            if status_code == 500:
+                logger.warning(f"生成 Alpha 时检测到 LLM Gateway 的 HTTP 500 错误: {e}。将其视为 Rate Limit 信号。")
+                self._enter_cooldown(self.llm_api_cooldown, reason="LLM Gateway 500 Error") # v7.4
+            elif status_code == 429:
+                logger.warning(f"生成 Alpha 时检测到 LLM API 429 Rate Limit: {e}。")
+                self._enter_cooldown(self.llm_api_cooldown, reason="LLM 429 Rate Limit") # v7.4
+            else:
+                logger.error(f"从 API 生成 Alpha 失败: {e}")
             return None
+            # --- v7.3 结束 ---
 
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         base_expression = base_alpha_obj.get('expression')
@@ -369,8 +439,10 @@ class AlphaGenerator:
         
         prompt_lines.extend([
             "\n**Task:** Apply ONE of the following evolution strategies:",
-            "1.  **Evolve Expression:** Make a small, creative change to the expression. Prioritize using the strategic guidance if available. Keep the expression concise (under 10 operators if possible).",
+            # --- v7.5 优化: 放宽复杂度 ---
+            "1.  **Evolve Expression:** Make a small, creative change to the expression. Prioritize using the strategic guidance if available. Keep the expression concise (under 15 operators if possible). Feel free to introduce new fields or operators.",
             "2.  **Evolve Settings:** Make a small, logical change to ONE numeric setting (`delay`, `decay`, `truncation`).",
+            # --- v7.5 结束 ---
             "\n**MANDATORY OUTPUT FORMAT:**",
             "Your entire response MUST be ONLY the raw JSON object inside a markdown code block. Example:",
             "```json",
@@ -403,8 +475,21 @@ class AlphaGenerator:
                 return None
             return evolved_strategy
         except Exception as e:
-            logger.error(f"从 API '进化' Alpha 策略失败: {e}")
+            # --- v7.3 修改: 捕获 LLM API 错误 (500 或 429) ---
+            status_code = -1
+            if hasattr(e, 'status_code'): status_code = e.status_code
+            elif hasattr(e, 'response') and e.response: status_code = e.response.status_code
+
+            if status_code == 500:
+                logger.warning(f"进化 Alpha 时检测到 LLM Gateway 的 HTTP 500 错误: {e}。将其视为 Rate Limit 信号。")
+                self._enter_cooldown(self.llm_api_cooldown, reason="LLM Gateway 500 Error") # v7.4
+            elif status_code == 429:
+                logger.warning(f"进化 Alpha 时检测到 LLM API 429 Rate Limit: {e}。")
+                self._enter_cooldown(self.llm_api_cooldown, reason="LLM 429 Rate Limit") # v7.4
+            else:
+                logger.error(f"从 API '进化' Alpha 策略失败: {e}")
             return None
+            # --- v7.3 结束 ---
 
     def log_tested_alphas(self, reports_to_log):
         all_reports = []
@@ -439,7 +524,7 @@ class AlphaGenerator:
         
         for report in purged_reports:
             report['archive_reason'] = reason
-            report['archive_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            report['archive_timestamp'] = datetime.now().strftime('%Y-m-%d %H:%M:%S')
         
         all_archived.extend(purged_reports)
         try:
@@ -519,9 +604,17 @@ class AlphaGenerator:
         logger.info(f"Alpha 生成器启动 | 模式: {mode.upper()} | 并发等级: {concurrency_level} | 轮间间隔: {sleep_time}s")
         fields = self.wq.get_data_fields()
         operators = self.wq.get_operators()
-        if not fields or not operators:
+        
+        # v7.3 修改: 检查 get_operators 是否返回了 Rate Limit 信号
+        if operators == "RATE_LIMIT":
+            logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
+            self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
+        
+        if not fields or not operators or operators == "RATE_LIMIT":
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
-            time.sleep(60); return
+            if operators != "RATE_LIMIT": # 如果不是因为Rate Limit，就睡60s退出
+                time.sleep(60)
+            # 如果是Rate Limit，run 循环会处理冷却
         
         evolution_seeds = []
         strategic_guidance = []
@@ -534,6 +627,29 @@ class AlphaGenerator:
                 strategic_guidance = self.analyze_successful_patterns()
 
         while True:
+            # --- v7.3 新增: 检查冷却状态 ---
+            if time.time() < self._rate_limit_until:
+                remaining = self._rate_limit_until - time.time()
+                logger.info(f"当前处于冷却期。将在 {remaining/60:.1f} 分钟后恢复... (冷却至 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')})")
+                # 睡5分钟或剩余时间
+                time.sleep(min(remaining, 300)) 
+                continue # 跳过本轮循环
+            # --- v7.3 结束 ---
+
+            # v7.3 修改: 确保 fields 和 operators 正常
+            if not fields or not operators or operators == "RATE_LIMIT":
+                logger.warning("Fields 或 Operators 未就绪，正在尝试重新获取...")
+                fields = self.wq.get_data_fields()
+                operators = self.wq.get_operators()
+                if operators == "RATE_LIMIT":
+                    logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
+                    self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
+                    continue
+                if not fields or not operators:
+                    logger.error("仍然无法获取字段或操作符，将在60秒后重试。")
+                    time.sleep(60)
+                    continue
+
             current_batch_size = 1 if is_first_run else self.batch_size
             current_concurrency = 1 if is_first_run else concurrency_level
 
@@ -569,6 +685,15 @@ class AlphaGenerator:
                         log_report = {"expression": idea_expr, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                         try:
                             result = future.result()
+
+                            # --- v7.3 新增: 处理来自 WQ 模拟的 Rate Limit 信号 ---
+                            if result == "RATE_LIMIT":
+                                logger.critical(f"WorldQuant 模拟返回 'RATE_LIMIT' 信号 (针对: {idea_expr})。")
+                                self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
+                                # 不需要 break，让其他已提交的任务完成，但新的循环会进入冷却
+                                continue
+                            # --- v7.3 结束 ---
+
                             if result in ["TIMEOUT", "ERROR"]:
                                 log_report["status"] = result
                                 reports_to_log.append(log_report)
@@ -674,6 +799,23 @@ if __name__ == "__main__":
             logger.info("WorldQuant 客户端初始化成功。")
             retry_count = 0
         except requests.exceptions.RequestException as e:
+            # --- v7.3 修改: 捕获 WQ 初始化时的 429 错误 ---
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
+                logger.critical(f"初始化 WorldQuant 客户端时检测到 429 Rate Limit: {e}。")
+                # --- v7.4 调整: 使用 WQ 专属冷却时间 ---
+                cooldown_end = time.time() + WQ_API_COOLDOWN 
+                logger.warning(f"将进入 {WQ_API_COOLDOWN/60:.0f} 分钟冷却期，直到 {datetime.fromtimestamp(cooldown_end).strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                while time.time() < cooldown_end:
+                    remaining = cooldown_end - time.time()
+                    logger.info(f"初始化冷却中... {remaining:.0f} 秒后重试。")
+                    time.sleep(min(remaining, WQ_API_COOLDOWN)) # 睡 1 分钟或剩余时间
+                # --- v7.4 结束 ---
+                
+                retry_count = 0 # 重置重试次数
+                continue # 返回循环顶部，再次尝试初始化
+            # --- v7.3 结束 ---
+
             logger.error(f"初始化 WorldQuant 客户端失败: {e}")
             retry_count += 1
             if retry_count <= MAX_INIT_RETRIES:

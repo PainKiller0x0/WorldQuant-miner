@@ -21381,5 +21381,105 @@
         "expression": "ts_corr(vwap, volume, 5) + ts_delta(close, 3);",
         "timestamp": "2025-10-23 17:45:13",
         "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 10)) + rank(ts_mean(close, 20)));",
+        "timestamp": "2025-10-23 18:01:22",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(vwap, close, 5) + ts_delta(volume, 3);",
+        "timestamp": "2025-10-23 19:43:04",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 5) * rank(ts_mean(close, 10)) + ts_mean(close, 2) + ts_delta(vwap, 1) + ts_delta(high, 2) + rank(ts_mean(close, 5)));",
+        "timestamp": "2025-10-23 19:58:09",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(ts_mean(close, 20)) * ts_delta(volume, 5) * rank(ts_delta(close, 10)));",
+        "timestamp": "2025-10-23 20:33:40",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(ts_mean(close, 10)) + ts_delta(volume, 2));",
+        "timestamp": "2025-10-23 21:39:38",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(ts_mean(close, 10)) * rank(ts_mean(volume, 5)) * ts_delta(high, 2));",
+        "timestamp": "2025-10-23 22:34:18",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_mean(vwap, 5) * ts_delta(close, 1));",
+        "timestamp": "2025-10-23 23:58:34",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, open, 10) + ts_delta(vwap, 5);",
+        "timestamp": "2025-10-24 00:11:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(close, open, 5) + ts_delta(vwap, 3);",
+        "timestamp": "2025-10-24 00:45:35",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 5) + ts_mean(vwap, 10) + ts_std_dev(close, 5));",
+        "timestamp": "2025-10-24 01:40:00",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(ts_mean(close, 10)) + ts_delta(vwap, 2) + rank(ts_mean(close, 3)));",
+        "timestamp": "2025-10-24 02:10:09",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(vwap, close, 5) + ts_delta(high, 10);",
+        "timestamp": "2025-10-24 02:19:23",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(vwap, close, 10) + ts_delta(volume, 3);",
+        "timestamp": "2025-10-24 04:05:18",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * ts_delta(close, 5) + ts_mean(close, 10) + ts_delta(open, 2));",
+        "timestamp": "2025-10-24 05:04:02",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(high, volume, 5) + ts_delta(close, 3);",
+        "timestamp": "2025-10-24 05:07:25",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(vwap, close, 10) + ts_delta(volume, 5);",
+        "timestamp": "2025-10-24 05:46:16",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_mean(open, 5) + ts_delta(close, 5) + rank(ts_mean(low, 10)));",
+        "timestamp": "2025-10-24 06:15:39",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_corr(vwap, volume, 10) - ts_mean(close, 5);",
+        "timestamp": "2025-10-24 06:31:35",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(close) * rank(ts_delta(open, 2)) + ts_mean(vwap, 10) * rank(ts_delta(high, 5)) + rank(ts_std_dev(close, 5)));",
+        "timestamp": "2025-10-24 09:09:52",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 5)) + ts_mean(close, 5);",
+        "timestamp": "2025-10-24 17:30:28",
+        "status": "TIMEOUT"
     }
 ]

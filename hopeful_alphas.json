@@ -71,6 +71,77 @@
         "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 10));",
+        "alpha_id": "O0Q8X1bR",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/O0Q8X1bR",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-24 19:40:38",
+        "performance": {
+            "pnl": 5775526,
+            "bookSize": 20000000,
+            "longCount": 1489,
+            "shortCount": 1570,
+            "turnover": 0.4265,
+            "returns": 0.1167,
+            "drawdown": 0.0423,
+            "margin": 0.000547,
+            "sharpe": 1.91,
+            "fitness": 1.0,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.91
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "PASS",
+                    "limit": 1.0,
+                    "value": 1.0
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4265
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4265
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.83,
+                    "value": 1.67
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+    },
+    {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
         "alpha_id": "6Xm97G0J",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/6Xm97G0J",
@@ -2769,6 +2840,77 @@
         "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(close, 2));",
+        "alpha_id": "3qQV0Nrg",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/3qQV0Nrg",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-24 18:58:15",
+        "performance": {
+            "pnl": 5819670,
+            "bookSize": 20000000,
+            "longCount": 1424,
+            "shortCount": 1633,
+            "turnover": 0.4816,
+            "returns": 0.1176,
+            "drawdown": 0.1007,
+            "margin": 0.000488,
+            "sharpe": 1.76,
+            "fitness": 0.87,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.76
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.87
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4816
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4816
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.76,
+                    "value": 1.71
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+    },
+    {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5));",
         "alpha_id": "vRRGMJXr",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/vRRGMJXr",
@@ -3530,6 +3672,77 @@
                     "result": "PASS",
                     "limit": 0.78,
                     "value": 1.63
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_mean(open, 5));",
+        "alpha_id": "mLw6neq5",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/mLw6neq5",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-24 19:46:55",
+        "performance": {
+            "pnl": 4985302,
+            "bookSize": 20000000,
+            "longCount": 1507,
+            "shortCount": 1553,
+            "turnover": 0.4297,
+            "returns": 0.1008,
+            "drawdown": 0.0582,
+            "margin": 0.000469,
+            "sharpe": 1.75,
+            "fitness": 0.85,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.75
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.85
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4297
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4297
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.76,
+                    "value": 1.65
                 },
                 {
                     "name": "SELF_CORRELATION",
@@ -5986,6 +6199,77 @@
         "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
     },
     {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 20)) * rank(ts_delta(close, 5)) + rank(ts_mean(volume, 10));",
+        "alpha_id": "A1jQja8d",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/A1jQja8d",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-24 20:18:57",
+        "performance": {
+            "pnl": 4598692,
+            "bookSize": 20000000,
+            "longCount": 1500,
+            "shortCount": 1560,
+            "turnover": 0.2766,
+            "returns": 0.0929,
+            "drawdown": 0.0505,
+            "margin": 0.000672,
+            "sharpe": 1.49,
+            "fitness": 0.86,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.49
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.86
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.2766
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.2766
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.65,
+                    "value": 1.52
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+    },
+    {
         "expression": "rank(ts_mean(ts_decay_linear(vwap, 10) - ts_decay_linear(close, 10), 5)) * rank(ts_corr(vwap, close, 10));",
         "alpha_id": "78k5lvw8",
         "result_url": "https://platform.worldquantbrain.com/alphas/regular/78k5lvw8",
@@ -7559,10 +7843,10 @@
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(vwap, 3)) * rank(ts_mean(close, 7));",
-        "alpha_id": "RRjkd7Je",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/RRjkd7Je",
+        "alpha_id": "A1jvNkOY",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/A1jvNkOY",
         "grade": "INFERIOR",
-        "timestamp": "2025-10-22 16:16:23",
+        "timestamp": "2025-10-24 18:34:32",
         "performance": {
             "pnl": 4568995,
             "bookSize": 20000000,
@@ -10137,77 +10421,6 @@
             "turnover": 0.4526,
             "returns": 0.111,
             "drawdown": 0.128,
-            "margin": 0.000491,
-            "sharpe": 1.62,
-            "fitness": 0.8,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.62
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.8
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4526
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4526
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 1.43
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 5) + ts_mean(open, 1));",
-        "alpha_id": "qM9qArVA",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/qM9qArVA",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-23 09:54:40",
-        "performance": {
-            "pnl": 5494962,
-            "bookSize": 20000000,
-            "longCount": 1400,
-            "shortCount": 1660,
-            "turnover": 0.4526,
-            "returns": 0.1111,
-            "drawdown": 0.1279,
             "margin": 0.000491,
             "sharpe": 1.62,
             "fitness": 0.8,
@@ -13899,219 +14112,6 @@
             "shortCount": 1660,
             "turnover": 0.4526,
             "returns": 0.1111,
-            "drawdown": 0.128,
-            "margin": 0.000491,
-            "sharpe": 1.62,
-            "fitness": 0.8,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.62
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.8
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4526
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4526
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 1.43
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(close) * rank(ts_delta(open, 2)) + ts_mean(vwap, 10) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 10)) * rank(volume));",
-        "alpha_id": "RRjV3nv0",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/RRjV3nv0",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-24 08:00:27",
-        "performance": {
-            "pnl": 5495662,
-            "bookSize": 20000000,
-            "longCount": 1400,
-            "shortCount": 1660,
-            "turnover": 0.4526,
-            "returns": 0.1111,
-            "drawdown": 0.128,
-            "margin": 0.000491,
-            "sharpe": 1.62,
-            "fitness": 0.8,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.62
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.8
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4526
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4526
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 1.43
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) * rank(ts_mean(close, 10)) + ts_delta(open, 2) * rank(ts_mean(volume, 10)));",
-        "alpha_id": "O0QrEpgd",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/O0QrEpgd",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-24 08:15:36",
-        "performance": {
-            "pnl": 5496224,
-            "bookSize": 20000000,
-            "longCount": 1400,
-            "shortCount": 1660,
-            "turnover": 0.4526,
-            "returns": 0.1111,
-            "drawdown": 0.1281,
-            "margin": 0.000491,
-            "sharpe": 1.62,
-            "fitness": 0.8,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.62
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.8
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4526
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4526
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 1.43
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 5) * rank(ts_mean(vwap, 10)) + ts_delta(close, 1));",
-        "alpha_id": "Wj1b0PVd",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/Wj1b0PVd",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-24 15:31:51",
-        "performance": {
-            "pnl": 5494588,
-            "bookSize": 20000000,
-            "longCount": 1400,
-            "shortCount": 1660,
-            "turnover": 0.4526,
-            "returns": 0.111,
             "drawdown": 0.128,
             "margin": 0.000491,
             "sharpe": 1.62,

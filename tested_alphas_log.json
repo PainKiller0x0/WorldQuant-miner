@@ -21546,5 +21546,55 @@
         "expression": "group_rank(ts_decay_linear(vwap, 10) * ts_decay_linear(adv20, 10), cap);",
         "timestamp": "2025-10-24 20:25:16",
         "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, adv40, 10)) * rank(ts_delta(close, 5)) + rank(ts_std_dev(returns, 20)) * rank(ts_mean(buy_turnover, 15));",
+        "timestamp": "2025-10-24 20:28:11",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, adv40, 10)) * ts_decay_linear(returns, 5);",
+        "timestamp": "2025-10-24 20:28:11",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(close, adv20, 10)) * rank(ts_delta(vwap, 5)) - rank(ts_std_dev(returns, 20)) * rank(log(cap));",
+        "timestamp": "2025-10-24 20:58:03",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwma(close, 10), 5));",
+        "timestamp": "2025-10-24 21:02:03",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - (rank(ts_std_dev(volume, 15)) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(close, 1) * rank(ts_mean(vwap, 5)) + ts_delta(high, 2));",
+        "timestamp": "2025-10-24 21:07:42",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, adv40, 10)) * ts_delta(close, 5);",
+        "timestamp": "2025-10-24 21:05:33",
+        "status": "ERROR"
+    },
+    {
+        "expression": "ts_corr(ts_decay_linear(adv20, 20), ts_decay_linear(adv40, 40), 10);",
+        "timestamp": "2025-10-24 21:15:10",
+        "status": "ERROR"
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - (rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 5) + ts_mean(vwap, 10));",
+        "timestamp": "2025-10-24 21:41:14",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "rank(ts_corr(vwap, adv20, 10) * ts_delta(close, 5) * log(cap));",
+        "timestamp": "2025-10-24 21:48:13",
+        "status": "TIMEOUT"
+    },
+    {
+        "expression": "ts_rank(ts_corr(vwap, adv40, 10), 20);",
+        "timestamp": "2025-10-24 21:51:11",
+        "status": "ERROR"
     }
 ]

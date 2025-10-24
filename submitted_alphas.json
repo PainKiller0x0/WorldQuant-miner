@@ -1,0 +1,4 @@
+[
+    "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
+    "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));"
+]

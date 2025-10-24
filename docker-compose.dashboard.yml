@@ -15,6 +15,10 @@ services:
       - ./logs:/app/logs
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
       - ./tested_alphas_log.json:/app/tested_alphas_log.json
+      # --- v5.7 状态持久化修复 (交接任务) ---
+      - ./submitted_alphas.json:/app/submitted_alphas.json
+      - ./failed_submissions.json:/app/failed_submissions.json
+      # --- 修复结束 ---
       - ./Web仪表盘.py:/app/Web仪表盘.py # 挂载后台文件
       - ./templates:/app/templates   # 挂载整个templates文件夹
     command: python -u Web仪表盘.py # 运行新的后台脚本

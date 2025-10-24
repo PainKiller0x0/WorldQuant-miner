@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v7.5 (Bolder Generation & Advanced Fields) ---
+# --- alpha_generator_ollama.py v7.6.1 (Three-Strikes Blacklist) ---
 import argparse
 import logging
 import json
@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 LLM_API_COOLDOWN = 3600  # 1 小时 (针对 LLM API 500/429 错误)
 WQ_API_COOLDOWN = 60     # 1 分钟 (针对 WorldQuant 429 错误)
 # --- v7.4 结束 ---
+
+# --- v7.6 调整: 黑名单文件及计数 ---
+INVALID_FUNCTIONS_FILE = "invalid_functions.json"
+BLACKLIST_MAX_STRIKES = 3 # "事不过三"
+# --- v7.6 结束 ---
 
 
 # --- 日志配置 ---
@@ -53,10 +58,6 @@ def setup_logging(log_file):
     
     logging.getLogger('').addHandler(issue_handler)
     
-    # --- BUG 修复: 移除此处的局部
-    # logger = logging.getLogger(__name__) # <-- 此行已删除
-    # --- 修复结束 ---
-
     # 现在 logger 是全局的，可以直接使用
     logger.info("日志系统初始化完成。INFO及以上信息将输出到控制台和主日志文件。")
     logger.info(f"WARNING及以上的问题将额外记录到: {issue_log_path}")
@@ -200,7 +201,9 @@ class WorldQuant:
                     return final_data
                 elif status == "ERROR":
                     logger.error(f"Alpha 模拟出错，服务器返回的完整错误报告: {result_data}")
-                    return "ERROR"
+                    # --- v7.6 修改: 返回完整的错误 JSON ---
+                    return result_data 
+                    # --- v7.6 结束 ---
                 else:
                     logger.debug(f"Alpha '{alpha_expression}' 仍在模拟中... 状态: {status}")
                     time.sleep(10)
@@ -245,6 +248,15 @@ class AlphaGenerator:
         self.wq_api_cooldown = WQ_API_COOLDOWN
         self._rate_limit_until = 0
         # --- v7.4 结束 ---
+        
+        # --- v7.6.1 调整: "事不过三"黑名单 ---
+        self.invalid_functions_file = INVALID_FUNCTIONS_FILE
+        self.blacklist_lock = threading.Lock() # v7.6.1: 重命名锁
+        self.blacklist_counts = self.load_blacklist_counts() # v7.6.1: 存储计数
+        self.blacklist_max_strikes = BLACKLIST_MAX_STRIKES
+        self.function_call_pattern = re.compile(r'([a-zA-Z_0-9]+)\s*\(')
+        self.fields = [] # 用于存储字段列表
+        # --- v7.6.1 结束 ---
 
     # --- v7.4 调整: 冷却触发器接受时长 ---
     def _enter_cooldown(self, duration_seconds, reason="Rate Limit"):
@@ -265,6 +277,72 @@ class AlphaGenerator:
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
             return set()
+            
+    # --- v7.6.1 调整: 加载黑名单计数 (原 load_invalid_functions) ---
+    def load_blacklist_counts(self):
+        with self.blacklist_lock:
+            if not os.path.exists(self.invalid_functions_file):
+                logger.info("无效函数计数文件(invalid_functions.json)不存在，将创建新的。")
+                return {} # 返回空字典
+            try:
+                with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if not content: 
+                        return {} # 空文件，返回空字典
+                    
+                    data = json.loads(content)
+                    
+                    if not isinstance(data, dict):
+                        logger.warning(f"{self.invalid_functions_file} 格式不正确 (不是字典)，将重置。")
+                        return {}
+                        
+                    logger.info(f"成功加载 {len(data)} 个函数的黑名单计数。")
+                    return data
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"加载 {self.invalid_functions_file} 出错: {e}, 将创建新的。")
+                return {} # 出错，返回空字典
+    
+    # --- v7.6.1 调整: 更新黑名单计数 (原 add_to_invalid_functions) ---
+    def update_blacklist_count(self, function_name):
+        with self.blacklist_lock:
+            # 再次从文件加载，确保多线程安全和数据最新
+            current_counts = self.load_blacklist_counts()
+            
+            current_count = current_counts.get(function_name, 0)
+            current_count += 1
+            current_counts[function_name] = current_count
+            
+            try:
+                with open(self.invalid_functions_file, 'w', encoding='utf-8') as f:
+                    json.dump(current_counts, f, indent=4)
+                
+                # 同步更新内存中的计数
+                self.blacklist_counts = current_counts
+                
+                if current_count < self.blacklist_max_strikes:
+                    logger.warning(f"检测到无效函数: '{function_name}'。计数: {current_count}/{self.blacklist_max_strikes}。")
+                else:
+                    logger.critical(f"'{function_name}' 已达到 {current_count}/{self.blacklist_max_strikes} 次计数，将被永久拉黑。")
+                    
+            except IOError as e:
+                logger.error(f"保存黑名单计数文件时出错: {e}")
+                
+    # --- v7.6.1 调整: 检查是否被拉黑 (原 is_using_invalid_function) ---
+    def is_using_blacklisted_function(self, alpha_code: str) -> bool:
+        if not self.blacklist_counts:
+            return False # 黑名单为空，跳过检查
+        
+        found_functions = self.function_call_pattern.findall(alpha_code)
+        if not found_functions:
+            return False
+            
+        for func in found_functions:
+            # 检查函数是否在计数器中，并且计数是否达到阈值
+            if func in self.blacklist_counts and self.blacklist_counts[func] >= self.blacklist_max_strikes:
+                logger.warning(f"预检拦截: Alpha '{alpha_code}' 包含了已被拉黑的函数 '{func}' (计数: {self.blacklist_counts[func]}/{self.blacklist_max_strikes})。")
+                return True
+        return False
+    # --- v7.6.1 结束 ---
 
     def excavate_one_pearl(self, sample_size=200):
         if not os.path.exists(self.tested_alphas_logfile):
@@ -524,7 +602,7 @@ class AlphaGenerator:
         
         for report in purged_reports:
             report['archive_reason'] = reason
-            report['archive_timestamp'] = datetime.now().strftime('%Y-m-%d %H:%M:%S')
+            report['archive_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         all_archived.extend(purged_reports)
         try:
@@ -602,17 +680,19 @@ class AlphaGenerator:
         is_first_run = True
         
         logger.info(f"Alpha 生成器启动 | 模式: {mode.upper()} | 并发等级: {concurrency_level} | 轮间间隔: {sleep_time}s")
-        fields = self.wq.get_data_fields()
-        operators = self.wq.get_operators()
+        # --- v7.6 修改: 将 fields 和 operators 存为实例属性 ---
+        self.fields = self.wq.get_data_fields()
+        self.operators = self.wq.get_operators()
+        # --- v7.6 结束 ---
         
         # v7.3 修改: 检查 get_operators 是否返回了 Rate Limit 信号
-        if operators == "RATE_LIMIT":
+        if self.operators == "RATE_LIMIT":
             logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
             self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
         
-        if not fields or not operators or operators == "RATE_LIMIT":
+        if not self.fields or not self.operators or self.operators == "RATE_LIMIT":
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
-            if operators != "RATE_LIMIT": # 如果不是因为Rate Limit，就睡60s退出
+            if self.operators != "RATE_LIMIT": # 如果不是因为Rate Limit，就睡60s退出
                 time.sleep(60)
             # 如果是Rate Limit，run 循环会处理冷却
         
@@ -637,15 +717,15 @@ class AlphaGenerator:
             # --- v7.3 结束 ---
 
             # v7.3 修改: 确保 fields 和 operators 正常
-            if not fields or not operators or operators == "RATE_LIMIT":
+            if not self.fields or not self.operators or self.operators == "RATE_LIMIT":
                 logger.warning("Fields 或 Operators 未就绪，正在尝试重新获取...")
-                fields = self.wq.get_data_fields()
-                operators = self.wq.get_operators()
-                if operators == "RATE_LIMIT":
+                self.fields = self.wq.get_data_fields()
+                self.operators = self.wq.get_operators()
+                if self.operators == "RATE_LIMIT":
                     logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
                     self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
                     continue
-                if not fields or not operators:
+                if not self.fields or not self.operators:
                     logger.error("仍然无法获取字段或操作符，将在60秒后重试。")
                     time.sleep(60)
                     continue
@@ -661,7 +741,7 @@ class AlphaGenerator:
             strategies_to_test = []
             if mode == 'discover':
                 for _ in range(current_batch_size):
-                    idea = self.generate_alpha_idea(fields, operators, guidance=strategic_guidance)
+                    idea = self.generate_alpha_idea(self.fields, self.operators, guidance=strategic_guidance)
                     if idea: strategies_to_test.append(idea)
             elif mode == 'evolve':
                 for _ in range(current_batch_size):
@@ -669,7 +749,20 @@ class AlphaGenerator:
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance)
                     if idea: strategies_to_test.append(idea)
 
-            valid_strategies = [s for s in strategies_to_test if s and s.get("expression") and s.get("expression") not in self.tested_alphas and not is_alpha_syntactically_suspicious(s.get("expression"))]
+            # --- v7.6.1 修改: 预检逻辑 ---
+            pre_valid_strategies = [s for s in strategies_to_test if s and s.get("expression") and s.get("expression") not in self.tested_alphas]
+            
+            valid_strategies = []
+            for s in pre_valid_strategies:
+                expr = s.get("expression")
+                if is_alpha_syntactically_suspicious(expr):
+                    continue
+                # v7.6.1: 使用新的 "三振出局" 检查
+                if self.is_using_blacklisted_function(expr): 
+                    continue
+                valid_strategies.append(s)
+            # --- v7.6.1 结束 ---
+
             logger.info(f"成功生成 {len(valid_strategies)} 个通过预检且待测试的新策略。")
             
             if valid_strategies:
@@ -690,17 +783,46 @@ class AlphaGenerator:
                             if result == "RATE_LIMIT":
                                 logger.critical(f"WorldQuant 模拟返回 'RATE_LIMIT' 信号 (针对: {idea_expr})。")
                                 self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit") # v7.4
-                                # 不需要 break，让其他已提交的任务完成，但新的循环会进入冷却
                                 continue
                             # --- v7.3 结束 ---
+                            
+                            # --- v7.6.1: 动态黑名单计数逻辑 ---
+                            if isinstance(result, dict) and result.get("status") == "ERROR":
+                                log_report["status"] = "ERROR"
+                                reports_to_log.append(log_report)
+                                
+                                # 检查 WQ 返回的详细错误信息
+                                error_message = ""
+                                regular_errors = result.get("regular", {}).get("errors", [])
+                                if regular_errors and isinstance(regular_errors, list) and len(regular_errors) > 0:
+                                    error_message = regular_errors[0].get("message", "")
+                                else:
+                                    error_message = result.get("message", "") # Fallback
 
-                            if result in ["TIMEOUT", "ERROR"]:
+                                # 尝试从错误信息中解析
+                                match = re.search(r"(Unknown function|unknown operator) '(\w+)'", error_message)
+                                if match:
+                                    bad_function = match.group(2)
+                                    # 检查它是否只是一个数据字段
+                                    if bad_function not in self.fields:
+                                        # v7.6.1: 更新计数，而不是直接拉黑
+                                        self.update_blacklist_count(bad_function) 
+                                    else:
+                                        logger.info(f"Alpha 模拟出错: '{bad_function}' 是一个数据字段，但可能被误用为函数。已记录，不计入黑名单。")
+                                else:
+                                    # v7.6.1: 其他错误，不触发黑名单
+                                    logger.warning(f"Alpha 模拟出错 (非函数错误)，已记录: {idea_expr} | Error: {error_message[:200]}...")
+                                continue
+                            # --- v7.6.1 结束 ---
+
+                            if result in ["TIMEOUT"]: # "ERROR" 已被上面的 dict 捕获
                                 log_report["status"] = result
                                 reports_to_log.append(log_report)
-                                logger.warning(f"Alpha 模拟{result}，已记录并丢弃: {idea_expr}")
+                                # v7.6.1: TIMEOUT 不触发黑名单
+                                logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
                                 continue
                             
-                            if result:
+                            if result: # 此时 result 必然是 COMPLETE 的成功 JSON
                                 is_stats = result.get("is", {})
                                 alpha_id = result.get("id")
                                 if not is_stats or not alpha_id: continue

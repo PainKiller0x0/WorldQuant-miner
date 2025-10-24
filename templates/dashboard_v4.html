@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.3 (WQ 失败状态)</title>
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.4 (提交成功状态)</title>
     <style>
-        /* ... (v5.2 的 CSS 保持不变) ... */
+        /* --- 完整的 CSS 样式 --- */
         :root {
             --bg-color: #121212;
             --card-bg-color: #1e1e1e;
@@ -19,125 +19,333 @@
             --success-color: lightgreen;
             --error-color: lightcoral;
             --pending-color: orange;
-            --danger-color: #cf6679; /* v5.3: 新增危险色 */
+            --danger-color: #cf6679; /* v5.3: 危险色 */
+            --finalized-color: #018786; /* v5.4: 完成颜色 */
         }
 
-        html { box-sizing: border-box; overflow-x: hidden; }
-        *, *:before, *:after { box-sizing: inherit; }
-        body { font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; position: relative; }
-        .container { display: grid; grid-template-columns: 1fr; gap: 20px; width: 100%; max-width: 1600px; margin: 0 auto; }
-        .card { background-color: var(--card-bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); overflow: hidden; }
-        h1, h2 { color: var(--primary-accent-color); border-bottom: 2px solid #3700b3; padding-bottom: 10px; }
-        h1 { text-align: center; margin: 0 0 30px 0; }
-        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .kpi { background-color: #2a2a2a; padding: 15px; border-radius: 6px; border-left: 5px solid var(--secondary-accent-color); }
-        .kpi.kpi-pending-submit { border-left-color: var(--primary-accent-color); }
-        .kpi.kpi-pending-submit .kpi-title { color: var(--primary-accent-color); }
-        .kpi-title { font-weight: bold; color: var(--secondary-accent-color); margin-bottom: 5px; }
-        .kpi-value { font-size: 1.5em; font-weight: bold; }
-        .log-container, .alpha-container { border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; overflow-y: auto; }
-        .log-container { background-color: #2c2c2c; height: 250px; font-family: var(--font-mono); font-size: 0.9em; white-space: pre-wrap; word-break: break-all; }
-        .alpha-container { height: 400px; }
-        .alpha-list { list-style: none; padding: 0; margin: 0; }
-        .alpha-item { background-color: #2a2a2a; margin-bottom: 10px; padding: 15px; border-radius: 6px; border-left: 5px solid var(--primary-accent-color); transition: all 0.2s ease-in-out; overflow: hidden; }
+        html {
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            position: relative;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: var(--card-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        h1, h2 {
+            color: var(--primary-accent-color);
+            border-bottom: 2px solid #3700b3;
+            padding-bottom: 10px;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0 0 30px 0;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .kpi {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 5px solid var(--secondary-accent-color);
+        }
+
+        .kpi.kpi-pending-submit {
+             border-left-color: var(--primary-accent-color);
+        }
+        .kpi.kpi-pending-submit .kpi-title {
+            color: var(--primary-accent-color);
+        }
+
+        .kpi-title {
+            font-weight: bold;
+            color: var(--secondary-accent-color);
+            margin-bottom: 5px;
+        }
+
+        .kpi-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .log-container, .alpha-container {
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .log-container {
+            background-color: #2c2c2c;
+            height: 250px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .alpha-container {
+            height: 400px;
+        }
+
+        .alpha-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .alpha-item {
+            background-color: #2a2a2a;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 5px solid var(--primary-accent-color);
+            transition: all 0.2s ease-in-out;
+            overflow: hidden;
+        }
+
         .pass, .log-pass { color: var(--success-color); font-weight: bold; }
         .fail, .log-fail { color: var(--error-color); font-weight: bold; }
         .pending, .log-pending { color: var(--pending-color); font-weight: bold; }
-        .download-button { display: inline-block; padding: 8px 15px; background-color: #3700b3; color: #fff; text-decoration: none; border-radius: 5px; margin-bottom: 10px; text-align: center; transition: background-color 0.2s; white-space: nowrap; }
-        .download-button:hover { background-color: #4a148c; }
-        .log-download-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
-        .download-button.issues { background-color: #b00020; }
-        .download-button.issues:hover { background-color: #c51162; }
-        .alpha-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
-        .alpha-expression { font-family: var(--font-mono); font-size: 0.95em; color: #cfcfcf; background-color: #333; padding: 5px; border-radius: 4px; display: block; margin-bottom: 10px; white-space: pre-wrap; word-break: break-all; flex-grow: 1; }
-        .copy-button { background-color: var(--primary-accent-color); color: #121212; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: bold; transition: background-color 0.2s, color 0.2s; flex-shrink: 0; white-space: nowrap; line-height: 1.5; height: fit-content; }
-        .copy-button:hover { background-color: var(--secondary-accent-color); }
-        .copy-button.copied { background-color: var(--success-color); color: #121212; }
-        .alpha-stats { font-size: 0.9em; color: var(--text-muted-color); word-break: normal; margin-bottom: 10px; }
-        .badge { padding: 4px 8px; border-radius: 12px; font-size: 0.9em; font-weight: bold; margin-left: 10px; color: #121212; vertical-align: middle; }
+
+        .download-button {
+            display: inline-block;
+            padding: 8px 15px;
+            background-color: #3700b3;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            text-align: center;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+
+        .download-button:hover {
+            background-color: #4a148c;
+        }
+
+        .log-download-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .download-button.issues {
+            background-color: #b00020;
+        }
+        .download-button.issues:hover {
+            background-color: #c51162;
+        }
+
+        .alpha-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .alpha-expression {
+            font-family: var(--font-mono);
+            font-size: 0.95em;
+            color: #cfcfcf;
+            background-color: #333;
+            padding: 5px;
+            border-radius: 4px;
+            display: block;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            flex-grow: 1;
+        }
+
+        .copy-button {
+            background-color: var(--primary-accent-color);
+            color: #121212;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background-color 0.2s, color 0.2s;
+            flex-shrink: 0;
+            white-space: nowrap;
+            line-height: 1.5;
+            height: fit-content;
+        }
+        .copy-button:hover {
+            background-color: var(--secondary-accent-color);
+        }
+        .copy-button.copied {
+            background-color: var(--success-color);
+            color: #121212;
+        }
+
+        .alpha-stats {
+            font-size: 0.9em;
+            color: var(--text-muted-color);
+            word-break: normal;
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-left: 10px;
+            color: #121212;
+            vertical-align: middle;
+        }
         .badge-success { background-color: var(--success-color); }
         .badge-primary { background-color: #6200ee; color: #fff; }
-        /* --- v5.3: 新增危险徽章 --- */
         .badge-danger { background-color: var(--danger-color); color: #fff; }
-        /* --- v5.3 结束 --- */
-        .alpha-footer { display: flex; justify-content: flex-end; align-items: center; gap: 15px; /* v5.3: 增加间距 */}
-        .form-check { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-muted-color); cursor: pointer; }
-        .form-check-label { cursor: pointer; user-select: none; }
-        .form-check-input { appearance: none; width: 1.25em; height: 1.25em; border: 1px solid var(--primary-accent-color); border-radius: 4px; background-color: var(--card-bg-color); cursor: pointer; position: relative; transition: background-color 0.2s; }
-        .form-check-input:checked { background-color: var(--primary-accent-color); }
-        .form-check-input:checked::after { content: '\2713'; position: absolute; color: #121212; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 1em; font-weight: bold; }
-        /* --- v5.3: 为失败复选框添加样式 --- */
+        /* --- v5.4: 新增徽章样式 --- */
+        .badge-finalized { background-color: var(--finalized-color); color: #fff; }
+        /* --- v5.4 结束 --- */
+
+        .alpha-footer {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 15px; /* v5.3: 增加间距 */
+        }
+
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            color: var(--text-muted-color);
+            cursor: pointer;
+        }
+        .form-check-label {
+            cursor: pointer;
+            user-select: none;
+        }
+        .form-check-input {
+            appearance: none;
+            width: 1.25em;
+            height: 1.25em;
+            border: 1px solid var(--primary-accent-color);
+            border-radius: 4px;
+            background-color: var(--card-bg-color);
+            cursor: pointer;
+            position: relative;
+            transition: background-color 0.2s;
+        }
+        .form-check-input:checked {
+            background-color: var(--primary-accent-color);
+        }
+        .form-check-input:checked::after {
+            content: '\2713';
+            position: absolute;
+            color: #121212;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1em;
+            font-weight: bold;
+        }
         .form-check-input.fail-check { border-color: var(--danger-color); }
         .form-check-input.fail-check:checked { background-color: var(--danger-color); }
-        /* --- v5.3 结束 --- */
-        .alpha-item.all-pass { border-left-color: var(--success-color); background-color: #2e3b2e; }
-        .alpha-item.submittable { border-left-color: #6200ee; background-color: #2a2a3a; }
-        /* --- v5.3: 新增失败样式 --- */
-        .alpha-item.failed-on-wq { border-left-color: var(--danger-color); background-color: #3a2a2a; opacity: 0.7; }
-        /* --- v5.3 结束 --- */
-        .toast-notification { position: fixed; bottom: 20px; right: 20px; background-color: var(--success-color); color: #121212; padding: 10px 20px; border-radius: 5px; font-weight: bold; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; }
+
+        .alpha-item.all-pass {
+            border-left-color: var(--success-color);
+            background-color: #2e3b2e;
+        }
+        .alpha-item.submittable {
+            border-left-color: #6200ee;
+            background-color: #2a2a3a;
+        }
+        .alpha-item.failed-on-wq {
+            border-left-color: var(--danger-color);
+            background-color: #3a2a2a;
+            opacity: 0.7;
+        }
+
+        .toast-notification {
+            position: fixed; bottom: 20px; right: 20px; background-color: var(--success-color);
+            color: #121212; padding: 10px 20px; border-radius: 5px; font-weight: bold;
+            z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+        }
         .toast-notification.show { opacity: 1; visibility: visible; }
         .toast-notification.error { background-color: var(--error-color); }
-        .version-button { position: fixed; bottom: 20px; left: 20px; padding: 8px 15px; background-color: #444; color: var(--text-muted-color); border: 1px solid var(--border-color); border-radius: 5px; cursor: pointer; z-index: 999; transition: background-color 0.2s, color 0.2s; font-size: 0.9em; }
+
+        .version-button {
+            position: fixed; bottom: 20px; left: 20px; padding: 8px 15px; background-color: #444;
+            color: var(--text-muted-color); border: 1px solid var(--border-color); border-radius: 5px;
+            cursor: pointer; z-index: 999; transition: background-color 0.2s, color 0.2s; font-size: 0.9em;
+        }
         .version-button:hover { background-color: #555; color: var(--text-color); }
-        .modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7); padding-top: 60px; }
-        .modal-content { background-color: var(--card-bg-color); margin: 5% auto; padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; width: 80%; max-width: 600px; color: var(--text-color); }
-        .modal-header { padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+
+        .modal {
+            display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.7); padding-top: 60px;
+        }
+        .modal-content {
+            background-color: var(--card-bg-color); margin: 5% auto; padding: 20px;
+            border: 1px solid var(--border-color); border-radius: 8px; width: 80%; max-width: 600px; color: var(--text-color);
+        }
+        .modal-header {
+            padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
         .modal-header h2 { margin: 0; padding: 0; border: none; color: var(--primary-accent-color); }
         .close-button { color: var(--text-muted-color); font-size: 28px; font-weight: bold; cursor: pointer; }
         .close-button:hover, .close-button:focus { color: var(--text-color); text-decoration: none; }
         .version-list { list-style: none; padding: 0; margin: 0; }
         .version-list li { margin-bottom: 10px; font-size: 0.95em; }
         .version-list li strong { color: var(--secondary-accent-color); margin-right: 10px; display: inline-block; min-width: 150px; }
+        /* --- 完整的 CSS 样式结束 --- */
     </style>
 </head>
 <body>
-    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.3</h1>
-
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.4</h1>
     <button id="versionBtn" class="version-button" onclick="openVersionModal()">查看版本</button>
-
     <div id="versionModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>关键组件版本信息</h2>
-                <span class="close-button" onclick="closeVersionModal()">&times;</span>
-            </div>
-            <ul id="versionList" class="version-list">
-                <li>加载中...</li>
-            </ul>
-        </div>
+        <div class="modal-content"><div class="modal-header"><h2>关键组件版本信息</h2><span class="close-button" onclick="closeVersionModal()">&times;</span></div><ul id="versionList" class="version-list"><li>加载中...</li></ul></div>
     </div>
 
-
     <div class="container">
-        <div class="card">
-            <h2>🕵️‍♂️ 发现者 (Miner)</h2>
-            <div class="kpi-grid">
-                <div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="miner-status">--</div></div>
-                <div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="miner-last-seen">--</div></div>
-            </div>
-            <h3>最新日志</h3>
-            <div class="log-download-group">
-                <a href="/download_logs/miner.log" class="download-button" download>下载 Miner 日志</a>
-                <a href="/download_logs/miner_issues.log" class="download-button issues" download>下载 Miner 问题日志</a>
-            </div>
-            <div class="log-container" id="miner-logs">正在加载日志...</div>
-        </div>
-
-        <div class="card">
-            <h2>👨‍🏫 进化者 (Evolver)</h2>
-            <div class="kpi-grid">
-                <div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="evolver-status">--</div></div>
-                <div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="evolver-last-seen">--</div></div>
-            </div>
-            <h3>最新日志</h3>
-            <div class="log-download-group">
-                <a href="/download_logs/evolver.log" class="download-button" download>下载 Evolver 日志</a>
-                <a href="/download_logs/evolver_issues.log" class="download-button issues" download>下载 Evolver 问题日志</a>
-            </div>
-            <div class="log-container" id="evolver-logs">正在加载日志...</div>
-        </div>
-
+         <div class="card"><h2>🕵️‍♂️ 发现者 (Miner)</h2><div class="kpi-grid"><div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="miner-status">--</div></div><div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="miner-last-seen">--</div></div></div><h3>最新日志</h3><div class="log-download-group"><a href="/download_logs/miner.log" class="download-button" download>下载 Miner 日志</a><a href="/download_logs/miner_issues.log" class="download-button issues" download>下载 Miner 问题日志</a></div><div class="log-container" id="miner-logs">正在加载日志...</div></div>
+        <div class="card"><h2>👨‍🏫 进化者 (Evolver)</h2><div class="kpi-grid"><div class="kpi"><div class="kpi-title">运行状态</div><div class="kpi-value" id="evolver-status">--</div></div><div class="kpi"><div class="kpi-title">上次心跳</div><div class="kpi-value" id="evolver-last-seen">--</div></div></div><h3>最新日志</h3><div class="log-download-group"><a href="/download_logs/evolver.log" class="download-button" download>下载 Evolver 日志</a><a href="/download_logs/evolver_issues.log" class="download-button issues" download>下载 Evolver 问题日志</a></div><div class="log-container" id="evolver-logs">正在加载日志...</div></div>
         <div class="card">
             <h2>🏆 精英 Alpha 池 (Hopeful Alphas)</h2>
             <div class="kpi-grid">
@@ -148,130 +356,24 @@
                 <div class="kpi"><div class="kpi-title">平均 Fitness</div><div class="kpi-value" id="avg-fitness">--</div></div>
             </div>
             <div class="alpha-container">
-                <ul id="hopeful-alphas-list" class="alpha-list">
-                    </ul>
+                <ul id="hopeful-alphas-list" class="alpha-list"></ul>
             </div>
         </div>
     </div>
-
     <div id="toast-container" class="toast-notification"></div>
 
     <script>
-        // ... (colorizeLogs, formatChecks, showToast, copyToClipboard, Modal functions 保持不变) ...
-        function colorizeLogs(logText) { /* ...不变... */
-             if (!logText) return '';
-            logText = String(logText).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            return logText
-                .replace(/PASS/g, '<span class="log-pass">PASS</span>')
-                .replace(/FAIL/g, '<span class="log-fail">FAIL</span>')
-                .replace(/PENDING/g, '<span class="log-pending">PENDING</span>');
-        }
-        function formatChecks(checksString) { /* ...不变... */
-             if (!checksString) return 'N/A';
-            checksString = String(checksString);
-            return checksString
-                .replace(/(\d+\s*PASS)/g, '<span class="pass">$1</span>')
-                .replace(/(\d+\s*FAIL)/g, '<span class="fail">$1</span>')
-                .replace(/(\d+\s*PENDING)/g, '<span class="pending">$1</span>');
-        }
-        let toastTimeout;
-        function showToast(message, isError = false) { /* ...不变... */
-            const toastContainer = document.getElementById('toast-container');
-            if (!toastContainer) { console.error("Toast container not found!"); return; }
-            toastContainer.textContent = message;
-            toastContainer.classList.add('show');
-            if (isError) { toastContainer.classList.add('error'); } else { toastContainer.classList.remove('error'); }
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => { toastContainer.classList.remove('show'); }, 3000);
-        }
-        function copyToClipboard(button, text) { /* ...不变... */
-            text = String(text || '');
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => {
-                    const originalText = button.textContent;
-                    button.textContent = '已复制!';
-                    button.classList.add('copied');
-                    showToast('Alpha 复制成功!');
-                    setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000);
-                }).catch(err => { console.error('Clipboard API 复制失败: ', err); fallbackCopyTextToClipboard(button, text); });
-            } else { fallbackCopyTextToClipboard(button, text); }
-        }
-        function fallbackCopyTextToClipboard(button, text) { /* ...不变... */
-             console.warn('正在尝试回退复制方法 (execCommand)...');
-            try {
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                textArea.style.position = 'fixed'; textArea.style.top = '-9999px'; textArea.style.left = '-9999px';
-                document.body.appendChild(textArea); textArea.focus(); textArea.select();
-                const successful = document.execCommand('copy'); document.body.removeChild(textArea);
-                if (successful) {
-                    const originalText = button.textContent; button.textContent = '已复制!'; button.classList.add('copied');
-                    showToast('Alpha 复制成功 (回退模式)!');
-                    setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000);
-                } else { throw new Error('document.execCommand("copy") failed'); }
-            } catch (err) { console.error('回退复制方法失败: ', err); showToast('浏览器不支持自动复制', true); }
-        }
-        let latestVersionData = null;
-        function openVersionModal() { /* ...不变... */
-             const modal = document.getElementById('versionModal'); const versionList = document.getElementById('versionList'); if(!modal || !versionList) return; versionList.innerHTML = '';
-            if (latestVersionData && latestVersionData.file_versions) {
-                 const versions = latestVersionData.file_versions; const sortedKeys = Object.keys(versions).sort();
-                 if (sortedKeys.length > 0) { sortedKeys.forEach(name => { const li = document.createElement('li'); li.innerHTML = `<strong>${name}:</strong> ${versions[name]}`; versionList.appendChild(li); }); } else { versionList.innerHTML = '<li>未能获取到版本信息。</li>'; }
-            } else { versionList.innerHTML = '<li>正在等待数据加载...</li>'; }
-            modal.style.display = "block";
-        }
-        function closeVersionModal() { /* ...不变... */ const modal = document.getElementById('versionModal'); if(modal) modal.style.display = "none"; }
-        window.onclick = function(event) { /* ...不变... */ const modal = document.getElementById('versionModal'); if (modal && event.target == modal) { closeVersionModal(); } }
-
-
-        // --- toggleSubmittedStatus 保持不变 ---
-        function toggleSubmittedStatus(checkbox, expression) {
-            const isChecked = checkbox.checked;
-            const url = isChecked ? '/api/mark_submitted' : '/api/unmark_submitted';
-            expression = String(expression || '');
-            checkbox.disabled = true;
-
-            fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) })
-            .then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); })
-            .then(data => { if (data.status === 'success') { console.log(data.message); showToast(`状态更新成功: ${data.message}`); updateStatus(); } else { console.error('标记失败:', data.message); checkbox.checked = !isChecked; showToast(`标记操作失败: ${data.message}`, true); } })
-            .catch(error => { console.error('API 请求或处理失败:', error); checkbox.checked = !isChecked; showToast(`API 请求错误: ${error.message || '未知错误'}`, true); })
-            .finally(() => { if (checkbox && document.body.contains(checkbox)) { checkbox.disabled = false; } });
-        }
-
-        // --- v5.3: 新增 toggleFailedStatus 函数 ---
-        function toggleFailedStatus(checkbox, expression) {
-            const isChecked = checkbox.checked;
-            // 注意: API 端点名称改变
-            const url = isChecked ? '/api/mark_failed_on_wq' : '/api/unmark_failed_on_wq';
-            expression = String(expression || '');
-            checkbox.disabled = true;
-
-            fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) })
-            .then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); })
-            .then(data => {
-                if (data.status === 'success') {
-                    console.log(data.message); // e.g., "WQ Failed status Marked"
-                    showToast(`状态更新成功: ${data.message}`);
-                    updateStatus(); // 重新加载以更新徽章和样式
-                } else {
-                    console.error('标记失败:', data.message);
-                    checkbox.checked = !isChecked;
-                    showToast(`标记操作失败: ${data.message}`, true);
-                }
-            })
-            .catch(error => {
-                console.error('API 请求或处理失败:', error);
-                checkbox.checked = !isChecked;
-                showToast(`API 请求错误: ${error.message || '未知错误'}`, true);
-            })
-            .finally(() => {
-                if (checkbox && document.body.contains(checkbox)) {
-                   checkbox.disabled = false;
-                }
-            });
-        }
-        // --- v5.3 结束 ---
-
+        // --- JS 代码与上一版本 v5.3 完全一致 ---
+        function colorizeLogs(logText) { if (!logText) return ''; logText = String(logText).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); return logText.replace(/PASS/g, '<span class="log-pass">PASS</span>').replace(/FAIL/g, '<span class="log-fail">FAIL</span>').replace(/PENDING/g, '<span class="log-pending">PENDING</span>'); }
+        function formatChecks(checksString) { if (!checksString) return 'N/A'; checksString = String(checksString); return checksString.replace(/(\d+\s*PASS)/g, '<span class="pass">$1</span>').replace(/(\d+\s*FAIL)/g, '<span class="fail">$1</span>').replace(/(\d+\s*PENDING)/g, '<span class="pending">$1</span>'); }
+        let toastTimeout; function showToast(message, isError = false) { const toastContainer = document.getElementById('toast-container'); if (!toastContainer) { console.error("Toast container not found!"); return; } toastContainer.textContent = message; toastContainer.classList.add('show'); if (isError) { toastContainer.classList.add('error'); } else { toastContainer.classList.remove('error'); } clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { toastContainer.classList.remove('show'); }, 3000); }
+        function copyToClipboard(button, text) { text = String(text || ''); if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(() => { const originalText = button.textContent; button.textContent = '已复制!'; button.classList.add('copied'); showToast('Alpha 复制成功!'); setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000); }).catch(err => { console.error('Clipboard API 复制失败: ', err); fallbackCopyTextToClipboard(button, text); }); } else { fallbackCopyTextToClipboard(button, text); } }
+        function fallbackCopyTextToClipboard(button, text) { console.warn('正在尝试回退复制方法 (execCommand)...'); try { const textArea = document.createElement('textarea'); textArea.value = text; textArea.style.position = 'fixed'; textArea.style.top = '-9999px'; textArea.style.left = '-9999px'; document.body.appendChild(textArea); textArea.focus(); textArea.select(); const successful = document.execCommand('copy'); document.body.removeChild(textArea); if (successful) { const originalText = button.textContent; button.textContent = '已复制!'; button.classList.add('copied'); showToast('Alpha 复制成功 (回退模式)!'); setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000); } else { throw new Error('document.execCommand("copy") failed'); } } catch (err) { console.error('回退复制方法失败: ', err); showToast('浏览器不支持自动复制', true); } }
+        let latestVersionData = null; function openVersionModal() { const modal = document.getElementById('versionModal'); const versionList = document.getElementById('versionList'); if(!modal || !versionList) return; versionList.innerHTML = ''; if (latestVersionData && latestVersionData.file_versions) { const versions = latestVersionData.file_versions; const sortedKeys = Object.keys(versions).sort(); if (sortedKeys.length > 0) { sortedKeys.forEach(name => { const li = document.createElement('li'); li.innerHTML = `<strong>${name}:</strong> ${versions[name]}`; versionList.appendChild(li); }); } else { versionList.innerHTML = '<li>未能获取到版本信息。</li>'; } } else { versionList.innerHTML = '<li>正在等待数据加载...</li>'; } modal.style.display = "block"; }
+        function closeVersionModal() { const modal = document.getElementById('versionModal'); if(modal) modal.style.display = "none"; }
+        window.onclick = function(event) { const modal = document.getElementById('versionModal'); if (modal && event.target == modal) { closeVersionModal(); } }
+        function toggleSubmittedStatus(checkbox, expression) { const isChecked = checkbox.checked; const url = isChecked ? '/api/mark_submitted' : '/api/unmark_submitted'; expression = String(expression || ''); checkbox.disabled = true; fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) }).then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); }).then(data => { if (data.status === 'success') { console.log(data.message); showToast(`状态更新成功: ${data.message}`); updateStatus(); } else { console.error('标记失败:', data.message); checkbox.checked = !isChecked; showToast(`标记操作失败: ${data.message}`, true); } }).catch(error => { console.error('API 请求或处理失败:', error); checkbox.checked = !isChecked; showToast(`API 请求错误: ${error.message || '未知错误'}`, true); }).finally(() => { if (checkbox && document.body.contains(checkbox)) { checkbox.disabled = false; } }); }
+        function toggleFailedStatus(checkbox, expression) { const isChecked = checkbox.checked; const url = isChecked ? '/api/mark_failed_on_wq' : '/api/unmark_failed_on_wq'; expression = String(expression || ''); checkbox.disabled = true; fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) }).then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); }).then(data => { if (data.status === 'success') { console.log(data.message); showToast(`状态更新成功: ${data.message}`); updateStatus(); } else { console.error('标记失败:', data.message); checkbox.checked = !isChecked; showToast(`标记操作失败: ${data.message}`, true); } }).catch(error => { console.error('API 请求或处理失败:', error); checkbox.checked = !isChecked; showToast(`API 请求错误: ${error.message || '未知错误'}`, true); }).finally(() => { if (checkbox && document.body.contains(checkbox)) { checkbox.disabled = false; } }); }
 
         // --- 主更新函数 ---
         function updateStatus() {
@@ -280,12 +382,7 @@
                 .then(response => { if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); } return response.json(); })
                 .then(data => {
                     latestVersionData = data;
-                    const updateServiceStatus = (serviceName, serviceData) => { /* ...不变... */
-                        const statusEl = document.getElementById(`${serviceName}-status`); const lastSeenEl = document.getElementById(`${serviceName}-last-seen`); const logsEl = document.getElementById(`${serviceName}-logs`);
-                        if (!serviceData) { if(statusEl) statusEl.textContent = '数据错误'; if(lastSeenEl) lastSeenEl.textContent = '--'; if(logsEl) logsEl.innerHTML = '无法加载服务数据'; return; }
-                        if (statusEl) { statusEl.textContent = serviceData.status || '状态未知'; statusEl.style.color = serviceData.status === 'RUNNING' ? 'var(--success-color)' : 'var(--error-color)'; }
-                        if (lastSeenEl) { lastSeenEl.textContent = serviceData.last_seen || '--'; } if (logsEl) { logsEl.innerHTML = colorizeLogs(serviceData.logs); }
-                    };
+                    const updateServiceStatus = (serviceName, serviceData) => { const statusEl = document.getElementById(`${serviceName}-status`); const lastSeenEl = document.getElementById(`${serviceName}-last-seen`); const logsEl = document.getElementById(`${serviceName}-logs`); if (!serviceData) { if(statusEl) statusEl.textContent = '数据错误'; if(lastSeenEl) lastSeenEl.textContent = '--'; if(logsEl) logsEl.innerHTML = '无法加载服务数据'; return; } if (statusEl) { statusEl.textContent = serviceData.status || '状态未知'; statusEl.style.color = serviceData.status === 'RUNNING' ? 'var(--success-color)' : 'var(--error-color)'; } if (lastSeenEl) { lastSeenEl.textContent = serviceData.last_seen || '--'; } if (logsEl) { logsEl.innerHTML = colorizeLogs(serviceData.logs); } };
                     updateServiceStatus('miner', data.miner);
                     updateServiceStatus('evolver', data.evolver);
 
@@ -310,12 +407,16 @@
                         let badge = '';
                         const isAllPass = alpha.is_all_pass === true;
                         const isSubmittable = alpha.is_submittable === true;
-                        const isFailedOnWQ = alpha.is_failed_on_wq === true; // <-- v5.3: 获取失败状态
+                        const isFailedOnWQ = alpha.is_failed_on_wq === true;
+                        const isSuccessfullySubmitted = alpha.is_successfully_submitted === true; // <-- v5.7
 
-                        // --- v5.3: 徽章和样式逻辑更新 ---
+                        // --- v5.4: 徽章逻辑更新 ---
                         if (isFailedOnWQ) {
-                            item.classList.add('failed-on-wq'); // 应用失败样式
+                            item.classList.add('failed-on-wq');
                             badge = '<span class="badge badge-danger">❌ WQ 失败</span>';
+                        } else if (isSuccessfullySubmitted) { // <-- 优先判断成功状态
+                            // 不需要特殊 item class
+                            badge = '<span class="badge badge-finalized">✅ 已提交通过</span>'; // 使用新徽章
                         } else if (isAllPass) {
                             item.classList.add('all-pass');
                             badge = '<span class="badge badge-success">🏆 完美策略</span>';
@@ -323,40 +424,17 @@
                             item.classList.add('submittable');
                             badge = '<span class="badge badge-primary">🏅 可提交</span>';
                         }
-                        // --- v5.3 结束 ---
+                        // --- v5.4 结束 ---
 
                         const isSubmittedChecked = alpha.is_submitted === true ? 'checked' : '';
-                        const isFailedChecked = isFailedOnWQ ? 'checked' : ''; // <-- v5.3: 新复选框状态
+                        const isFailedChecked = isFailedOnWQ ? 'checked' : '';
                         const submittedUniqueId = `check-alpha-${index}`;
-                        const failedUniqueId = `fail-check-alpha-${index}`; // <-- v5.3: 新复选框ID
+                        const failedUniqueId = `fail-check-alpha-${index}`;
 
-                        const escapedExpr = String(alpha.expression || '') .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+                        const escapedExpr = String(alpha.expression || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
 
-                        // --- v5.3: 添加第二个复选框 ---
-                        const submittedCheckboxHTML = `
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox"
-                                       id="${submittedUniqueId}"
-                                       onchange="toggleSubmittedStatus(this, '${escapedExpr}')"
-                                       ${isSubmittedChecked}>
-                                <label class="form-check-label" for="${submittedUniqueId}">
-                                    标记为已提交
-                                </label>
-                            </div>
-                        `;
-                        const failedCheckboxHTML = `
-                            <div class="form-check">
-                                <input class="form-check-input fail-check" type="checkbox"
-                                       id="${failedUniqueId}"
-                                       onchange="toggleFailedStatus(this, '${escapedExpr}')"
-                                       ${isFailedChecked}>
-                                <label class="form-check-label" for="${failedUniqueId}">
-                                    标记为 WQ 失败
-                                </label>
-                            </div>
-                        `;
-                        // --- v5.3 结束 ---
-
+                        const submittedCheckboxHTML = `<div class="form-check"><input class="form-check-input" type="checkbox" id="${submittedUniqueId}" onchange="toggleSubmittedStatus(this, '${escapedExpr}')" ${isSubmittedChecked}><label class="form-check-label" for="${submittedUniqueId}">标记为已提交</label></div>`;
+                        const failedCheckboxHTML = `<div class="form-check"><input class="form-check-input fail-check" type="checkbox" id="${failedUniqueId}" onchange="toggleFailedStatus(this, '${escapedExpr}')" ${isFailedChecked}><label class="form-check-label" for="${failedUniqueId}">标记为 WQ 失败</label></div>`;
                         const copyButtonHTML = `<button class="copy-button" onclick="copyToClipboard(this, '${escapedExpr}')">复制</button>`;
 
                         const expressionText = String(alpha.expression || '表达式丢失');
@@ -368,25 +446,9 @@
                         const timestampText = alpha.timestamp || 'N/A';
 
                         item.innerHTML = `
-                            <div class="alpha-header">
-                                <code class="alpha-expression">${expressionText}</code>
-                                <div class="alpha-actions">
-                                    ${copyButtonHTML}
-                                </div>
-                            </div>
-                            <div class="alpha-stats">
-                                <strong>Fitness:</strong> ${fitnessText} |
-                                <strong>Sharpe:</strong> ${sharpeText} |
-                                <strong>Returns:</strong> ${returnsText} |
-                                <strong>Turnover:</strong> ${turnoverText} |
-                                <strong>Checks:</strong> ${checksText} |
-                                <strong>Timestamp:</strong> ${timestampText}
-                                ${badge}
-                            </div>
-                            <div class="alpha-footer">
-                                ${submittedCheckboxHTML}
-                                ${failedCheckboxHTML}
-                            </div>
+                            <div class="alpha-header"><code class="alpha-expression">${expressionText}</code><div class="alpha-actions">${copyButtonHTML}</div></div>
+                            <div class="alpha-stats"><strong>Fitness:</strong> ${fitnessText} | <strong>Sharpe:</strong> ${sharpeText} | <strong>Returns:</strong> ${returnsText} | <strong>Turnover:</strong> ${turnoverText} | <strong>Checks:</strong> ${checksText} | <strong>Timestamp:</strong> ${timestampText} ${badge}</div>
+                            <div class="alpha-footer">${submittedCheckboxHTML} ${failedCheckboxHTML}</div>
                         `;
                         list.appendChild(item);
                     });

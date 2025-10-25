@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v7.8.2 (Adjust Seed Split Ratio) ---
+# --- alpha_generator_ollama.py v7.8.3 (Fix task_done Bug) ---
 import argparse
 import logging
 import json
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 import queue # v7.7 新增
 
-CURRENT_GENERATOR_VERSION = "v7.8.2" # v7.8.2: 版本号
+CURRENT_GENERATOR_VERSION = "v7.8.3" # v7.8.3: 修复 task_done Bug
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
@@ -918,6 +918,7 @@ class AlphaGenerator:
                 logger.error(f"保存精华战报文件时出错: {e}")
 
     # --- v7.7 新增: 消费者 (Worker) 线程 ---
+    # --- v7.8.3 修复: 修正 RATE_LIMIT 逻辑中的 task_done() 重复调用 BUG ---
     def _consumer_worker(self):
         """消费者工作线程，从队列中获取策略并执行测试。"""
         while True:
@@ -925,7 +926,7 @@ class AlphaGenerator:
             try:
                 # 1. 从队列获取任务
                 strategy = self.strategy_queue.get()
-                if strategy is None: # 退出信号 (虽然目前没用，但良好实践)
+                if strategy is None: # 退出信号
                     self.strategy_queue.task_done()
                     break
 
@@ -951,25 +952,45 @@ class AlphaGenerator:
                 # 3. 处理 WQ 429 Rate Limit (核心)
                 if result == "RATE_LIMIT":
                     logger.warning(f"遭遇 WQ 429 (针对: {idea_expr})。")
-                    # v7.8: 使用 self.wq_api_cooldown (已更新为 30s)
-                    logger.info(f"触发 {self.wq_api_cooldown}s 冷却... 策略将放回队列头部重试。")
-                    # 触发全局冷却，让生产者(LLM)也暂停
+                    logger.info(f"触发 {self.wq_api_cooldown}s 冷却... 策略将放回队列重试。")
                     self._enter_cooldown(self.wq_api_cooldown, "WorldQuant 429 Rate Limit")
-
-                    # 暂停 worker
                     time.sleep(self.wq_api_cooldown)
 
-                    # 把任务放回队列 (v7.7.1 优化: 应该放回头部，但 put 没有 "put_first"，所以就这样)
-                    # v7.8.1: 使用 try-except 增加健壮性
                     try:
                         self.strategy_queue.put(strategy)
                         logger.info(f"策略 {idea_expr[:60]}... 已放回队列。")
+                        
+                        # --- v7.8.3 BUG 修复 ---
+                        # 成功放回队列，我们 *不能* 在这里调用 task_done()
+                        # 因为这个任务 (strategy) 实际上还没有“完成”，它只是被放回去了。
+                        # 我们依赖 finally 块中的 task_done() 来标记 *原始* 的 get() 任务已完成。
+                        # --- 修复开始 ---
+                        
+                        # self.strategy_queue.task_done() # <--- v7.8.2 的 BUG 在这里 (移除)
+                        
+                        # --- 修复结束 ---
+
                     except queue.Full:
                          logger.error(f"尝试放回策略 {idea_expr[:60]}... 时队列已满！该策略将被丢弃。")
+                         # --- v7.8.3 BUG 修复 ---
+                         # 只有在放回失败 (队列满) 导致策略被丢弃时，
+                         # 我们才需要在这里调用 task_done()，因为 finally 块不会被 continue 跳过。
+                         # 但为了逻辑统一，我们让 finally 去处理。
+                         # 关键是：我们必须 continue 来跳过 finally 块中的 task_done()，
+                         # 因为我们不想为 *同一个* get() 任务调用两次 task_done()。
+                         
+                         # v7.8.3 正确逻辑:
+                         # 策略放回失败 (Full)，这个 get() 任务被丢弃了，
+                         # 我们必须在这里调用 task_done() 来平衡 get()。
+                         # 然后我们 continue，跳过 finally 的第二次调用。
+                         self.strategy_queue.task_done()
+                         continue # <--- 确保在丢弃时也 continue
 
-                    # v7.8.1 BUG修复: 必须在这里 task_done，否则 put 可能会在队列满时阻塞
-                    self.strategy_queue.task_done()
-                    continue # 继续下一个循环
+                    # --- v7.8.3 BUG 修复 ---
+                    # 无论策略是成功放回 (put) 还是放回失败 (Full)，
+                    # 我们都必须 continue 来跳过 finally 块中的 task_done()，
+                    # 避免对同一次 get() 重复调用。
+                    continue # <--- 移到这里，确保 put() 成功后也 continue
 
                 # 4. 处理 ERROR (黑名单逻辑)
                 if isinstance(result, dict) and result.get("status") == "ERROR":
@@ -977,82 +998,71 @@ class AlphaGenerator:
                     self.log_tested_alphas([log_report]) # v7.7: 立即记录
 
                     error_message = ""
-                    # v7.8.1: 健壮性检查
                     regular_result = result.get("regular", {})
                     if isinstance(regular_result, dict):
                          regular_errors = regular_result.get("errors", [])
                          if regular_errors and isinstance(regular_errors, list) and len(regular_errors) > 0 and isinstance(regular_errors[0], dict):
                              error_message = regular_errors[0].get("message", "")
-
-                    if not error_message: # Fallback
-                        error_message = result.get("message", "")
-
-                    match = re.search(r"(Unknown function|unknown operator|unknown variable) '(\w+)'", error_message or "") # v7.8.1: 确保 error_message 是字符串
+                    if not error_message: error_message = result.get("message", "")
+                    match = re.search(r"(Unknown function|unknown operator|unknown variable) '(\w+)'", error_message or "")
 
                     if match:
                         error_type = match.group(1)
                         bad_identifier = match.group(2)
-
                         should_blacklist = False
                         if error_type == "unknown variable":
                             should_blacklist = True
                             logger.warning(f"检测到无效变量: '{bad_identifier}'。WQ API 报告其未知。")
                         elif error_type in ["Unknown function", "unknown operator"]:
-                            # v7.8.1: 确保 self.fields 是列表
                             if bad_identifier not in (self.fields if isinstance(self.fields, list) else []):
                                 should_blacklist = True
                                 logger.warning(f"检测到无效函数/操作符: '{bad_identifier}'。")
                             else:
                                 logger.info(f"Alpha 模拟出错: '{bad_identifier}' 是一个数据字段，但被误用为函数。已记录，不计入黑名单。")
-
                         if should_blacklist:
-                            self.update_blacklist_count(bad_identifier) # 线程安全
+                            self.update_blacklist_count(bad_identifier)
                     else:
-                        logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...") # v7.8.1: 确保打印字符串
-                    # v7.8: 无论如何都 continue，不需要 task_done，因为它在 finally 中
-                    continue # 继续下一个循环
+                        logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...")
+                    
+                    # 错误处理后，依赖 finally 中的 task_done()
+                    continue 
 
                 # 5. 处理 TIMEOUT
                 if result in ["TIMEOUT"]:
                     log_report["status"] = result
-                    self.log_tested_alphas([log_report]) # v7.7: 立即记录
+                    self.log_tested_alphas([log_report])
                     logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
-                    continue # 继续下一个循环
+                    
+                    # 超时处理后，依赖 finally 中的 task_done()
+                    continue 
 
                 # 6. 处理 COMPLETE
-                # v7.8.1: 健壮性检查
                 if isinstance(result, dict):
                     is_stats = result.get("is", {})
                     alpha_id = result.get("id")
                     if not isinstance(is_stats, dict) or not alpha_id:
                         logger.warning(f"模拟返回不完整 (缺少 'is' 或 'id')，已丢弃: {idea_expr}")
-                        continue
+                        continue # 依赖 finally
 
                     checks = is_stats.get("checks", [])
                     passed_count = 0
                     failed_count = 0
                     pending_count = 0
-                    # v7.8.1: 健壮性检查
                     if isinstance(checks, list):
                          passed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PASS")
                          failed_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "FAIL")
                          pending_count = sum(1 for check in checks if isinstance(check, dict) and check.get("result") == "PENDING")
 
                     fitness = is_stats.get('fitness', -999)
-                    try: fitness_float = float(fitness) # v7.8.1: 用于比较
+                    try: fitness_float = float(fitness)
                     except (ValueError, TypeError): fitness_float = -999
 
-
                     log_report["status"] = "COMPLETE"
-                    log_report["fitness"] = fitness_float # v7.8.1: 记录 float
+                    log_report["fitness"] = fitness_float
                     log_report["passed_checks"] = passed_count
                     log_report["performance"] = is_stats
-
-                    # v7.7: 立即记录所有测试过的
                     self.log_tested_alphas([log_report])
-
                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
-
                     is_high_quality = fitness_float > 0 and passed_count >= 4
                     is_high_potential = fitness_float > -0.5 and passed_count >= 5
 
@@ -1062,11 +1072,9 @@ class AlphaGenerator:
                         else:
                             logger.info(f"发现一个高质量策略！ Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
 
-                        # v7.8.1: 健壮性检查
                         regular_code = result.get("regular", {}).get("code") if isinstance(result.get("regular"), dict) else None
-
                         hopeful_report = {
-                            "expression": regular_code or idea_expr, # Fallback to original expression
+                            "expression": regular_code or idea_expr,
                             "alpha_id": alpha_id,
                             "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
                             "grade": result.get("grade", "UNKNOWN"),
@@ -1077,25 +1085,19 @@ class AlphaGenerator:
                         perf_items = is_stats.items()
                         stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
                         logger.info(f"生成高质量策略战报 [{checks_summary}] -> {stats_str}")
-
-                        # v7.7: 立即保存 (线程安全)
                         self.save_hopeful_reports([hopeful_report])
                     else:
                         logger.info(f"策略未达到高质量标准，已丢弃。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
                 else:
-                    # 如果 result 不是 dict 且不是 TIMEOUT/RATE_LIMIT/ERROR，记录未知情况
                      logger.error(f"收到未知的模拟结果类型: {type(result)} for alpha: {idea_expr}")
 
-
             except Exception as exc:
-                 # v7.8.1: 健壮性检查
                 expr_for_log = "UNKNOWN"
                 if isinstance(strategy, dict) and 'expression' in strategy:
                      expr_for_log = strategy['expression']
                 logger.error(f"处理策略 '{expr_for_log}' 的结果时发生意外错误: {exc}", exc_info=True)
                 if isinstance(strategy, dict) and 'expression' in strategy:
                     try:
-                        # 尝试记录异常
                         log_report = {"expression": strategy['expression'], "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                         log_report["status"] = "EXCEPTION_WORKER"
                         self.log_tested_alphas([log_report])
@@ -1103,7 +1105,9 @@ class AlphaGenerator:
                         logger.critical(f"在异常处理中再次发生错误，无法记录: {log_exc}")
             finally:
                 # 7. 标记任务完成 (确保即使出错也调用)
+                # 无论上面发生什么 (除了 continue)，这个 get() 任务都需要被标记为 done。
                 self.strategy_queue.task_done()
+    # --- v7.8.3 修复结束 ---
 
 
     # --- v7.7 重构: run 方法现在是 生产者 ---

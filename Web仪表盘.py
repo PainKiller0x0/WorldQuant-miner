@@ -1,13 +1,17 @@
-# --- Web仪表盘.py v5.7 (Add Successfully Submitted Status) ---
+# --- Web仪表盘.py v5.8 (Show Version Info) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
-import re
+import re # v5.8: 确保导入 re
 import threading
 from datetime import datetime, timedelta
 from collections import deque
 import os.path
 import logging
+
+# --- v5.8: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v5.8"
+# --- v5.8: 结束 ---
 
 # --- 配置基础日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,17 +25,20 @@ HOPEFUL_ALPHAS_FILE = os.path.join(BASE_DIR, 'hopeful_alphas.json')
 SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas.json'))
 FAILED_SUBMISSIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json'))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
+# --- v5.8: 新增文件路径 ---
+# (这些路径是在容器内的路径，假设 generator 文件被挂载到同级)
+GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
+DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py") # 指向自身
+# --- v5.8: 结束 ---
 
-FILES_TO_TRACK = {
-    "仪表盘后端 (Py)": os.path.abspath(os.path.join(BASE_DIR, "Web仪表盘.py")),
-    "仪表盘前端 (HTML)": os.path.abspath(os.path.join(TEMPLATE_DIR, "dashboard_v4.html")),
-    "核心生成器 (Py)": os.path.abspath(os.path.join(BASE_DIR, "alpha_generator_ollama.py"))
-}
+
+# v5.8: 不再需要 FILES_TO_TRACK 字典，改为直接读取
+# FILES_TO_TRACK = { ... } # 已删除
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
-file_lock = threading.Lock()
-hopeful_lock = threading.Lock()
-failed_lock = threading.Lock()
+file_lock = threading.Lock() # 用于 submitted_alphas.json
+hopeful_lock = threading.Lock() # 用于 hopeful_alphas.json
+failed_lock = threading.Lock() # 用于 failed_submissions.json
 
 # --- 加强日志: load_submitted_alphas (保持 v5.3) ---
 def load_submitted_alphas():
@@ -128,9 +135,9 @@ def get_hopeful_alphas_stats():
                 if os.path.getsize(HOPEFUL_ALPHAS_FILE) > 0:
                     with open(HOPEFUL_ALPHAS_FILE, 'r', encoding='utf-8') as f: content = f.read()
                     if content:
-                       alphas_data = json.loads(content)
-                       if isinstance(alphas_data, list): alphas = alphas_data; logger.info(f"[Stats] Loaded {len(alphas)} alphas from hopeful_alphas.json")
-                       else: logger.warning(f"[Stats] hopeful_alphas.json did not contain a list. Found type: {type(alphas_data)}")
+                        alphas_data = json.loads(content)
+                        if isinstance(alphas_data, list): alphas = alphas_data; logger.info(f"[Stats] Loaded {len(alphas)} alphas from hopeful_alphas.json")
+                        else: logger.warning(f"[Stats] hopeful_alphas.json did not contain a list. Found type: {type(alphas_data)}")
             except (IOError, json.JSONDecodeError) as e: logger.error(f"[Stats] Error processing {HOPEFUL_ALPHAS_FILE}: {e}")
             except Exception as e: logger.error(f"[Stats] Unexpected error reading {HOPEFUL_ALPHAS_FILE}: {e}", exc_info=True)
 
@@ -140,21 +147,46 @@ def get_hopeful_alphas_stats():
             stats['count'] = len(valid_alphas_list)
 
             # ... (计算 max/avg fitness/sharpe 的逻辑不变) ...
-            all_fitness = [a.get('performance', {}).get('fitness', 0) for a in valid_alphas_list]
-            all_sharpe = [a.get('performance', {}).get('sharpe', 0) for a in valid_alphas_list]
-            if all_fitness: stats['max_fitness'] = max(all_fitness) if all_fitness else 0.0; stats['avg_fitness'] = sum(all_fitness) / len(all_fitness) if all_fitness else 0.0
-            if all_sharpe: stats['max_sharpe'] = max(all_sharpe) if all_sharpe else 0.0
+            all_fitness = [a.get('performance', {}).get('fitness', 0) for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
+            all_sharpe = [a.get('performance', {}).get('sharpe', 0) for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
+
+            # v5.8: 过滤 None 或非数字
+            valid_fitness = [f for f in all_fitness if isinstance(f, (int, float))]
+            valid_sharpe = [s for s in all_sharpe if isinstance(s, (int, float))]
+
+            if valid_fitness:
+                 stats['max_fitness'] = max(valid_fitness) if valid_fitness else 0.0
+                 stats['avg_fitness'] = sum(valid_fitness) / len(valid_fitness) if valid_fitness else 0.0
+            if valid_sharpe:
+                 stats['max_sharpe'] = max(valid_sharpe) if valid_sharpe else 0.0
+
 
             def calculate_combined_score(report):
-                # ... (此函数逻辑不变) ...
+                # ... (此函数逻辑不变, 但稍作清理) ...
                 if not isinstance(report, dict): return -float('inf')
-                perf = report.get('performance', {}); fitness = perf.get('fitness', -999); sharpe = perf.get('sharpe', 0.0); turnover = perf.get('turnover', 1.0)
-                checks_summary = report.get('checks_summary', '0 PASS'); passed_count = 0
-                try: match = re.match(r'(\d+)', checks_summary or '');
-                except (ValueError, IndexError, TypeError): pass
-                try: sharpe = float(sharpe) if sharpe is not None else 0.0; turnover = float(turnover) if turnover is not None else 1.0
-                except (ValueError, TypeError): sharpe, turnover = 0.0, 1.0
-                return fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
+                perf = report.get('performance', {})
+                if not isinstance(perf, dict): return -float('inf') # v5.8: 增加检查
+
+                fitness = perf.get('fitness', -999)
+                sharpe = perf.get('sharpe', 0.0)
+                turnover = perf.get('turnover', 1.0)
+                checks_summary = report.get('checks_summary', '0 PASS')
+                passed_count = 0
+
+                try: # v5.8: 修正正则匹配
+                    match = re.search(r'(\d+)\s+PASS', checks_summary or '')
+                    if match: passed_count = int(match.group(1))
+                except (ValueError, TypeError): pass # 保持 0
+
+                try: fitness_f = float(fitness)
+                except (ValueError, TypeError): fitness_f = -999
+                try: sharpe_f = float(sharpe)
+                except (ValueError, TypeError): sharpe_f = 0.0
+                try: turnover_f = float(turnover)
+                except (ValueError, TypeError): turnover_f = 1.0
+
+                return fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1)
+
 
             processed_alphas_temp = []
             processed_count = 0
@@ -164,8 +196,12 @@ def get_hopeful_alphas_stats():
                     expression = alpha.get('expression')
                     if not expression: continue
 
-                    perf_data = alpha.get('performance', {}); fitness_val = perf_data.get('fitness', 0)
-                    summary = alpha.get('checks_summary', ''); summary_str = summary if summary is not None else ''
+                    perf_data = alpha.get('performance', {})
+                    # v5.8: 健壮性检查
+                    if not isinstance(perf_data, dict): perf_data = {}
+                    fitness_val = perf_data.get('fitness', 0)
+                    summary = alpha.get('checks_summary', '')
+                    summary_str = summary if summary is not None else ''
 
                     fail_match = fail_pattern.search(summary_str); has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
                     pending_match = pending_pattern.search(summary_str); has_pending = bool(pending_match and int(pending_match.group(1)) > 0)
@@ -199,9 +235,13 @@ def get_hopeful_alphas_stats():
 
             def sort_key(alpha):
                 # ... (排序逻辑保持 v5.4 不变) ...
-                sort_fitness = (alpha['fitness'] >= 1)
-                sort_submitted = (not alpha['is_submitted'])
-                sort_combined = alpha['combined_score']
+                # v5.8: 健壮性检查
+                fitness_val = -float('inf')
+                if isinstance(alpha.get('fitness'), (int, float)):
+                    fitness_val = alpha['fitness']
+                sort_fitness = (fitness_val >= 1)
+                sort_submitted = (not alpha.get('is_submitted', False)) # 默认 False
+                sort_combined = alpha.get('combined_score', -float('inf')) # 默认最低
                 return (sort_fitness, sort_submitted, sort_combined)
 
             processed_alphas_temp.sort(key=sort_key, reverse=True)
@@ -212,30 +252,76 @@ def get_hopeful_alphas_stats():
     return stats
 # --- v5.7 结束 ---
 
-# ... (get_file_versions 保持不变) ...
-def get_file_versions():
-    versions = {};
-    for name, filepath in FILES_TO_TRACK.items():
-        try:
-            if os.path.exists(filepath): mtime = os.stat(filepath).st_mtime; versions[name] = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
-            else: versions[name] = "文件未找到"
-        except Exception as e: versions[name] = f"获取失败: {e}"; logger.error(f"Error getting version for {name} ({filepath}): {e}")
-    return versions
+# v5.8: 不再使用 get_file_versions
+# def get_file_versions(): ... # 已删除
+
+# --- v5.8: 新增辅助函数 - 从文件读取版本号 ---
+def get_version_from_file(file_path, version_regex_str):
+    logger.info(f"[Version] Attempting to read version from {file_path}")
+    version_regex = re.compile(version_regex_str)
+    try:
+        # 使用'r'模式，因为我们挂载的是 .py 文件，而不是 .pyc
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        match = version_regex.search(content)
+        if match:
+            version = match.group(1)
+            logger.info(f"[Version] Found version {version} in {file_path}")
+            return version
+        else:
+            logger.warning(f"[Version] Regex did not find version in {file_path}")
+            return "unknown_format"
+    except IOError as e:
+        logger.error(f"[Version] IOError reading {file_path}: {e}")
+        return "file_not_found"
+    except Exception as e:
+        logger.error(f"[Version] Unexpected error reading {file_path}: {e}")
+        return "read_error"
+# --- v5.8: 结束 ---
+
 
 @app.route('/')
 def dashboard(): return render_template('dashboard_v4.html')
 
-# ... ( /status 路由保持不变) ...
+# ... ( /status 路由保持不变, 但调用 get_file_versions 已删除) ...
 @app.route('/status')
 def status():
     logger.info("[API /status] Request received.")
     try:
+        # v5.8: 移除 file_versions 的调用
         data = { "miner": get_service_status('miner.log'), "evolver": get_service_status('evolver.log'),
-                 "hopeful_alphas": get_hopeful_alphas_stats(), "file_versions": get_file_versions() }
+                 "hopeful_alphas": get_hopeful_alphas_stats()
+                 # "file_versions": get_file_versions() # <-- 已删除
+               }
         response = make_response(jsonify(data))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; response.headers['Pragma'] = 'no-cache'; response.headers['Expires'] = '0'
         logger.info("[API /status] Request completed successfully with no-cache headers."); return response
     except Exception as e: logger.critical(f"[API /status] CRITICAL Error: {e}", exc_info=True); return jsonify({"error": "Failed to retrieve status data due to an internal server error."}), 500
+
+# --- v5.8: 新增 API - 获取版本信息 ---
+@app.route('/api/version_info')
+def version_info():
+    logger.info("[API /version_info] Request received.")
+
+    # 1. Dashboard 版本 (直接读取常量)
+    dashboard_version = CURRENT_DASHBOARD_VERSION
+
+    # 2. Generator 版本 (读取挂载的文件)
+    generator_version = get_version_from_file(
+        GENERATOR_FILE_PATH,
+        r'CURRENT_GENERATOR_VERSION\s*=\s*["\'](v[0-9]+\.[0-9]+\.[0-9]+[^"\']*)["\']'
+    )
+
+    data = {
+        "dashboard_version": dashboard_version,
+        "generator_version": generator_version
+    }
+    response = make_response(jsonify(data))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; response.headers['Pragma'] = 'no-cache'; response.headers['Expires'] = '0'
+    logger.info("[API /version_info] Request completed successfully.")
+    return response
+# --- v5.8: 结束 ---
+
 
 # ... ( /download_logs 保持不变) ...
 @app.route('/download_logs/<log_filename>')
@@ -315,5 +401,5 @@ if __name__ == '__main__':
         except OSError as e: logger.error(f"Error creating log directory {LOG_DIR}: {e}")
     try: os.stat_cache.clear(); logger.info("Cleared os.stat_cache() on startup.")
     except AttributeError: logger.info("os.stat_cache() not available on this platform, skipping.")
-    logger.info("Starting Flask application...")
+    logger.info(f"Starting Flask application (Version: {CURRENT_DASHBOARD_VERSION})...") # v5.8: 显示版本
     app.run(host='0.0.0.0', port=8080, threaded=True, debug=False)

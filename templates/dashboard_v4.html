@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.4 (提交成功状态)</title>
+    <title>WQ 自动化量化研究团队 - 监控仪表盘 v5.5 (版本显示)</title>
     <style>
-        /* --- 完整的 CSS 样式 --- */
+        /* --- 完整的 CSS 样式 (保持 v5.4 不变) --- */
         :root {
             --bg-color: #121212;
             --card-bg-color: #1e1e1e;
@@ -308,39 +308,38 @@
         .toast-notification.show { opacity: 1; visibility: visible; }
         .toast-notification.error { background-color: var(--error-color); }
 
-        .version-button {
-            position: fixed; bottom: 20px; left: 20px; padding: 8px 15px; background-color: #444;
-            color: var(--text-muted-color); border: 1px solid var(--border-color); border-radius: 5px;
-            cursor: pointer; z-index: 999; transition: background-color 0.2s, color 0.2s; font-size: 0.9em;
-        }
-        .version-button:hover { background-color: #555; color: var(--text-color); }
+        /* --- v5.5: 移除旧版本按钮和弹窗样式 --- */
+        /* .version-button { ... } */
+        /* .modal { ... } */
+        /* .modal-content { ... } */
+        /* ... (其他 modal 相关样式) ... */
 
-        .modal {
-            display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto; background-color: rgba(0,0,0,0.7); padding-top: 60px;
+        /* --- v5.5: 新增版本显示区域样式 --- */
+        .version-info {
+            position: fixed; /* 固定位置 */
+            bottom: 10px;    /* 底部 */
+            left: 10px;     /* 左侧 */
+            background-color: rgba(42, 42, 42, 0.8); /* 半透明背景 */
+            color: var(--text-muted-color);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            z-index: 998; /* 低于 toast */
         }
-        .modal-content {
-            background-color: var(--card-bg-color); margin: 5% auto; padding: 20px;
-            border: 1px solid var(--border-color); border-radius: 8px; width: 80%; max-width: 600px; color: var(--text-color);
+        .version-info strong {
+             color: var(--text-color); /* 突出显示版本号 */
         }
-        .modal-header {
-            padding-bottom: 10px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .modal-header h2 { margin: 0; padding: 0; border: none; color: var(--primary-accent-color); }
-        .close-button { color: var(--text-muted-color); font-size: 28px; font-weight: bold; cursor: pointer; }
-        .close-button:hover, .close-button:focus { color: var(--text-color); text-decoration: none; }
-        .version-list { list-style: none; padding: 0; margin: 0; }
-        .version-list li { margin-bottom: 10px; font-size: 0.95em; }
-        .version-list li strong { color: var(--secondary-accent-color); margin-right: 10px; display: inline-block; min-width: 150px; }
+        /* --- v5.5 结束 --- */
+
         /* --- 完整的 CSS 样式结束 --- */
     </style>
 </head>
 <body>
-    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.4</h1>
-    <button id="versionBtn" class="version-button" onclick="openVersionModal()">查看版本</button>
-    <div id="versionModal" class="modal">
-        <div class="modal-content"><div class="modal-header"><h2>关键组件版本信息</h2><span class="close-button" onclick="closeVersionModal()">&times;</span></div><ul id="versionList" class="version-list"><li>加载中...</li></ul></div>
+    <h1>WQ 自动化量化研究团队 - 监控仪表盘 v5.5</h1>
+
+    <div class="version-info">
+        Generator: <strong id="generator-version">...</strong> |
+        Dashboard: <strong id="dashboard-version">...</strong>
     </div>
 
     <div class="container">
@@ -363,25 +362,44 @@
     <div id="toast-container" class="toast-notification"></div>
 
     <script>
-        // --- JS 代码与上一版本 v5.3 完全一致 ---
+        // --- JS 代码 (保持 v5.4 不变, 除了 updateStatus) ---
         function colorizeLogs(logText) { if (!logText) return ''; logText = String(logText).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); return logText.replace(/PASS/g, '<span class="log-pass">PASS</span>').replace(/FAIL/g, '<span class="log-fail">FAIL</span>').replace(/PENDING/g, '<span class="log-pending">PENDING</span>'); }
         function formatChecks(checksString) { if (!checksString) return 'N/A'; checksString = String(checksString); return checksString.replace(/(\d+\s*PASS)/g, '<span class="pass">$1</span>').replace(/(\d+\s*FAIL)/g, '<span class="fail">$1</span>').replace(/(\d+\s*PENDING)/g, '<span class="pending">$1</span>'); }
         let toastTimeout; function showToast(message, isError = false) { const toastContainer = document.getElementById('toast-container'); if (!toastContainer) { console.error("Toast container not found!"); return; } toastContainer.textContent = message; toastContainer.classList.add('show'); if (isError) { toastContainer.classList.add('error'); } else { toastContainer.classList.remove('error'); } clearTimeout(toastTimeout); toastTimeout = setTimeout(() => { toastContainer.classList.remove('show'); }, 3000); }
         function copyToClipboard(button, text) { text = String(text || ''); if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(() => { const originalText = button.textContent; button.textContent = '已复制!'; button.classList.add('copied'); showToast('Alpha 复制成功!'); setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000); }).catch(err => { console.error('Clipboard API 复制失败: ', err); fallbackCopyTextToClipboard(button, text); }); } else { fallbackCopyTextToClipboard(button, text); } }
         function fallbackCopyTextToClipboard(button, text) { console.warn('正在尝试回退复制方法 (execCommand)...'); try { const textArea = document.createElement('textarea'); textArea.value = text; textArea.style.position = 'fixed'; textArea.style.top = '-9999px'; textArea.style.left = '-9999px'; document.body.appendChild(textArea); textArea.focus(); textArea.select(); const successful = document.execCommand('copy'); document.body.removeChild(textArea); if (successful) { const originalText = button.textContent; button.textContent = '已复制!'; button.classList.add('copied'); showToast('Alpha 复制成功 (回退模式)!'); setTimeout(() => { if (button && document.body.contains(button)) { button.textContent = originalText; button.classList.remove('copied'); } }, 2000); } else { throw new Error('document.execCommand("copy") failed'); } } catch (err) { console.error('回退复制方法失败: ', err); showToast('浏览器不支持自动复制', true); } }
-        let latestVersionData = null; function openVersionModal() { const modal = document.getElementById('versionModal'); const versionList = document.getElementById('versionList'); if(!modal || !versionList) return; versionList.innerHTML = ''; if (latestVersionData && latestVersionData.file_versions) { const versions = latestVersionData.file_versions; const sortedKeys = Object.keys(versions).sort(); if (sortedKeys.length > 0) { sortedKeys.forEach(name => { const li = document.createElement('li'); li.innerHTML = `<strong>${name}:</strong> ${versions[name]}`; versionList.appendChild(li); }); } else { versionList.innerHTML = '<li>未能获取到版本信息。</li>'; } } else { versionList.innerHTML = '<li>正在等待数据加载...</li>'; } modal.style.display = "block"; }
-        function closeVersionModal() { const modal = document.getElementById('versionModal'); if(modal) modal.style.display = "none"; }
-        window.onclick = function(event) { const modal = document.getElementById('versionModal'); if (modal && event.target == modal) { closeVersionModal(); } }
+        // v5.5: 移除 open/closeVersionModal 和 latestVersionData
+        // let latestVersionData = null;
+        // function openVersionModal() { ... }
+        // function closeVersionModal() { ... }
+        // window.onclick = function(event) { ... }
+
         function toggleSubmittedStatus(checkbox, expression) { const isChecked = checkbox.checked; const url = isChecked ? '/api/mark_submitted' : '/api/unmark_submitted'; expression = String(expression || ''); checkbox.disabled = true; fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) }).then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); }).then(data => { if (data.status === 'success') { console.log(data.message); showToast(`状态更新成功: ${data.message}`); updateStatus(); } else { console.error('标记失败:', data.message); checkbox.checked = !isChecked; showToast(`标记操作失败: ${data.message}`, true); } }).catch(error => { console.error('API 请求或处理失败:', error); checkbox.checked = !isChecked; showToast(`API 请求错误: ${error.message || '未知错误'}`, true); }).finally(() => { if (checkbox && document.body.contains(checkbox)) { checkbox.disabled = false; } }); }
         function toggleFailedStatus(checkbox, expression) { const isChecked = checkbox.checked; const url = isChecked ? '/api/mark_failed_on_wq' : '/api/unmark_failed_on_wq'; expression = String(expression || ''); checkbox.disabled = true; fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expression: expression }) }).then(response => { if (!response.ok) { return response.json().then(errData => { throw new Error(errData.message || `API error! status: ${response.status}`); }).catch(() => { throw new Error(`API error! status: ${response.status}`); }); } return response.json(); }).then(data => { if (data.status === 'success') { console.log(data.message); showToast(`状态更新成功: ${data.message}`); updateStatus(); } else { console.error('标记失败:', data.message); checkbox.checked = !isChecked; showToast(`标记操作失败: ${data.message}`, true); } }).catch(error => { console.error('API 请求或处理失败:', error); checkbox.checked = !isChecked; showToast(`API 请求错误: ${error.message || '未知错误'}`, true); }).finally(() => { if (checkbox && document.body.contains(checkbox)) { checkbox.disabled = false; } }); }
 
-        // --- 主更新函数 ---
+        // --- 主更新函数 (v5.5: 添加版本获取) ---
         function updateStatus() {
             const cacheBuster = new Date().getTime();
+
+            // v5.5: Fetch version info
+            fetch(`/api/version_info?_=${cacheBuster}`)
+                .then(response => response.ok ? response.json() : Promise.reject(`Version API error! status: ${response.status}`))
+                .then(versionData => {
+                    document.getElementById('generator-version').textContent = versionData.generator_version || 'N/A';
+                    document.getElementById('dashboard-version').textContent = versionData.dashboard_version || 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching version info:', error);
+                    document.getElementById('generator-version').textContent = 'Error';
+                    document.getElementById('dashboard-version').textContent = 'Error';
+                 });
+
+            // Fetch main status data
             fetch(`/status?_=${cacheBuster}`)
                 .then(response => { if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); } return response.json(); })
                 .then(data => {
-                    latestVersionData = data;
+                    // v5.5: 不再需要 latestVersionData
+                    // latestVersionData = data;
                     const updateServiceStatus = (serviceName, serviceData) => { const statusEl = document.getElementById(`${serviceName}-status`); const lastSeenEl = document.getElementById(`${serviceName}-last-seen`); const logsEl = document.getElementById(`${serviceName}-logs`); if (!serviceData) { if(statusEl) statusEl.textContent = '数据错误'; if(lastSeenEl) lastSeenEl.textContent = '--'; if(logsEl) logsEl.innerHTML = '无法加载服务数据'; return; } if (statusEl) { statusEl.textContent = serviceData.status || '状态未知'; statusEl.style.color = serviceData.status === 'RUNNING' ? 'var(--success-color)' : 'var(--error-color)'; } if (lastSeenEl) { lastSeenEl.textContent = serviceData.last_seen || '--'; } if (logsEl) { logsEl.innerHTML = colorizeLogs(serviceData.logs); } };
                     updateServiceStatus('miner', data.miner);
                     updateServiceStatus('evolver', data.evolver);
@@ -431,13 +449,15 @@
                         const submittedUniqueId = `check-alpha-${index}`;
                         const failedUniqueId = `fail-check-alpha-${index}`;
 
-                        const escapedExpr = String(alpha.expression || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+                        // v5.8: 修复 copyToClipboard 的 JS 字符串转义
+                        const escapedExpr = JSON.stringify(alpha.expression || '').slice(1, -1); // 更可靠的转义
 
                         const submittedCheckboxHTML = `<div class="form-check"><input class="form-check-input" type="checkbox" id="${submittedUniqueId}" onchange="toggleSubmittedStatus(this, '${escapedExpr}')" ${isSubmittedChecked}><label class="form-check-label" for="${submittedUniqueId}">标记为已提交</label></div>`;
                         const failedCheckboxHTML = `<div class="form-check"><input class="form-check-input fail-check" type="checkbox" id="${failedUniqueId}" onchange="toggleFailedStatus(this, '${escapedExpr}')" ${isFailedChecked}><label class="form-check-label" for="${failedUniqueId}">标记为 WQ 失败</label></div>`;
                         const copyButtonHTML = `<button class="copy-button" onclick="copyToClipboard(this, '${escapedExpr}')">复制</button>`;
 
                         const expressionText = String(alpha.expression || '表达式丢失');
+                        // v5.8: 增加健壮性检查
                         const fitnessText = (typeof alpha.fitness === 'number' ? alpha.fitness.toFixed(3) : 'N/A');
                         const sharpeText = (typeof alpha.sharpe === 'number' ? alpha.sharpe.toFixed(3) : 'N/A');
                         const turnoverText = (typeof alpha.turnover === 'number' ? alpha.turnover.toFixed(3) : 'N/A');
@@ -455,12 +475,14 @@
                 })
                 .catch(error => {
                     console.error('Error fetching/processing status:', error);
-                    latestVersionData = null;
+                    // v5.5: 不再需要 latestVersionData
+                    // latestVersionData = null;
                     const list = document.getElementById('hopeful-alphas-list');
                     if(list) list.innerHTML = `<li class="alpha-item fail">加载 Alpha 列表时出错: ${error.message || '未知错误'}</li>`;
                     document.querySelectorAll('.kpi-value').forEach(el => el.textContent = '错误');
-                    const versionList = document.getElementById('versionList');
-                    if (versionList) versionList.innerHTML = `<li>加载数据时出错: ${error.message || '未知错误'}</li>`;
+                    // v5.5: 移除对 versionList 的错误处理
+                    // const versionList = document.getElementById('versionList');
+                    // if (versionList) versionList.innerHTML = `<li>加载数据时出错: ${error.message || '未知错误'}</li>`;
                      showToast(`仪表盘更新失败: ${error.message}`, true);
                 });
         }

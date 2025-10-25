@@ -21,6 +21,8 @@ services:
       # --- 修复结束 ---
       - ./Web仪表盘.py:/app/Web仪表盘.py # 挂载后台文件
       - ./templates:/app/templates   # 挂载整个templates文件夹
+      # --- v5.8 (版本显示) 新增 ---
+      - ./alpha_generator_ollama.py:/app/alpha_generator_ollama.py:ro
     command: python -u Web仪表盘.py # 运行新的后台脚本
     ports:
       - "8080:8080"

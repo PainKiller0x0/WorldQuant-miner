@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v7.6.1 (Three-Strikes Blacklist) ---
+# --- alpha_generator_ollama.py v7.6.2 (Blacklist Functions & Variables) ---
 import argparse
 import logging
 import json
@@ -249,14 +249,15 @@ class AlphaGenerator:
         self._rate_limit_until = 0
         # --- v7.4 结束 ---
         
-        # --- v7.6.1 调整: "事不过三"黑名单 ---
+        # --- v7.6.2 调整: "事不过三"标识符黑名单 ---
         self.invalid_functions_file = INVALID_FUNCTIONS_FILE
-        self.blacklist_lock = threading.Lock() # v7.6.1: 重命名锁
-        self.blacklist_counts = self.load_blacklist_counts() # v7.6.1: 存储计数
+        self.blacklist_lock = threading.Lock()
+        self.blacklist_counts = self.load_blacklist_counts() 
         self.blacklist_max_strikes = BLACKLIST_MAX_STRIKES
-        self.function_call_pattern = re.compile(r'([a-zA-Z_0-9]+)\s*\(')
+        # v7.6.2: 使用 \b (单词边界) 来匹配所有独立标识符 (变量或函数名)
+        self.identifier_pattern = re.compile(r'\b([a-zA-Z_][a-zA-Z_0-9]*)\b')
         self.fields = [] # 用于存储字段列表
-        # --- v7.6.1 结束 ---
+        # --- v7.6.2 结束 ---
 
     # --- v7.4 调整: 冷却触发器接受时长 ---
     def _enter_cooldown(self, duration_seconds, reason="Rate Limit"):
@@ -278,11 +279,11 @@ class AlphaGenerator:
             logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
             return set()
             
-    # --- v7.6.1 调整: 加载黑名单计数 (原 load_invalid_functions) ---
+    # --- v7.6.1 调整: 加载黑名单计数 ---
     def load_blacklist_counts(self):
         with self.blacklist_lock:
             if not os.path.exists(self.invalid_functions_file):
-                logger.info("无效函数计数文件(invalid_functions.json)不存在，将创建新的。")
+                logger.info("无效标识符计数文件(invalid_functions.json)不存在，将创建新的。")
                 return {} # 返回空字典
             try:
                 with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
@@ -296,21 +297,21 @@ class AlphaGenerator:
                         logger.warning(f"{self.invalid_functions_file} 格式不正确 (不是字典)，将重置。")
                         return {}
                         
-                    logger.info(f"成功加载 {len(data)} 个函数的黑名单计数。")
+                    logger.info(f"成功加载 {len(data)} 个标识符的黑名单计数。")
                     return data
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"加载 {self.invalid_functions_file} 出错: {e}, 将创建新的。")
                 return {} # 出错，返回空字典
     
-    # --- v7.6.1 调整: 更新黑名单计数 (原 add_to_invalid_functions) ---
-    def update_blacklist_count(self, function_name):
+    # --- v7.6.1 调整: 更新黑名单计数 ---
+    def update_blacklist_count(self, identifier_name):
         with self.blacklist_lock:
             # 再次从文件加载，确保多线程安全和数据最新
             current_counts = self.load_blacklist_counts()
             
-            current_count = current_counts.get(function_name, 0)
+            current_count = current_counts.get(identifier_name, 0)
             current_count += 1
-            current_counts[function_name] = current_count
+            current_counts[identifier_name] = current_count
             
             try:
                 with open(self.invalid_functions_file, 'w', encoding='utf-8') as f:
@@ -320,29 +321,30 @@ class AlphaGenerator:
                 self.blacklist_counts = current_counts
                 
                 if current_count < self.blacklist_max_strikes:
-                    logger.warning(f"检测到无效函数: '{function_name}'。计数: {current_count}/{self.blacklist_max_strikes}。")
+                    logger.warning(f"检测到无效标识符: '{identifier_name}'。计数: {current_count}/{self.blacklist_max_strikes}。")
                 else:
-                    logger.critical(f"'{function_name}' 已达到 {current_count}/{self.blacklist_max_strikes} 次计数，将被永久拉黑。")
+                    logger.critical(f"'{identifier_name}' 已达到 {current_count}/{self.blacklist_max_strikes} 次计数，将被永久拉黑。")
                     
             except IOError as e:
                 logger.error(f"保存黑名单计数文件时出错: {e}")
                 
-    # --- v7.6.1 调整: 检查是否被拉黑 (原 is_using_invalid_function) ---
-    def is_using_blacklisted_function(self, alpha_code: str) -> bool:
+    # --- v7.6.2 调整: 检查是否被拉黑 (原 is_using_blacklisted_function) ---
+    def is_using_blacklisted_identifier(self, alpha_code: str) -> bool:
         if not self.blacklist_counts:
             return False # 黑名单为空，跳过检查
         
-        found_functions = self.function_call_pattern.findall(alpha_code)
-        if not found_functions:
+        # v7.6.2: 使用新的 identifier_pattern
+        found_identifiers = self.identifier_pattern.findall(alpha_code)
+        if not found_identifiers:
             return False
             
-        for func in found_functions:
-            # 检查函数是否在计数器中，并且计数是否达到阈值
-            if func in self.blacklist_counts and self.blacklist_counts[func] >= self.blacklist_max_strikes:
-                logger.warning(f"预检拦截: Alpha '{alpha_code}' 包含了已被拉黑的函数 '{func}' (计数: {self.blacklist_counts[func]}/{self.blacklist_max_strikes})。")
+        for identifier in found_identifiers:
+            # 检查标识符是否在计数器中，并且计数是否达到阈值
+            if identifier in self.blacklist_counts and self.blacklist_counts[identifier] >= self.blacklist_max_strikes:
+                logger.warning(f"预检拦截: Alpha '{alpha_code}' 包含了已被拉黑的标识符 '{identifier}' (计数: {self.blacklist_counts[identifier]}/{self.blacklist_max_strikes})。")
                 return True
         return False
-    # --- v7.6.1 结束 ---
+    # --- v7.6.2 结束 ---
 
     def excavate_one_pearl(self, sample_size=200):
         if not os.path.exists(self.tested_alphas_logfile):
@@ -749,7 +751,7 @@ class AlphaGenerator:
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance)
                     if idea: strategies_to_test.append(idea)
 
-            # --- v7.6.1 修改: 预检逻辑 ---
+            # --- v7.6.2 修改: 预检逻辑 ---
             pre_valid_strategies = [s for s in strategies_to_test if s and s.get("expression") and s.get("expression") not in self.tested_alphas]
             
             valid_strategies = []
@@ -757,11 +759,11 @@ class AlphaGenerator:
                 expr = s.get("expression")
                 if is_alpha_syntactically_suspicious(expr):
                     continue
-                # v7.6.1: 使用新的 "三振出局" 检查
-                if self.is_using_blacklisted_function(expr): 
+                # v7.6.2: 使用新的 "标识符" 检查
+                if self.is_using_blacklisted_identifier(expr): 
                     continue
                 valid_strategies.append(s)
-            # --- v7.6.1 结束 ---
+            # --- v7.6.2 结束 ---
 
             logger.info(f"成功生成 {len(valid_strategies)} 个通过预检且待测试的新策略。")
             
@@ -786,7 +788,7 @@ class AlphaGenerator:
                                 continue
                             # --- v7.3 结束 ---
                             
-                            # --- v7.6.1: 动态黑名单计数逻辑 ---
+                            # --- v7.6.2: 扩展黑名单逻辑 (捕获函数、操作符和变量) ---
                             if isinstance(result, dict) and result.get("status") == "ERROR":
                                 log_report["status"] = "ERROR"
                                 reports_to_log.append(log_report)
@@ -799,21 +801,38 @@ class AlphaGenerator:
                                 else:
                                     error_message = result.get("message", "") # Fallback
 
-                                # 尝试从错误信息中解析
-                                match = re.search(r"(Unknown function|unknown operator) '(\w+)'", error_message)
+                                # v7.6.2: 扩展 regex 以捕获 'unknown variable'
+                                match = re.search(r"(Unknown function|unknown operator|unknown variable) '(\w+)'", error_message)
+                                
                                 if match:
-                                    bad_function = match.group(2)
-                                    # 检查它是否只是一个数据字段
-                                    if bad_function not in self.fields:
-                                        # v7.6.1: 更新计数，而不是直接拉黑
-                                        self.update_blacklist_count(bad_function) 
-                                    else:
-                                        logger.info(f"Alpha 模拟出错: '{bad_function}' 是一个数据字段，但可能被误用为函数。已记录，不计入黑名单。")
+                                    error_type = match.group(1) # "Unknown function", "unknown variable", etc.
+                                    bad_identifier = match.group(2) # "adv40", "vwma", etc.
+
+                                    # v7.6.2: 改进的黑名单逻辑
+                                    # 1. 如果是 "unknown variable" (如 adv40)，WQ 认为它无效，直接拉黑 (无视 self.fields)。
+                                    # 2. 如果是 "Unknown function" (如 adv40())，但 adv40 在 self.fields 中，
+                                    #    说明它是被误用为函数的 *字段*，此时不应拉黑该 *字段*。
+                                    
+                                    should_blacklist = False
+                                    if error_type == "unknown variable":
+                                        should_blacklist = True
+                                        logger.warning(f"检测到无效变量: '{bad_identifier}'。WQ API 报告其未知。")
+                                    elif error_type in ["Unknown function", "unknown operator"]:
+                                        if bad_identifier not in self.fields:
+                                            should_blacklist = True
+                                            logger.warning(f"检测到无效函数/操作符: '{bad_identifier}'。")
+                                        else:
+                                            # 这是 v7.6.1 的 "误用" 逻辑，是正确的
+                                            logger.info(f"Alpha 模拟出错: '{bad_identifier}' 是一个数据字段，但被误用为函数。已记录，不计入黑名单。")
+                                    
+                                    if should_blacklist:
+                                        self.update_blacklist_count(bad_identifier) # Add to blacklist
+                                    
                                 else:
                                     # v7.6.1: 其他错误，不触发黑名单
-                                    logger.warning(f"Alpha 模拟出错 (非函数错误)，已记录: {idea_expr} | Error: {error_message[:200]}...")
+                                    logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {error_message[:200]}...")
                                 continue
-                            # --- v7.6.1 结束 ---
+                            # --- v7.6.2 结束 ---
 
                             if result in ["TIMEOUT"]: # "ERROR" 已被上面的 dict 捕获
                                 log_report["status"] = result

@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v7.8.1 (Diversity & Bolder Evolution) ---
+# --- alpha_generator_ollama.py v7.8.2 (Adjust Seed Split Ratio) ---
 import argparse
 import logging
 import json
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 import queue # v7.7 新增
 
-CURRENT_GENERATOR_VERSION = "v7.8.1" # v7.8.1: 版本号
+CURRENT_GENERATOR_VERSION = "v7.8.2" # v7.8.2: 版本号
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
@@ -470,6 +470,7 @@ class AlphaGenerator:
             return -999
 
     # --- v7.8 优化: 引入“外卡”种子选择 ---
+    # --- v7.8.2 优化: 调整分割比例 ---
     def load_evolution_seeds(self, total_sample_size=20, wild_card_count=5):
         seeds = []
         # v7.7: 加锁读写 hopeful_alphas.json 和 self.hopeful_alphas_cache
@@ -512,10 +513,15 @@ class AlphaGenerator:
         seeds.sort(key=self._calculate_combined_score, reverse=True)
 
         # 2. 划分精英池和外卡池
-        # 至少留一个在外卡池
-        cutoff_index = max(len(seeds) // 2, len(seeds) - 1) if len(seeds) > 1 else 0
+        # v7.8.2: 改为 70/30 分割
+        cutoff_index = len(seeds) * 7 // 10
+        # 确保至少有一个在外卡池 (除非总数 <= 1)
+        if cutoff_index == len(seeds) and len(seeds) > 1:
+             cutoff_index = len(seeds) - 1
+
         top_pool = seeds[:cutoff_index]
-        bottom_pool = seeds[cutoff_index:] # 后 50% + 遗珠
+        bottom_pool = seeds[cutoff_index:] # 后 30% + 遗珠
+        logger.info(f"种子池分割: Top {len(top_pool)} (精英), Bottom {len(bottom_pool)} (外卡池)") # v7.8.2: 增加日志
 
         evolution_seeds = []
         # v7.8.1: 修正精英数量计算
@@ -546,7 +552,7 @@ class AlphaGenerator:
             k_remaining = min(remaining_needed, len(remaining_pool))
             if k_remaining > 0:
                 evolution_seeds.extend(random.sample(remaining_pool, k_remaining))
-        # --- v7.8 结束 ---
+        # --- v7.8.2 结束 ---
 
         # v7.7: 加锁
         with self.hopeful_file_lock:
@@ -1155,13 +1161,13 @@ class AlphaGenerator:
                 # 3. (Evolve 模式) 更新种子和指导
                 # v7.8: 每次循环都重新加载，以获取最新数据 (已加锁)
                 if mode == 'evolve':
-                    # v7.8: load_evolution_seeds 已更新
+                    # v7.8.2: load_evolution_seeds 已更新 (分割比例)
                     evolution_seeds = self.load_evolution_seeds()
                     if not evolution_seeds:
                         mode = 'discover'
                         logger.warning("[生产者] 进化模式无法启动（无可用种子），已自动切换到发现模式。")
                     else:
-                        # v7.8: analyze_successful_patterns 已更新
+                        # v7.8.1: analyze_successful_patterns 已更新 (无重复)
                         strategic_guidance = self.analyze_successful_patterns()
 
                 # 4. 检查队列是否已满

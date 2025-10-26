@@ -68,7 +68,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 3.0675700000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 5)) + rank(ts_decay_linear(ts_corr(high, low, 20), 10));",
@@ -139,7 +140,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 3.0272500000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 5)) + ts_decay_linear(rank(ts_corr(close, open, 20)), 10);",
@@ -210,7 +212,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 3.0192200000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 5)) + ts_decay_linear(rank(ts_corr(close, open, 20)), 5);",
@@ -281,7 +284,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.9675700000000003
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_mean(ts_delta(close, 1), 3)) * rank(ts_std_dev(open, 30)) + rank(ts_mean(close, 60)) * rank(ts_delta(volume, 1)) + rank(ts_corr(close, open, 10)) + rank(ts_decay_linear(ts_corr(high, low, 15), 10));",
@@ -352,7 +356,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.95258
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 2) + ts_mean(open, 10) * rank(close) + ts_mean(vwap, 10)) * rank(ts_delta(close, 5)) + ts_decay_linear(rank(ts_corr(close, open, 20)), 10);",
@@ -423,7 +428,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.9435400000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
@@ -494,7 +500,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.93258
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 10));",
@@ -565,7 +572,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.9303500000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 20)) * rank(ts_decay_linear(ts_mean(high, 10), 15)) - rank(ts_std_dev(volume, 20) * ts_delta(vwap, 5)) * rank(ts_mean(close, 15)) * rank(ts_delta(close, 10));",
@@ -636,7 +644,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.9293500000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
@@ -707,7 +716,8 @@
                 }
             ]
         },
-        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING"
+        "checks_summary": "7 PASS / 0 FAIL / 1 PENDING",
+        "internal_score": 2.92253
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 5));",
@@ -778,7 +788,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.7174
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)));",
@@ -849,7 +860,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70729
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_mean(open, 10));",
@@ -920,7 +932,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70729
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_decay_linear(ts_mean(open, 10), 5));",
@@ -991,7 +1004,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70729
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_decay_linear(ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)), 5));",
@@ -1062,7 +1076,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70729
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_decay_linear(ts_mean(open, 10), 5) * ts_corr(high, low, 5));",
@@ -1133,7 +1148,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70725
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * ts_decay_linear(rank(ts_delta(high, 2)), 5));",
@@ -1204,7 +1220,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.70724
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
@@ -1275,7 +1292,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.69423
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_decay_linear(high, 2)));",
@@ -1346,7 +1364,80 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.69423
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_decay_linear(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
+        "alpha_id": "QPZp3qEp",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/QPZp3qEp",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-26 18:33:46",
+        "performance": {
+            "pnl": 5606837,
+            "bookSize": 20000000,
+            "longCount": 1497,
+            "shortCount": 1561,
+            "turnover": 0.4277,
+            "returns": 0.1133,
+            "drawdown": 0.0445,
+            "margin": 0.00053,
+            "sharpe": 1.89,
+            "fitness": 0.97,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.89
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.97
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4277
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4277
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.82,
+                    "value": 1.63
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.69423
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10)));",
@@ -1417,7 +1508,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6897800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_decay_linear(close, 10)));",
@@ -1488,7 +1580,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.68977
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 5) * ts_decay_linear(close, 5));",
@@ -1559,7 +1652,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.68126
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(close, 20)) * rank(ts_decay_linear(ts_delta(close, 1), 5));",
@@ -1630,7 +1724,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.67743
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 20)) * rank(ts_decay_linear(ts_delta(close, 1), 5));",
@@ -1701,7 +1796,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.67743
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(open, 3) * rank(ts_mean(open, 7))) + ts_decay_linear(ts_corr(high, low, 5), 10);",
@@ -1772,7 +1868,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.67045
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10))) * rank(ts_mean(high, 3)) * rank(ts_decay_linear(ts_delta(close, 1), 5));",
@@ -1843,7 +1940,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.65603
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_mean(open, 10));",
@@ -1914,7 +2012,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6523100000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_mean(open, 5));",
@@ -1985,7 +2084,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6523000000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_decay_linear(open, 5));",
@@ -2056,7 +2156,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6523000000000003
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(close, open, 10)) + rank(ts_decay_linear(ts_corr(close, vwap, 20), 5));",
@@ -2127,7 +2228,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.63761
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 20));",
@@ -2198,7 +2300,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.63627
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 5)) * rank(ts_decay_linear(ts_delta(high, 1), 5));",
@@ -2269,7 +2372,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6352400000000005
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 10));",
@@ -2340,7 +2444,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6329800000000003
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(close, open, 10));",
@@ -2411,7 +2516,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6329800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 3) * ts_std_dev(close, 5));",
@@ -2482,7 +2588,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6321000000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_decay_linear(ts_delta(close, 1), 3)) * ts_std_dev(close, 5));",
@@ -2553,7 +2660,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.63201
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_decay_linear(ts_delta(close, 5), 10)) * rank(ts_mean(vwap, 20));",
@@ -2624,7 +2732,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6301800000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(open, 3) * ts_decay_linear(rank(ts_mean(open, 7)), 5));",
@@ -2695,7 +2804,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6289800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10));",
@@ -2766,7 +2876,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.62627
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5));",
@@ -2837,7 +2948,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6262600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(open, 10));",
@@ -2908,7 +3020,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6262600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(open, 3) * rank(ts_mean(open, 7)));",
@@ -2979,7 +3092,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6189700000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(close, 10) * ts_decay_linear(ts_std_dev(close, 5), 10));",
@@ -3050,7 +3164,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6160900000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_mean(close, 10)) * rank(ts_decay_linear(ts_delta(close, 1), 5));",
@@ -3121,7 +3236,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6146
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_mean(vwap, 10)) * rank(ts_decay_linear(ts_delta(close, 1), 5));",
@@ -3192,7 +3308,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.61161
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * ts_decay_linear(rank(ts_mean(high, 5)), 10) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 10)) + ts_delta(rank(ts_mean(volume, 20)), 5);",
@@ -3263,7 +3380,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.61058
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_decay_linear(ts_mean(high, 5), 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 20)) * rank(ts_delta(close, 1));",
@@ -3334,7 +3452,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.61052
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * ts_decay_linear(rank(ts_mean(high, 5)), 10) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 10));",
@@ -3405,7 +3524,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.61006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10))) + ts_decay_linear(rank(ts_corr(close, open, 5)), 10);",
@@ -3476,7 +3596,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6099900000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_decay_linear(ts_delta(close, 3), 3) * rank(ts_mean(open, 7)) + ts_delta(vwap, 1) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)));",
@@ -3547,7 +3668,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6083100000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 5) * ts_std_dev(ts_delta(close, 2), 10));",
@@ -3618,7 +3740,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6059200000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * rank(ts_decay_linear(close, 1)));",
@@ -3689,7 +3812,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6029899999999997
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * rank(ts_delta(close, 1)));",
@@ -3760,7 +3884,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.60278
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_decay_linear(ts_corr(open, close, 20), 5));",
@@ -3831,7 +3956,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.6000700000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_decay_linear(ts_delta(high, 1), 5));",
@@ -3902,7 +4028,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.59901
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_decay_linear(vwap, 10));",
@@ -3973,7 +4100,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.597
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 5));",
@@ -4044,7 +4172,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.59699
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_mean(ts_delta(close, 1), 3)) * rank(ts_std_dev(open, 30)) + rank(ts_mean(close, 60)) * rank(ts_delta(volume, 1)) + rank(ts_corr(close, open, 10));",
@@ -4115,7 +4244,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5960000000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * rank(ts_delta(close, 1)));",
@@ -4186,7 +4316,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.59281
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_mean(close, 20)), 5) * ts_std_dev(close, 10));",
@@ -4257,7 +4388,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5901100000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 5));",
@@ -4328,7 +4460,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5900000000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 3));",
@@ -4399,7 +4532,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5899800000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_decay_linear(ts_delta(close, 1), 10)));",
@@ -4470,7 +4604,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5898500000000007
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_decay_linear(ts_delta(close, 1), 3)));",
@@ -4541,7 +4676,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5898400000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_delta(close, 1)));",
@@ -4612,7 +4748,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5898100000000004
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(close, open, 10)) + rank(ts_decay_linear(ts_corr(close, open, 20), 5));",
@@ -4683,7 +4820,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5897200000000002
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(close, open, 10)) + rank(ts_decay_linear(ts_corr(open, close, 20), 5));",
@@ -4754,7 +4892,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5897200000000002
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 20));",
@@ -4825,7 +4964,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5895
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(volume, 15) * ts_delta(vwap, 3)) * rank(ts_mean(close, 10)) * rank(ts_std_dev(close, 5));",
@@ -4896,7 +5036,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5883700000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_decay_linear(close, 20));",
@@ -4967,7 +5108,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871700000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5));",
@@ -5038,7 +5180,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5));",
@@ -5109,7 +5252,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 20) * ts_mean(high, 5));",
@@ -5180,7 +5324,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 20) * ts_decay_linear(high, 5));",
@@ -5251,7 +5396,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_decay_linear(high, 5));",
@@ -5322,7 +5468,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_decay_linear(high, 5));",
@@ -5393,7 +5540,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871500000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(open, 5) * ts_mean(high, 5));",
@@ -5464,7 +5612,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5871500000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 10));",
@@ -5535,7 +5684,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.58707
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20));",
@@ -5606,7 +5756,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5870500000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(ts_mean(open, 10), 5) * ts_mean(high, 5) * ts_mean(volume, 20));",
@@ -5677,7 +5828,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5870500000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 5));",
@@ -5748,7 +5900,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.587
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_decay_linear(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_decay_linear(ts_delta(high, 1), 5));",
@@ -5819,7 +5972,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.58619
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 10));",
@@ -5890,7 +6044,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.58401
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(vwap, 10));",
@@ -5961,7 +6116,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.58401
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_decay_linear(close, 20));",
@@ -6032,7 +6188,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.584
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - ts_decay_linear(rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 10) * ts_std_dev(vwap, 5)), 5);",
@@ -6103,7 +6260,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5832400000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 20) * ts_decay_linear(high, 5)) + ts_mean(ts_corr(close, open, 5), 10);",
@@ -6174,7 +6332,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5820000000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10))) * rank(ts_mean(high, 3)) * rank(ts_delta(close, 1));",
@@ -6245,7 +6404,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57899
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 3));",
@@ -6316,7 +6476,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5769800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 5) * ts_std_dev(ts_delta(close, 2), 10) * ts_mean(close, 20));",
@@ -6387,7 +6548,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57688
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * rank(ts_delta(close, 1)) * ts_mean(vwap, 5));",
@@ -6458,7 +6620,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57679
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * rank(ts_delta(close, 1)) * ts_decay_linear(close, 5));",
@@ -6529,7 +6692,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5767800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * ts_decay_linear(rank(ts_mean(high, 5)), 5) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 1));",
@@ -6600,7 +6764,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57626
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * ts_decay_linear(rank(ts_mean(high, 5)), 10) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_delta(close, 1))) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 1));",
@@ -6671,7 +6836,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5758
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 20)) * rank(ts_delta(close, 1));",
@@ -6742,7 +6908,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57445
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(close, 20)) * rank(ts_delta(close, 1));",
@@ -6813,7 +6980,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5744400000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * ts_mean(open, 7) * ts_decay_linear(ts_mean(close, 5), 10));",
@@ -6884,7 +7052,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57417
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5));",
@@ -6955,7 +7124,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57416
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(close, 10));",
@@ -7026,7 +7196,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57416
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * ts_mean(open, 7) * ts_decay_linear(close, 10));",
@@ -7097,7 +7268,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57416
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)));",
@@ -7168,7 +7340,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57411
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_mean(close, 20)), 5));",
@@ -7239,7 +7412,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57411
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_decay_linear(vwap, 5));",
@@ -7310,7 +7484,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.57409
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * ts_decay_linear(rank(ts_mean(close, 20)), 4);",
@@ -7381,7 +7556,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5740200000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 20));",
@@ -7452,7 +7628,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5740100000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_decay_linear(ts_mean(high, 5), 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_mean(vwap, 20));",
@@ -7523,7 +7700,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5733900000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_mean(close, 10));",
@@ -7594,7 +7772,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5733800000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_decay_linear(close, 10));",
@@ -7665,7 +7844,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5733700000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -7736,7 +7916,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5731000000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_delta(close, 1))) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -7807,7 +7988,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5730000000000004
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_decay_linear(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 20));",
@@ -7878,7 +8060,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56897
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - ts_decay_linear(rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_std_dev(open, 10)), 5);",
@@ -7949,7 +8132,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56726
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_decay_linear(open, 5) * ts_mean(adv20, 10));",
@@ -8020,7 +8204,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5639700000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(vwap, 3)) * rank(ts_decay_linear(close, 10)) * rank(ts_delta(close, 1));",
@@ -8091,7 +8276,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5633999999999997
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - ts_decay_linear(rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10))), 5);",
@@ -8162,7 +8348,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5631500000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_decay_linear(ts_delta(close, 1), 5))) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -8233,7 +8420,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5626800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_decay_linear(ts_mean(volume, 20), 10) * ts_mean(close, 5));",
@@ -8304,7 +8492,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.561
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5));",
@@ -8375,7 +8564,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56099
     },
     {
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_decay_linear(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 10));",
@@ -8446,7 +8636,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56068
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_mean(vwap, 20));",
@@ -8517,7 +8708,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56038
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_decay_linear(vwap, 20));",
@@ -8588,7 +8780,80 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.56036
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_mean(vwap, 20));",
+        "alpha_id": "wpKkZEOY",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/wpKkZEOY",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-26 18:41:39",
+        "performance": {
+            "pnl": 4468656,
+            "bookSize": 20000000,
+            "longCount": 1398,
+            "shortCount": 1662,
+            "turnover": 0.3969,
+            "returns": 0.0903,
+            "drawdown": 0.0593,
+            "margin": 0.000455,
+            "sharpe": 1.8,
+            "fitness": 0.86,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.8
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.86
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.3969
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.3969
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.78,
+                    "value": 1.65
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5603100000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(vwap, 3)) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 1));",
@@ -8659,7 +8924,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.55342
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_decay_linear(vwap, 2))) * rank(ts_delta(close, 2));",
@@ -8730,7 +8996,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5530600000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_decay_linear(rank(ts_delta(close, 1)), 3) * ts_mean(close, 20));",
@@ -8801,7 +9068,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.55093
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(vwap, 3)) * rank(ts_mean(open, 7)) * rank(ts_delta(close, 1));",
@@ -8872,7 +9140,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5504400000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 1));",
@@ -8943,7 +9212,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.55023
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_decay_linear(close, 10)) * rank(ts_delta(vwap, 1));",
@@ -9014,7 +9284,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5502200000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(close, 2));",
@@ -9085,7 +9356,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54984
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_delta(close, 1))) * rank(ts_mean(close, 10)) * rank(ts_decay_linear(ts_delta(close, 5), 5));",
@@ -9156,7 +9428,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54876
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10), 5));",
@@ -9227,7 +9500,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54809
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(ts_mean(open, 5), 10) * ts_mean(high, 5) * ts_mean(close, 10));",
@@ -9298,7 +9572,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54808
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_decay_linear(high, 5) * ts_mean(vwap, 20));",
@@ -9369,7 +9644,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54808
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(close, 3));",
@@ -9440,7 +9716,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54807
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_decay_linear(ts_std_dev(volume, 15), 5) * ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10));",
@@ -9511,7 +9788,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54807
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_decay_linear(high, 5) * ts_mean(close, 10));",
@@ -9582,7 +9860,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54807
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_decay_linear(close, 3));",
@@ -9653,7 +9932,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54806
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5) * ts_mean(vwap, 10));",
@@ -9724,7 +10004,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54795
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5) * ts_mean(vwap, 5) * ts_decay_linear(close, 10) * ts_std_dev(close, 30));",
@@ -9795,7 +10076,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54789
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * rank(ts_delta(high, 2)) + ts_decay_linear(ts_mean(open, 10), 5) * ts_corr(high, low, 5)) + ts_rank(ts_mean(volume, 30), 10);",
@@ -9866,7 +10148,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54786
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_delta(high, 5));",
@@ -9937,7 +10220,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5476
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_decay_linear(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -10008,7 +10292,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54706
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(vwap, 5));",
@@ -10079,7 +10364,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54571
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10));",
@@ -10150,7 +10436,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54508
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(close, 10) * ts_decay_linear(close, 10));",
@@ -10221,7 +10508,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.54508
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_std_dev(high, 5)) - rank(ts_delta(low, 3));",
@@ -10292,7 +10580,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5422000000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(ts_std_dev(volume, 15) * ts_delta(vwap, 3), 10)) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -10363,7 +10652,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5378700000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_decay_linear(close, 10)) * rank(ts_delta(close, 1));",
@@ -10434,7 +10724,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5374200000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5))) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10));",
@@ -10505,7 +10796,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53711
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5));",
@@ -10576,7 +10868,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53701
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(vwap, 20)) * rank(ts_delta(close, 5));",
@@ -10647,7 +10940,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53701
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 2) + ts_mean(open, 10) * rank(close) + ts_mean(vwap, 10)) * rank(ts_delta(close, 5));",
@@ -10718,7 +11012,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53701
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_delta(close, 1))) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 1));",
@@ -10789,7 +11084,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5367300000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5) * ts_mean(vwap, 5));",
@@ -10860,7 +11156,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5349500000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5) * ts_decay_linear(vwap, 5));",
@@ -10931,7 +11228,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5348900000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(high, 5) * ts_mean(volume, 20) * ts_mean(close, 5) * ts_mean(vwap, 5) * ts_decay_linear(close, 10) * ts_std_dev(close, 30) * ts_mean(open, 20));",
@@ -11002,7 +11300,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53486
     },
     {
         "expression": "rank(ts_corr(ts_delta(close, 5), ts_delta(vwap, 5), 10)) * rank(ts_decay_linear(adv20, 20)) - rank(ts_zscore(returns, 30));",
@@ -11073,7 +11372,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53454
     },
     {
         "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_mean(ts_std_dev(open, 30), 5)) * rank(ts_delta(ts_mean(vwap, 1), 3)) + rank(ts_corr(close, vwap, 15));",
@@ -11144,7 +11444,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53374
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 5));",
@@ -11215,7 +11516,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5327699999999997
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(close, 10));",
@@ -11286,7 +11588,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53272
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(close, 10));",
@@ -11357,7 +11660,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53269
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(vwap, 10));",
@@ -11428,7 +11732,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53269
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_mean(close, 20) / ts_mean(open, 20)), 5));",
@@ -11499,7 +11804,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53208
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_mean(vwap, 10));",
@@ -11570,7 +11876,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5320400000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_mean(open, 5));",
@@ -11641,7 +11948,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5320300000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_mean(vwap, 5));",
@@ -11712,7 +12020,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5320300000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(rank(ts_mean(close, 20)), 10) * ts_mean(vwap, 5));",
@@ -11783,7 +12092,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5320300000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_decay_linear(open, 5));",
@@ -11854,7 +12164,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5320300000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_decay_linear(ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10) * ts_mean(vwap, 5), 20));",
@@ -11925,7 +12236,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53202
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * rank(ts_mean(close, 20)) * ts_decay_linear(vwap, 10));",
@@ -11996,7 +12308,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5319800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * ts_decay_linear(vwap, 2)) * rank(ts_delta(high, 5)) * rank(ts_mean(close, 10));",
@@ -12067,7 +12380,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.53188
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - ts_decay_linear(rank(ts_delta(close, 3) * ts_mean(volume, 15) * ts_mean(open, 10)), 5);",
@@ -12138,7 +12452,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5312900000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 2) + ts_mean(open, 10) * rank(close) + ts_mean(vwap, 10) + ts_mean(vwap, 5)) * rank(ts_decay_linear(ts_delta(close, 5), 10));",
@@ -12209,7 +12524,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5302700000000002
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(close, 5)) * rank(ts_mean(close, 10)) + ts_decay_linear(rank(ts_corr(close, open, 20)), 5);",
@@ -12280,7 +12596,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5293500000000004
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5)) * rank(ts_delta(vwap, 2)) * ts_decay_linear(volume, 10)) * rank(ts_delta(close, 2));",
@@ -12351,7 +12668,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52853
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(ts_std_dev(volume, 15) * ts_delta(vwap, 3) + ts_mean(open, 5), 10)) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -12422,7 +12740,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52787
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(ts_std_dev(volume, 15) * ts_delta(vwap, 3), 10)) * rank(ts_mean(close, 20)) * rank(ts_delta(close, 5));",
@@ -12493,7 +12812,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52784
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 2) + ts_mean(open, 10) * rank(close) + ts_mean(vwap, 10)) * rank(ts_decay_linear(ts_delta(close, 5), 10));",
@@ -12564,7 +12884,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5272700000000006
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_mean(close, 5))) * rank(ts_delta(vwap, 2)) * ts_decay_linear(rank(ts_mean(close, 10)), 5);",
@@ -12635,7 +12956,80 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52713
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_std_dev(volume, 15) * ts_delta(open, 3) * rank(ts_mean(open, 7)) * ts_decay_linear(close, 5));",
+        "alpha_id": "LLVYNbXa",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/LLVYNbXa",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-26 18:39:45",
+        "performance": {
+            "pnl": 4901081,
+            "bookSize": 20000000,
+            "longCount": 1493,
+            "shortCount": 1566,
+            "turnover": 0.4311,
+            "returns": 0.0991,
+            "drawdown": 0.0649,
+            "margin": 0.00046,
+            "sharpe": 1.76,
+            "fitness": 0.84,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.76
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.84
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4311
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4311
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.76,
+                    "value": 1.5
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52489
     },
     {
         "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_std_dev(open, 30)) * rank(ts_mean(ts_delta(close, 1), 3)) + rank(ts_mean(volume, 10)) + rank(ts_corr(open, close, 5)) + rank(ts_mean(close, 5)) + rank(ts_corr(vwap, close, 15));",
@@ -12706,7 +13100,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5247
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_mean(vwap, 10)) * rank(ts_delta(close, 1));",
@@ -12777,7 +13172,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52444
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 1));",
@@ -12848,7 +13244,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5244299999999997
     },
     {
         "expression": "rank(ts_decay_linear(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 20)) - rank(ts_mean(ts_delta(close, 1), 3)) * rank(ts_mean(ts_delta(open, 5), 30));",
@@ -12919,7 +13316,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5241400000000005
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(close, 20));",
@@ -12990,7 +13388,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5226800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 20));",
@@ -13061,7 +13460,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5226800000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(close, 20));",
@@ -13132,7 +13532,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5226800000000003
     },
     {
         "expression": "rank(ts_corr(high, low, 10)) - rank(ts_delta(close, 5));",
@@ -13154,7 +13555,8 @@
             "LOW_SUB_UNIVERSE_SHARPE: PASS",
             "SELF_CORRELATION: PENDING",
             "MATCHES_COMPETITION: PASS"
-        ]
+        ],
+        "internal_score": 2.5216700000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7))) * rank(ts_delta(vwap, 5));",
@@ -13225,7 +13627,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52164
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5)) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 2));",
@@ -13296,7 +13699,80 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52128
+    },
+    {
+        "expression": "rank(ts_corr(close, vwap, 10)) * ts_decay_linear(rank(ts_mean(high, 5)), 5) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 10)) * rank(ts_delta(vwap, 1)) + ts_delta(rank(ts_mean(close, 20)), 5);",
+        "alpha_id": "om80NJv5",
+        "result_url": "https://platform.worldquantbrain.com/alphas/regular/om80NJv5",
+        "grade": "INFERIOR",
+        "timestamp": "2025-10-26 18:26:47",
+        "performance": {
+            "pnl": 4456382,
+            "bookSize": 20000000,
+            "longCount": 1368,
+            "shortCount": 1668,
+            "turnover": 0.4477,
+            "returns": 0.0901,
+            "drawdown": 0.0681,
+            "margin": 0.000402,
+            "sharpe": 1.82,
+            "fitness": 0.82,
+            "startDate": "2018-01-20",
+            "checks": [
+                {
+                    "name": "LOW_SHARPE",
+                    "result": "PASS",
+                    "limit": 1.25,
+                    "value": 1.82
+                },
+                {
+                    "name": "LOW_FITNESS",
+                    "result": "FAIL",
+                    "limit": 1.0,
+                    "value": 0.82
+                },
+                {
+                    "name": "LOW_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.01,
+                    "value": 0.4477
+                },
+                {
+                    "name": "HIGH_TURNOVER",
+                    "result": "PASS",
+                    "limit": 0.7,
+                    "value": 0.4477
+                },
+                {
+                    "name": "CONCENTRATED_WEIGHT",
+                    "result": "PASS"
+                },
+                {
+                    "name": "LOW_SUB_UNIVERSE_SHARPE",
+                    "result": "PASS",
+                    "limit": 0.79,
+                    "value": 1.68
+                },
+                {
+                    "name": "SELF_CORRELATION",
+                    "result": "PENDING"
+                },
+                {
+                    "name": "MATCHES_COMPETITION",
+                    "result": "PASS",
+                    "competitions": [
+                        {
+                            "id": "challenge",
+                            "name": "Challenge"
+                        }
+                    ]
+                }
+            ]
+        },
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5212299999999996
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2))) * rank(ts_mean(close, 5)) * rank(ts_delta(high, 1));",
@@ -13367,7 +13843,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52114
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_decay_linear(ts_delta(close, 3) * ts_std_dev(volume, 15), 5)) * rank(ts_mean(vwap, 20)) * rank(ts_delta(close, 1));",
@@ -13438,7 +13915,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.5203100000000003
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_decay_linear(ts_mean(high, 5), 10)) - rank(ts_std_dev(volume, 15) * ts_delta(vwap, 3)) * rank(ts_mean(close, 10)) * rank(ts_delta(close, 5));",
@@ -13509,7 +13987,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.52021
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_mean(vwap, 10));",
@@ -13580,7 +14059,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.51969
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(open, 20));",
@@ -13651,7 +14131,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.51969
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15)) * rank(ts_decay_linear(vwap, 20));",
@@ -13722,7 +14203,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.51966
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10) * ts_mean(vwap, 10));",
@@ -13793,7 +14275,8 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.51901
     },
     {
         "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(close, 20) * ts_mean(vwap, 10));",
@@ -13864,290 +14347,7 @@
                 }
             ]
         },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10) * ts_decay_linear(close, 20));",
-        "alpha_id": "Vk1mEAgb",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/Vk1mEAgb",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-25 17:39:19",
-        "performance": {
-            "pnl": 4944162,
-            "bookSize": 20000000,
-            "longCount": 1508,
-            "shortCount": 1552,
-            "turnover": 0.4299,
-            "returns": 0.0999,
-            "drawdown": 0.0579,
-            "margin": 0.000465,
-            "sharpe": 1.74,
-            "fitness": 0.84,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.74
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.84
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4299
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4299
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.75,
-                    "value": 1.63
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 10) * ts_mean(vwap, 5) * ts_decay_linear(ts_mean(close, 5), 20) * ts_mean(vwap, 10));",
-        "alpha_id": "j2zMA56e",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/j2zMA56e",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-26 10:41:30",
-        "performance": {
-            "pnl": 4935283,
-            "bookSize": 20000000,
-            "longCount": 1508,
-            "shortCount": 1552,
-            "turnover": 0.4299,
-            "returns": 0.0997,
-            "drawdown": 0.0591,
-            "margin": 0.000464,
-            "sharpe": 1.74,
-            "fitness": 0.84,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.74
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.84
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4299
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4299
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.75,
-                    "value": 1.63
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) - rank(ts_delta(close, 3) * ts_std_dev(volume, 15) * ts_mean(open, 5) * ts_mean(high, 5) * ts_mean(close, 10) * ts_mean(vwap, 5));",
-        "alpha_id": "d5kRaZOK",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/d5kRaZOK",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-24 07:00:56",
-        "performance": {
-            "pnl": 4927698,
-            "bookSize": 20000000,
-            "longCount": 1508,
-            "shortCount": 1552,
-            "turnover": 0.43,
-            "returns": 0.0996,
-            "drawdown": 0.0593,
-            "margin": 0.000463,
-            "sharpe": 1.74,
-            "fitness": 0.84,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.74
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.84
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.43
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.43
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.75,
-                    "value": 1.63
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
-    },
-    {
-        "expression": "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_delta(close, 3));",
-        "alpha_id": "npxkr8Jd",
-        "result_url": "https://platform.worldquantbrain.com/alphas/regular/npxkr8Jd",
-        "grade": "INFERIOR",
-        "timestamp": "2025-10-22 01:46:04",
-        "performance": {
-            "pnl": 5870491,
-            "bookSize": 20000000,
-            "longCount": 1388,
-            "shortCount": 1672,
-            "turnover": 0.4505,
-            "returns": 0.1186,
-            "drawdown": 0.1199,
-            "margin": 0.000527,
-            "sharpe": 1.68,
-            "fitness": 0.86,
-            "startDate": "2018-01-20",
-            "checks": [
-                {
-                    "name": "LOW_SHARPE",
-                    "result": "PASS",
-                    "limit": 1.25,
-                    "value": 1.68
-                },
-                {
-                    "name": "LOW_FITNESS",
-                    "result": "FAIL",
-                    "limit": 1.0,
-                    "value": 0.86
-                },
-                {
-                    "name": "LOW_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.01,
-                    "value": 0.4505
-                },
-                {
-                    "name": "HIGH_TURNOVER",
-                    "result": "PASS",
-                    "limit": 0.7,
-                    "value": 0.4505
-                },
-                {
-                    "name": "CONCENTRATED_WEIGHT",
-                    "result": "PASS"
-                },
-                {
-                    "name": "LOW_SUB_UNIVERSE_SHARPE",
-                    "result": "PASS",
-                    "limit": 0.73,
-                    "value": 1.56
-                },
-                {
-                    "name": "SELF_CORRELATION",
-                    "result": "PENDING"
-                },
-                {
-                    "name": "MATCHES_COMPETITION",
-                    "result": "PASS",
-                    "competitions": [
-                        {
-                            "id": "challenge",
-                            "name": "Challenge"
-                        }
-                    ]
-                }
-            ]
-        },
-        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING"
+        "checks_summary": "6 PASS / 1 FAIL / 1 PENDING",
+        "internal_score": 2.51901
     }
 ]

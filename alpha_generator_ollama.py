@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v9.0.0 (Modularized) ---
+# --- alpha_generator_ollama.py v9.3.0 (Expanded Mutation) ---
 import argparse
 import logging
 import json
@@ -19,25 +19,16 @@ from wq_client import WorldQuant
 from llm_provider import LLMProvider
 # --- v9.0 结束 ---
 
-CURRENT_GENERATOR_VERSION = "v9.0.0 (Modularized)" # v9.0
-
-# --- v9.0 移除: load_system_config (已移至 utils) ---
+CURRENT_GENERATOR_VERSION = "v9.3.0 (Expanded Mutation)" # v9.3
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
 # --- 修复结束 ---
 
-# --- v8.0: 移除硬编码的 Cooldowns (保留) ---
-
 # --- v7.6 调整: 黑名单文件及计数 ---
 INVALID_FUNCTIONS_FILE = "invalid_functions.json"
 BLACKLIST_MAX_STRIKES = 3 # "事不过三"
 # --- v7.6 结束 ---
-
-# --- v9.0 移除: setup_logging (已移至 utils) ---
-
-# --- v9.0 移除: WorldQuant Class (已移至 wq_client) ---
-
 
 # --- 语法预检函数 (保留在主模块) ---
 def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
@@ -117,10 +108,56 @@ class AlphaGenerator:
         logger.warning(f"检测到 {reason}。脚本将进入冷却期 {duration_minutes:.0f} 分钟 ({duration_seconds} 秒)，直到 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')}")
     # --- v8.0 结束 ---
 
-    # --- v9.0: 所有文件 IO 和业务逻辑函数 (load_tested_alphas, load_blacklist_counts, ... _calculate_combined_score, 等) 保持不变 ---
-    # (此处省略所有未更改的函数: load_tested_alphas, load_blacklist_counts, update_blacklist_count, is_using_blacklisted_identifier, 
-    #  excavate_one_pearl, _calculate_combined_score, _calculate_potential_score, load_evolution_seeds, analyze_successful_patterns,
-    #  log_tested_alphas, archive_purged_alphas, save_hopeful_reports)
+    # --- v9.2: 突变函数 ---
+    def _mutate_settings(self, settings_dict: dict) -> dict:
+        """
+        v9.3: 对给定的设置字典进行随机突变。
+        它会从 system_config.json 的 evolver_search_space 中随机选择 2-4 个参数进行修改。
+        """
+        try:
+            config = load_system_config()
+            search_space = config.get("evolver_search_space")
+            
+            if not search_space or not isinstance(search_space, dict):
+                logger.warning("[Mutate] 未在 system_config.json 中找到 evolver_search_space，跳过设置突变。")
+                return settings_dict
+
+            # v9.3: 决定突变 2, 3, 或 4 个参数
+            num_mutations = random.choices([2, 3, 4], weights=[0.3, 0.5, 0.2], k=1)[0]
+            
+            # 获取所有可用的突变键 (v9.3: 确保 WQ 默认值也能被突变)
+            available_keys = [key for key in search_space if key in self.wq.default_settings and search_space[key]]
+            
+            if not available_keys:
+                logger.warning("[Mutate] evolver_search_space 中没有可用于突变的键，跳过。")
+                return settings_dict
+
+            # 随机选择要突变的键 (确保不重复)
+            keys_to_mutate = random.sample(available_keys, min(num_mutations, len(available_keys)))
+
+            mutated_settings = settings_dict.copy()
+            log_msgs = []
+
+            for key in keys_to_mutate:
+                old_value = mutated_settings.get(key) # 使用 .get() 避免 KeyErrors
+                possible_new_values = [v for v in search_space[key] if v != old_value] # 确保新值与旧值不同
+                
+                if not possible_new_values: # 如果所有可选值都和旧值一样，就没必要突变了
+                    continue 
+
+                new_value = random.choice(possible_new_values)
+                mutated_settings[key] = new_value
+                log_msgs.append(f"{key}: {old_value} -> {new_value}")
+
+            if log_msgs:
+                logger.info(f"[Evolver Mutate] 突变了 {len(log_msgs)} 个设置: {', '.join(log_msgs)}")
+            
+            return mutated_settings
+
+        except Exception as e:
+            logger.error(f"[Mutate] 设置突变时发生错误: {e}", exc_info=True)
+            return settings_dict # 发生错误时，返回原始设置
+    # --- v9.2/v9.3 结束 ---
 
     # --- v7.7: 业务逻辑函数 (保留) ---
     def load_tested_alphas(self):
@@ -397,30 +434,51 @@ class AlphaGenerator:
         # result 要么是 idea dict，要么是 None
         return result
 
+    # --- v9.2/v9.3 重构: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings ---
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         """
-        v9.0: 委托 LLMProvider 进化，并处理冷却信号。
+        v9.3: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings。
         """
-        # v9.0: 传递 base_settings
-        base_alpha_obj['performance'] = base_alpha_obj.get('performance', {})
-        base_alpha_obj['performance']['settings'] = base_alpha_obj.get('performance', {}).get('settings', self.wq.default_settings)
+        # 1. 确定父本设置 (用于继承和突变)
+        # v9.2: 确保 'settings' 键在 'performance' 内部
+        if 'performance' not in base_alpha_obj or not base_alpha_obj['performance']:
+             base_alpha_obj['performance'] = {}
+        
+        # 尝试从父本获取设置，如果失败，则使用 WQ 默认值
+        parent_settings = base_alpha_obj['performance'].get('settings', self.wq.default_settings)
+        if not parent_settings or not isinstance(parent_settings, dict):
+             parent_settings = self.wq.default_settings
+        
+        # 将父本设置回填到 base_alpha_obj 中，以便 LLM prompt 可以看到它
+        base_alpha_obj['performance']['settings'] = parent_settings
 
+        # 2. 调用 LLM (只为了获取新的 expression)
+        # v9.2: llm_provider 的 prompt 已更新，只要求进化 expression
         result = self.llm.generate_evolved_alpha_idea(base_alpha_obj, guidance=guidance)
         
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Evolve)。")
-            # v8.0 逻辑: 使用 "LLM 429 Rate Limit" 理由触发标准 LLM 冷却
             self._enter_cooldown(reason="LLM 429 Rate Limit")
             return None
-            
-        # v9.0: 如果 settings 是空的，从 WQ 客户端填充默认值
-        if isinstance(result, dict) and not result.get('settings'):
-            result['settings'] = self.wq.default_settings
-            logger.info("进化策略未提供 settings，已应用 WQ 默认值。")
+        
+        if not isinstance(result, dict) or not result.get('expression'):
+            logger.warning("[AlphaGenerator] LLM 未能返回有效的进化 Expression 字典。")
+            return None # LLM 失败
 
-        # result 要么是 idea dict，要么是 None
-        return result
-    # --- v9.0 结束 ---
+        # 3. v9.2: 强制 Settings 突变
+        # 我们从父本继承设置，而不是使用 LLM 可能返回的（通常是空的）设置
+        
+        # 应用我们的 Python 突变逻辑 (v9.3: _mutate_settings 已更新)
+        mutated_settings = self._mutate_settings(parent_settings)
+        
+        # 将 LLM 返回的新 expression 和我们突变后的 settings 组合
+        evolved_strategy = {
+            "expression": result['expression'], # 来自 LLM
+            "settings": mutated_settings         # 来自 Python 突变
+        }
+
+        return evolved_strategy
+    # --- v9.2/v9.3 结束 ---
 
     def log_tested_alphas(self, reports_to_log):
         with self.tested_alphas_lock:
@@ -655,6 +713,10 @@ class AlphaGenerator:
                     log_report["fitness"] = fitness_float
                     log_report["passed_checks"] = passed_count
                     log_report["performance"] = is_stats # v7.9
+                    
+                    # v9.3: 将 settings 附加到 performance 中，以便父本可以继承
+                    log_report["performance"]["settings"] = strategy.get("settings", self.wq.default_settings)
+                    
                     self.log_tested_alphas([log_report])
                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
 
@@ -684,7 +746,7 @@ class AlphaGenerator:
                             "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
                             "grade": result.get("grade", "UNKNOWN"),
                             "timestamp": log_report["timestamp"],
-                            "performance": is_stats,
+                            "performance": log_report["performance"], # v9.3: 传递包含 settings 的 performance
                             "checks_summary": checks_summary
                         }
                         perf_items = is_stats.items()
@@ -798,7 +860,7 @@ class AlphaGenerator:
                          time.sleep(sleep_time)
                          continue
                     base_alpha_obj = random.choice(evolution_seeds)
-                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance)
+                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) # v9.3: 此函数已更新
 
                 # 6. 预检
                 if isinstance(idea, dict) and idea.get("expression"):
@@ -824,8 +886,6 @@ class AlphaGenerator:
                      # idea 为 None 是正常情况 (LLM 没返回, 或触发了冷却)
                      logger.warning("[生产者] LLM未能生成有效的 Alpha 策略 (或已进入冷却)。")
                 
-                # else: idea == "RATE_LIMIT" (已被 generate_... 方法处理, idea 会是 None)
-
                 logger.info(f"[生产者] 本轮生成结束。等待{sleep_time}秒开始下一轮...")
                 time.sleep(sleep_time)
 
@@ -836,13 +896,11 @@ class AlphaGenerator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v9.0 (Modularized)')
+    parser = argparse.ArgumentParser(description='Alpha Generator v9.3 (Expanded Mutation)')
     parser.add_argument('--user-id', type=str, required=True, help="WorldQuant User ID (email)")
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")
     parser.add_argument('--api-config-path', type=str, default="api_config.json", help="Path to the API configuration file")
-    
-    # --- v8.0: 移除静态参数 (保留) ---
     
     parser.add_argument('--mode', type=str, default='discover', choices=['discover', 'evolve'], help="Generation mode")
     parser.add_argument('--log-file', type=str, default='alpha_generator.log', help="Name of the log file in the logs directory")

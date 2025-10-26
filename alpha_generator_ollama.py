@@ -778,8 +778,12 @@ class AlphaGenerator:
 
                 # 4. 检查队列是否已满
                 if self.strategy_queue.qsize() >= self.queue_max_size:
-                    logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})，暂停生成 10 秒...")
-                    time.sleep(10)
+                    # v9.1: 从配置中读取队列暂停时间
+                    config = load_system_config()
+                    queue_sleep = config.get("producer_queue_full_sleep", 10) # 默认10秒
+                    
+                    logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})，暂停生成 {queue_sleep} 秒...")
+                    time.sleep(queue_sleep) # <--- 使用配置值
                     continue
 
                 logger.info(f"[生产者] [{mode.upper()}] 开始生成 1 个新 Alpha... (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")

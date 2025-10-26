@@ -318,7 +318,8 @@ def save_settings():
     expected_keys = {
         "wq_api_cooldown": int, "llm_api_cooldown": int,
         "miner_concurrency": int, "miner_sleep": int,
-        "evolver_concurrency": int, "evolver_sleep": int
+        "evolver_concurrency": int, "evolver_sleep": int,
+        "producer_queue_full_sleep": int # <--- 新增这一行
     }
     if not isinstance(new_config, dict): return jsonify(status='error', message='Invalid JSON format (must be an object)'), 400
 

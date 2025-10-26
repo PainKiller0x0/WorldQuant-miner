@@ -105,6 +105,12 @@
                 <input type="number" id="llm_api_cooldown" name="llm_api_cooldown" min="0">
                 <small>生产者 (LLM) 遇到 API 错误时的冷却时间。</small>
             </div>
+            
+            <div class="form-group">
+                    <label for="producer_queue_full_sleep">队列已满暂停 (秒):</label>
+                    <input type="number" id="producer_queue_full_sleep" name="producer_queue_full_sleep">
+                    <small>当 Miner/Evolver 生产速度过快导致队列已满时，生产者的暂停时间。</small>
+            </div>
         </div>
 
         <h2>静态参数 (需要重启服务生效)</h2>

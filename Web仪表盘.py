@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v6.0.1 (Fix Stats Structure for Modal) ---
+# --- Web仪表盘.py v6.0.2 (Remove Backend Sort) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -9,9 +9,9 @@ from collections import deque
 import os.path
 import logging
 
-# --- v6.0.1: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v6.0.1" 
-# --- v6.0.1: 结束 ---
+# --- v6.0.2: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v6.0.2" 
+# --- v6.0.2: 结束 ---
 
 # --- 配置基础日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -116,7 +116,7 @@ def get_service_status(log_file):
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
 
-# --- v6.0.1: Fix get_hopeful_alphas_stats structure ---
+# --- v6.0.2: Fix get_hopeful_alphas_stats (Remove backend sort) ---
 def get_hopeful_alphas_stats():
     stats = {
         "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
@@ -152,14 +152,13 @@ def get_hopeful_alphas_stats():
             all_fitness = [a.get('performance', {}).get('fitness') for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
             all_sharpe = [a.get('performance', {}).get('sharpe') for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
             
-            valid_fitness = [float(f) for f in all_fitness if isinstance(f, (int, float, str)) and str(f).replace('.', '', 1).isdigit()]
-            valid_sharpe = [float(s) for s in all_sharpe if isinstance(s, (int, float, str)) and str(s).replace('.', '', 1).isdigit()]
+            valid_fitness = [float(f) for f in all_fitness if isinstance(f, (int, float, str)) and (str(f).replace('.', '', 1).isdigit() or str(f).replace('-', '', 1).replace('.', '', 1).isdigit())] # v6.0.2 fix for negative
+            valid_sharpe = [float(s) for s in all_sharpe if isinstance(s, (int, float, str)) and (str(s).replace('.', '', 1).isdigit() or str(s).replace('-', '', 1).replace('.', '', 1).isdigit())] # v6.0.2 fix for negative
 
             if valid_fitness:
                  stats['max_fitness'] = max(valid_fitness) if valid_fitness else 0.0
                  stats['avg_fitness'] = sum(valid_fitness) / len(valid_fitness) if valid_fitness else 0.0
             if valid_sharpe:
-                 # Note: Max Sharpe might be less intuitive than Max Fitness
                  stats['max_sharpe'] = max(valid_sharpe) if valid_sharpe else 0.0 
 
             # Dashboard's score calculation (still based on v5.8 logic, without self-corr penalty)
@@ -196,19 +195,15 @@ def get_hopeful_alphas_stats():
                     expression = alpha_report.get('expression')
                     if not expression: continue
 
-                    # Ensure performance exists and is a dict
                     perf_data = alpha_report.get('performance', {})
                     if not isinstance(perf_data, dict): perf_data = {} 
                     
-                    # Get summary string
                     summary_str = alpha_report.get('checks_summary', '') or '' # Ensure it's a string
 
-                    # Parse counts from summary
                     fail_match = fail_pattern.search(summary_str); has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
                     pending_match = pending_pattern.search(summary_str); has_pending = bool(pending_match and int(pending_match.group(1)) > 0)
                     pass_match = pass_pattern.search(summary_str); passed_count = int(pass_match.group(1)) if pass_match else 0
 
-                    # Determine states
                     is_submittable = passed_count >= 7 and not has_fail
                     is_submitted = expression in submitted_set
                     is_failed_on_wq = expression in failed_set
@@ -227,7 +222,6 @@ def get_hopeful_alphas_stats():
                         "is_failed_on_wq": is_failed_on_wq,
                         "is_successfully_submitted": is_successfully_submitted, 
                         "dashboard_score": calculate_dashboard_score(alpha_report), # Use dashboard's calculation for sorting
-                        # Pass the *entire* original performance dict for detailed modal calculation
                         "performance": perf_data 
                     }
                     processed_alphas_temp.append(processed_alpha_data)
@@ -237,28 +231,15 @@ def get_hopeful_alphas_stats():
 
             logger.info(f"[Stats] Processed {processed_count}/{len(valid_alphas_list)} valid alphas for stats.")
 
-            # Sort using the dashboard's calculated score
-            def sort_key(alpha):
-                # Use dashboard_score for sorting
-                sort_dashboard_score = alpha.get('dashboard_score', -float('inf')) 
-                # Prioritize fitness >= 1 and not yet submitted
-                perf = alpha.get('performance', {})
-                fitness_val = -float('inf')
-                try: fitness_val = float(perf.get('fitness', -float('inf')))
-                except (ValueError, TypeError): pass
-                
-                sort_fitness_high = (fitness_val >= 1)
-                sort_not_submitted = (not alpha.get('is_submitted', False)) 
-                
-                return (sort_fitness_high, sort_not_submitted, sort_dashboard_score)
-
-            processed_alphas_temp.sort(key=sort_key, reverse=True)
+            # --- v6.0.2: REMOVE BACKEND SORTING ---
+            # processed_alphas_temp.sort(key=sort_key, reverse=True)
             stats['all_alphas'] = processed_alphas_temp
+            # --- v6.0.2 END ---
 
         except Exception as e: logger.error(f"[Stats] Unexpected error processing alphas list: {e}", exc_info=True)
 
     return stats
-# --- v6.0.1 End Fix ---
+# --- v6.0.2 End Fix ---
 
 
 # --- get_version_from_file remains unchanged ---
@@ -295,7 +276,6 @@ def get_settings():
         try:
             if not os.path.exists(SYSTEM_CONFIG_FILE):
                 logger.error(f"[API /api/get_settings] {SYSTEM_CONFIG_FILE} not found!")
-                # v6.0.1: Create a default config if it doesn't exist? Or just return error. Let's return error.
                 return jsonify({"error": "Config file not found on server."}), 404
             
             with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f: data = json.load(f)
@@ -315,11 +295,12 @@ def save_settings():
     if not request.is_json: return jsonify(status='error', message='Request must be JSON'), 400
     
     new_config = request.json
+    # v9.1: Add producer_queue_full_sleep
     expected_keys = {
         "wq_api_cooldown": int, "llm_api_cooldown": int,
         "miner_concurrency": int, "miner_sleep": int,
         "evolver_concurrency": int, "evolver_sleep": int,
-        "producer_queue_full_sleep": int # <--- 新增这一行
+        "producer_queue_full_sleep": int 
     }
     if not isinstance(new_config, dict): return jsonify(status='error', message='Invalid JSON format (must be an object)'), 400
 
@@ -337,7 +318,8 @@ def save_settings():
             # Validate and update with new values
             for key, expected_type in expected_keys.items():
                 if key not in new_config: 
-                    if key not in validated_config: # Only error if missing entirely
+                    # v9.1: Handle loading evolver_search_space (which isn't in expected_keys)
+                    if key not in validated_config and key in expected_keys: 
                         return jsonify(status='error', message=f"Missing key: {key}"), 400
                     continue # Keep old value if not provided in new config
                 
@@ -348,6 +330,14 @@ def save_settings():
                     validated_config[key] = converted_value # Store converted value
                 except (ValueError, TypeError):
                      return jsonify(status='error', message=f"Invalid type for {key}. Expected {expected_type.__name__}, got '{value}'"), 400
+            
+            # v9.2: Preserve the evolver_search_space if it exists
+            if 'evolver_search_space' in new_config and isinstance(new_config['evolver_search_space'], dict):
+                validated_config['evolver_search_space'] = new_config['evolver_search_space']
+            elif 'evolver_search_space' not in validated_config:
+                # Add a default empty one if it doesn't exist at all
+                validated_config['evolver_search_space'] = {}
+
 
             # Write back
             with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(validated_config, f, indent=2)

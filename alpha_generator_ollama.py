@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v9.3.0 (Expanded Mutation) ---
+# --- alpha_generator_ollama.py v9.4.0 (Prompt Engineering) ---
 import argparse
 import logging
 import json
@@ -19,7 +19,7 @@ from wq_client import WorldQuant
 from llm_provider import LLMProvider
 # --- v9.0 结束 ---
 
-CURRENT_GENERATOR_VERSION = "v9.3.0 (Expanded Mutation)" # v9.3
+CURRENT_GENERATOR_VERSION = "v9.4.0 (Prompt Engineering)" # v9.4
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
@@ -257,6 +257,25 @@ class AlphaGenerator:
         logger.info(f"考古学家在 {len(sample_records)} 条记录中发现一颗遗珠！潜力分: {best_pearl['potential_score']:.3f}, Expression: {best_pearl['expression']}")
         return {"expression": best_pearl['expression'], "performance": best_pearl.get('performance', {})}
 
+    # --- v9.4: Helper to get Self-Correlation ---
+    def _get_self_correlation(self, report_or_record) -> float:
+        """从 Alpha 报告或测试日志记录中提取 Self-Correlation 值"""
+        if not isinstance(report_or_record, dict): return 0.0
+        perf = report_or_record.get('performance', {})
+        if not isinstance(perf, dict): return 0.0
+        
+        self_corr_value = 0.0
+        try:
+            checks_list = perf.get('checks', [])
+            if isinstance(checks_list, list):
+                for check in checks_list:
+                    if isinstance(check, dict) and check.get('name') == 'Self-correlation':
+                        self_corr_value = float(check.get('value', 0.0))
+                        break
+        except (ValueError, TypeError): pass
+        return self_corr_value
+    # --- v9.4 End ---
+
     def _calculate_combined_score(self, report):
         if not isinstance(report, dict): return -float('inf')
         perf = report.get('performance', {})
@@ -270,21 +289,16 @@ class AlphaGenerator:
             match = re.search(r'(\d+)\s+PASS', checks_summary or '')
             if match: passed_count = int(match.group(1))
         except (ValueError, TypeError): pass
-        self_corr_value = 0.0 # v7.9
-        try:
-            checks_list = perf.get('checks', [])
-            if isinstance(checks_list, list):
-                for check in checks_list:
-                    if isinstance(check, dict) and check.get('name') == 'Self-correlation':
-                        self_corr_value = float(check.get('value', 0.0))
-                        break
-        except (ValueError, TypeError): pass
+        
+        self_corr_value = self._get_self_correlation(report) # v9.4: Use helper
+        
         try: fitness_f = float(fitness)
         except (ValueError, TypeError): fitness_f = -999
         try: sharpe_f = float(sharpe)
         except (ValueError, TypeError): sharpe_f = 0.0
         try: turnover_f = float(turnover)
         except (ValueError, TypeError): turnover_f = 1.0
+        
         self_corr_penalty = 0.0 # v7.9
         if self_corr_value > 0.7:
             self_corr_penalty = (self_corr_value - 0.7) * 5.0
@@ -300,13 +314,9 @@ class AlphaGenerator:
             passed_count = int(record.get('passed_checks', 0))
             sharpe_f = float(perf.get('sharpe', 0.0))
             turnover_f = float(perf.get('turnover', 1.0))
-            self_corr_value = 0.0 # v7.9
-            checks_list = perf.get('checks', [])
-            if isinstance(checks_list, list):
-                for check in checks_list:
-                    if isinstance(check, dict) and check.get('name') == 'Self-correlation':
-                        self_corr_value = float(check.get('value', 0.0))
-                        break
+            
+            self_corr_value = self._get_self_correlation(record) # v9.4: Use helper
+            
             self_corr_penalty = 0.0 # v7.9
             if self_corr_value > 0.7:
                 self_corr_penalty = (self_corr_value - 0.7) * 5.0
@@ -421,41 +431,48 @@ class AlphaGenerator:
     # --- v9.0 重构: 委托给 LLMProvider ---
     def generate_alpha_idea(self, fields, operators, guidance=None):
         """
-        v9.0: 委托 LLMProvider 生成，并处理冷却信号。
+        v9.4: 委托 LLMProvider 生成 (Prompt 已更新)。
         """
-        result = self.llm.generate_alpha_idea(fields, operators, guidance)
+        result = self.llm.generate_alpha_idea(fields, operators, guidance) # v9.4: Prompt Updated
         
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Discover)。")
-            # v8.0 逻辑: 使用 "LLM 429 Rate Limit" 理由触发标准 LLM 冷却
             self._enter_cooldown(reason="LLM 429 Rate Limit")
             return None
         
-        # result 要么是 idea dict，要么是 None
         return result
 
-    # --- v9.2/v9.3 重构: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings ---
+    # --- v9.4 重构: 加入针对高 Self-Corr 的特殊指导 ---
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         """
-        v9.3: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings。
+        v9.4: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings。
+              如果父本 Self-Corr 高，则添加特殊指导。
         """
         # 1. 确定父本设置 (用于继承和突变)
-        # v9.2: 确保 'settings' 键在 'performance' 内部
         if 'performance' not in base_alpha_obj or not base_alpha_obj['performance']:
              base_alpha_obj['performance'] = {}
-        
-        # 尝试从父本获取设置，如果失败，则使用 WQ 默认值
         parent_settings = base_alpha_obj['performance'].get('settings', self.wq.default_settings)
         if not parent_settings or not isinstance(parent_settings, dict):
              parent_settings = self.wq.default_settings
-        
-        # 将父本设置回填到 base_alpha_obj 中，以便 LLM prompt 可以看到它
         base_alpha_obj['performance']['settings'] = parent_settings
 
+        # --- v9.4: 检查父本 Self-Correlation 并添加特殊指导 ---
+        parent_self_corr = self._get_self_correlation(base_alpha_obj)
+        if parent_self_corr > 0.7:
+            logger.warning(f"[Evolve Guidance] 父本 {base_alpha_obj.get('expression', 'N/A')[:30]}... Self-Corr 高 ({parent_self_corr:.3f})，添加特殊指导。")
+            base_alpha_obj['_special_guidance_high_corr'] = "**PRIORITY: Reduce Self-Correlation!** Parent's correlation is too high. Make significant changes to lower it."
+        else:
+             # 确保这个键不存在，以免混淆 LLM
+             base_alpha_obj.pop('_special_guidance_high_corr', None) 
+        # --- v9.4 End ---
+
         # 2. 调用 LLM (只为了获取新的 expression)
-        # v9.2: llm_provider 的 prompt 已更新，只要求进化 expression
-        result = self.llm.generate_evolved_alpha_idea(base_alpha_obj, guidance=guidance)
+        # v9.4: llm_provider 的 prompt 已更新
+        result = self.llm.generate_evolved_alpha_idea(base_alpha_obj, guidance=guidance) 
         
+        # 清理掉特殊指导键，以防意外保存
+        base_alpha_obj.pop('_special_guidance_high_corr', None)
+
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Evolve)。")
             self._enter_cooldown(reason="LLM 429 Rate Limit")
@@ -466,19 +483,15 @@ class AlphaGenerator:
             return None # LLM 失败
 
         # 3. v9.2: 强制 Settings 突变
-        # 我们从父本继承设置，而不是使用 LLM 可能返回的（通常是空的）设置
-        
-        # 应用我们的 Python 突变逻辑 (v9.3: _mutate_settings 已更新)
         mutated_settings = self._mutate_settings(parent_settings)
         
-        # 将 LLM 返回的新 expression 和我们突变后的 settings 组合
         evolved_strategy = {
             "expression": result['expression'], # 来自 LLM
             "settings": mutated_settings         # 来自 Python 突变
         }
 
         return evolved_strategy
-    # --- v9.2/v9.3 结束 ---
+    # --- v9.4 结束 ---
 
     def log_tested_alphas(self, reports_to_log):
         with self.tested_alphas_lock:
@@ -562,16 +575,10 @@ class AlphaGenerator:
                 except (ValueError, TypeError): pass
                 try: fitness_float = float(fitness)
                 except (ValueError, TypeError): fitness_float = -999
-                self_corr_value = 0.0 # v7.9
-                try:
-                    checks_list = report.get('performance', {}).get('checks', [])
-                    if isinstance(checks_list, list):
-                        for check in checks_list:
-                            if isinstance(check, dict) and check.get('name') == 'Self-correlation':
-                                self_corr_value = float(check.get('value', 0.0))
-                                break
-                except (ValueError, TypeError): pass
+                
+                self_corr_value = self._get_self_correlation(report) # v9.4: Use helper
                 is_self_corr_ok = self_corr_value < 0.7 
+                
                 is_high_quality = fitness_float > 0 and passed_count >= 4
                 is_high_potential = fitness_float > -0.5 and passed_count >= 5
                 if (is_high_quality or is_high_potential) and is_self_corr_ok:
@@ -720,14 +727,7 @@ class AlphaGenerator:
                     self.log_tested_alphas([log_report])
                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
 
-                    self_corr_value = 0.0 # v7.9
-                    try:
-                        if isinstance(checks, list):
-                            for check in checks:
-                                if isinstance(check, dict) and check.get('name') == 'Self-correlation':
-                                    self_corr_value = float(check.get('value', 0.0))
-                                    break
-                    except (ValueError, TypeError): pass
+                    self_corr_value = self._get_self_correlation(log_report) # v9.4: Use helper
                     is_self_corr_ok = self_corr_value < 0.7
                     
                     is_high_quality = fitness_float > 0 and passed_count >= 4
@@ -853,14 +853,14 @@ class AlphaGenerator:
                 # 5. 生成新策略 (v9.0: 调用重构后的方法)
                 idea = None
                 if mode == 'discover':
-                    idea = self.generate_alpha_idea(self.fields, self.operators, guidance=strategic_guidance)
+                    idea = self.generate_alpha_idea(self.fields, self.operators, guidance=strategic_guidance) # v9.4: 此函数已更新
                 elif mode == 'evolve':
                     if not evolution_seeds:
                          logger.warning("[生产者] 进化模式种子列表为空，跳过本轮生成。")
                          time.sleep(sleep_time)
                          continue
                     base_alpha_obj = random.choice(evolution_seeds)
-                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) # v9.3: 此函数已更新
+                    idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) # v9.4: 此函数已更新
 
                 # 6. 预检
                 if isinstance(idea, dict) and idea.get("expression"):
@@ -896,7 +896,7 @@ class AlphaGenerator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v9.3 (Expanded Mutation)')
+    parser = argparse.ArgumentParser(description='Alpha Generator v9.4 (Prompt Engineering)')
     parser.add_argument('--user-id', type=str, required=True, help="WorldQuant User ID (email)")
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")

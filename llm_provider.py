@@ -1,6 +1,4 @@
-# --- llm_provider.py ---
-# LLM (Ollama/OpenAI) API 交互模块
-
+# --- llm_provider.py v9.4.0 (Prompt Engineering for Self-Corr) ---
 import logging
 import json
 import re
@@ -28,54 +26,72 @@ class LLMProvider:
 
         # --- v7.5 优化: 动态混合操作符 ---
         core_operators = ['rank', 'ts_corr', 'ts_delta', 'ts_decay_linear', 'ts_mean', 'ts_std_dev', 'ts_zscore', 'multiply', 'subtract', 'divide', 'add', 'log', 'signed_power']
-
-        # v7.8.1: 确保 operators 是列表
         if not isinstance(operators, list): operators = []
         advanced_operators = [op for op in operators if op not in core_operators]
         sample_size = 0
         extra_operators = []
-        if advanced_operators: # v7.8.1: 确保 advanced_operators 不为空
-             sample_size = min(len(advanced_operators), 20) # 最多抽取20个
+        if advanced_operators:
+             sample_size = min(len(advanced_operators), 20)
              extra_operators = random.sample(advanced_operators, sample_size)
-
         combined_operators = core_operators + extra_operators
         operator_list = ", ".join(combined_operators)
         logger.info(f"本轮 Discover 将使用 {len(combined_operators)} 个操作符 (最多 13 核心 + {sample_size} 随机)。")
         # --- v7.5 结束 ---
 
+        # --- v9.4: Enhanced Prompt ---
         prompt_lines = [
             "You are a world-class Quantitative Analyst creating alphas for WorldQuant. Your goal is to generate a single, novel, and syntactically correct alpha expression.",
             "Follow these rules strictly:",
             "1.  **Use ONLY the provided fields and operators.**",
             "2.  **The expression MUST end with a semicolon (;).**",
             "3.  **IMPORTANT SYNTAX:** All functions starting with `ts_` (like `ts_corr`, `ts_mean`, etc.) MUST have a second integer argument for the lookback period (e.g., `ts_mean(close, 10)`).",
-            "4.  **Complexity:** Try to keep operators below 15, but more complex and creative combinations are encouraged.",
+            "4.  **Complexity:** Aim for 5-15 operators. Creative combinations are encouraged.",
             "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression.",
             "6.  **Be Creative:** Do not just combine `close` and `vwap`. Use other fields like `cap`, `adv20`, or `returns`.",
-            "**CRITICAL RULE:** Avoid high Self-Correlation (> 0.7). Your expression should be novel and change signal frequently." # v7.9
+            # --- v9.4: Detailed Self-Correlation Guidance ---
+            "7.  **CRITICAL RULE: Avoid high Self-Correlation!** WQ rejects Self-Correlation > 0.7. To lower correlation:",
+            "    - Combine different operator types (e.g., trend `ts_` + momentum/reversal `rank`).",
+            "    - Avoid overly simple transformations on `close` or `vwap` alone.",
+            "    - Introduce faster-changing fields like `volume`, `turnover`, or `returns`.",
+            "    - Ensure the signal changes reasonably often."
+            # --- v9.4 End ---
         ]
 
         if guidance:
             prompt_lines.append(f"**Strategic Guidance:** Our analysis suggests these patterns are successful: `{', '.join(guidance)}`. Try to incorporate some of these patterns.")
 
+        # --- v9.4: Add Few-Shot Examples ---
+        # User provided examples:
+        example_1 = "rank(ts_mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 10)) + rank(ts_decay_linear(ts_corr(high, low, 20), 10));"
+        example_2 = "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) + ts_mean(close, 20) * rank(ts_mean(close, 30)) + ts_delta(close, 2) + ts_mean(open, 10) * rank(close) + ts_mean(vwap, 10)) * rank(ts_delta(close, 5)) + ts_decay_linear(rank(ts_corr(close, open, 20)), 10);"
+        
         prompt_lines.extend([
-            f"**Available Data Fields:** {field_list}",
-            f"**Allowed Operators:** {operator_list}", # v7.5
-            "New Alpha Expression:"
+            "\n**Here are examples of successful Alphas with good (low) Self-Correlation. Learn from their structure:**",
+            f"- `{example_1}`",
+            f"- `{example_2}`"
         ])
+        # --- v9.4 End ---
+
+        prompt_lines.extend([
+            f"\n**Available Data Fields:** {field_list}",
+            f"**Allowed Operators:** {operator_list}",
+            "\n**Generate ONE new Alpha Expression now:**"
+        ])
+        # --- v9.4 Prompt End ---
         prompt = "\n".join(prompt_lines)
 
         try:
-            chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=150, temperature=0.95)
+            # v9.4: Slightly increased max_tokens for potentially longer examples/prompts
+            chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=200, temperature=0.95) 
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
              # v7.8.1: 更严格的结尾检查和清理
             idea = idea.split(';')[0] # 取第一个分号前的部分
             if idea: idea += ';' # 确保以分号结尾
             else: return None # 如果为空则返回 None
 
-            return {"expression": idea, "settings": {}}
+            return {"expression": idea, "settings": {}} # Settings are handled by AlphaGenerator now
         except Exception as e:
-            # --- v9.0 重构: 检查状态码并返回信号，而不是调用冷却 ---
+            # --- v9.0 重构: 检查状态码并返回信号 ---
             status_code = -1
             if hasattr(e, 'status_code'): status_code = e.status_code
             elif hasattr(e, 'response') and e.response: status_code = e.response.status_code
@@ -90,36 +106,52 @@ class LLMProvider:
 
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         base_expression = base_alpha_obj.get('expression')
-        base_settings = base_alpha_obj.get('performance', {}).get('settings', {}) # v9.0: 移除 self.wq.default_settings 依赖
-        base_score_info = base_alpha_obj.get('internal_score', 0.0) # v9.0: 依赖传入的分数
+        base_settings = base_alpha_obj.get('performance', {}).get('settings', {}) 
+        base_score_info = base_alpha_obj.get('internal_score', 0.0) 
 
+        # --- v9.4: Enhanced Evolve Prompt ---
         prompt_lines = [
-            "You are an AI machine that generates code. Your SOLE task is to evolve a given investment strategy for WorldQuant.",
-            "You MUST output ONLY a single, valid JSON object in a markdown code block. Do NOT include any explanations, analysis, or introductory text.",
+            "You are an AI machine evolving WorldQuant investment strategies. Your task is to modify the given Alpha Expression.",
+            "You MUST output ONLY a single, valid JSON object in a markdown code block. Do NOT include any explanations.",
             f"**Base Strategy for Evolution:**",
             f"- Expression: `{base_expression}`",
             f"- Settings: `{json.dumps(base_settings)}`",
-            f"- (Internal Score: {base_score_info:.3f})" # v7.9
+            f"- (Internal Score: {base_score_info:.3f})"
         ]
 
-        if guidance:
-            prompt_lines.append(f"**Strategic Guidance:** Analysis suggests these patterns are successful: `{', '.join(guidance)}`. Your evolution should try to incorporate one of these patterns.")
+        # v9.4: Combine strategic and specific guidance
+        final_guidance = []
+        if isinstance(guidance, list) and guidance:
+             final_guidance.extend(guidance)
+        
+        # v9.4: Check for specific high self-corr guidance (added by AlphaGenerator)
+        high_corr_guidance = base_alpha_obj.get('_special_guidance_high_corr') 
+        if high_corr_guidance:
+            final_guidance.append(high_corr_guidance) # Add the special instruction
+
+        if final_guidance:
+             prompt_lines.append(f"**Strategic Guidance:** {', '.join(final_guidance)}")
 
         prompt_lines.extend([
-            "\n**Task:** Apply ONE of the following evolution strategies. Your goal is to BREAK 'fitness > 1.0' by escaping local optima. Be creative and bold.",
-            "1.  **Evolve Expression (HIGHLY PREFERRED):** Make a significant, creative change. Try to INTRODUCE 1-2 NEW operators or data fields (especially from the strategic guidance), or combine existing parts in a novel way. Do not just change a number.",
-            "2.  **Evolve Settings (Low Priority):** Make a small, logical change to ONE numeric setting (`delay`, `decay`, `truncation`). Only do this if you cannot find a good expression evolution.",
-            "**CRITICAL RULE:** Avoid high Self-Correlation (> 0.7). Your evolution *must* aim to reduce correlation if it is high, or keep it low.", # v7.9
+            "\n**Task:** Evolve ONLY the Alpha Expression. Make a significant, creative change to escape local optima.",
+            "   - Try to INTRODUCE 1-2 NEW operators or data fields, or combine parts in a novel way.",
+            "   - Do not just change a number.",
+            # --- v9.4: Detailed Self-Correlation Guidance ---
+            "**CRITICAL RULE: Avoid or Reduce high Self-Correlation!** WQ rejects Self-Correlation > 0.7.",
+            "   - To lower correlation: Combine different operator types (e.g., trend `ts_` + reversal `rank`),",
+            "   - avoid simple `close`/`vwap` transforms, use faster fields (`volume`, `returns`).",
+            # --- v9.4 End ---
             "\n**MANDATORY OUTPUT FORMAT:**",
             "Your entire response MUST be ONLY the raw JSON object inside a markdown code block. Example:",
             "```json",
             "{",
-            '  "expression": "rank(ts_corr(close, vwap, 10));",',
-            '  "settings": {}',
+            '  "expression": "rank(ts_corr(close, vwap, 10));"', 
+            '  "settings": {}', # Settings key MUST be present but value should be empty
             "}",
             "```",
-            "Evolved Strategy:"
+            "\n**Evolved Strategy (Expression ONLY):**"
         ])
+        # --- v9.4 Prompt End ---
         prompt = "\n".join(prompt_lines)
 
         try:
@@ -154,10 +186,13 @@ class LLMProvider:
             if not evolved_strategy.get('expression'):
                  logger.error("进化返回的 expression 清理后为空。")
                  return None
+                 
+            # v9.4: Ensure settings is always returned empty, even if LLM hallucinates it
+            evolved_strategy['settings'] = {} 
 
             return evolved_strategy
         except Exception as e:
-            # --- v9.0 重构: 检查状态码并返回信号，而不是调用冷却 ---
+            # --- v9.0 重构: 检查状态码并返回信号 ---
             status_code = -1
             if hasattr(e, 'status_code'): status_code = e.status_code
             elif hasattr(e, 'response') and e.response: status_code = e.response.status_code

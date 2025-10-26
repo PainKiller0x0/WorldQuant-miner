@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v8.2.1)</title> <style>
+    <title>WQ Alpha 监控仪表盘 (v8.3.1)</title>
+<style>
         /* v8.2.1: Minor style adjustments */
         :root { /* Color variables */
             --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333; --muted-text-color: #7f8c8d; --header-bg-color: #3498db; --header-text-color: white; --link-color: #2980b9; --border-color: #ddd; --table-header-bg: #ecf0f1; --log-bg-color: #2c3e50; --log-text-color: #ecf0f1; --dot-default-bg: #95a5a6; --dot-running-bg: #2ecc71; --dot-stalled-bg: #e67e22; --dot-error-bg: #e74c3c; --status-pass-color: #28a745; --status-fail-color: #dc3545; --status-pending-color: #fd7e14; --alpha-submitted-bg: #e2e3e5; --alpha-failed-bg: #f8d7da; --alpha-failed-text: #721c24; --alpha-success-bg: #d4edda; --alpha-success-text: #155724; --button-primary-bg: #007bff; --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d; --button-secondary-hover-bg: #5a6268; --button-text-color: white; --badge-pass-bg: #28a745; --badge-fail-bg: #dc3545; --badge-pending-bg: #fd7e14; --badge-text-color: white; --modal-bg: rgba(0, 0, 0, 0.5); --modal-content-bg: #fff;
@@ -31,9 +32,9 @@
         .info-item span { font-size: 1em; }
         .download-btn { display: inline-block; background-color: var(--button-secondary-bg); color: var(--button-text-color); padding: 6px 10px; margin: 5px 5px 5px 0; border-radius: 4px; font-size: 12px; text-decoration: none; border: none; cursor: pointer; transition: background-color 0.3s; }
         .download-btn:hover { background-color: var(--button-secondary-hover-bg); color: var(--button-text-color); }
-        
+
         #alphas-table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
-        #alphas-table th, 
+        #alphas-table th,
         #alphas-table td { border: 1px solid var(--border-color); padding: 10px; text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; }
         #alphas-table th { background: var(--table-header-bg); transition: background-color 0.3s; font-weight: 600; }
         #alphas-table td { font-size: 13px; vertical-align: top; }
@@ -41,6 +42,39 @@
         #alphas-table td:nth-child(2), .logs { font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; }
          /* Ensure checkbox labels use body font */
          .alpha-actions label span { font-family: inherit !important; font-size: 13px; }
+
+        /* v8.3.0: Sortable Header Styles */
+        #alphas-table th.sortable {
+            cursor: pointer;
+            position: relative;
+        }
+        #alphas-table th.sortable::after {
+            content: '';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            margin-top: -6px;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            opacity: 0.3;
+        }
+        #alphas-table th.sortable.sort-asc::after {
+            border-bottom: 6px solid var(--text-color);
+            opacity: 1;
+        }
+        #alphas-table th.sortable.sort-desc::after {
+            border-top: 6px solid var(--text-color);
+            opacity: 1;
+        }
+        /* v8.3.1: Style for the span inside the sortable header */
+        #alphas-table th.sortable span.header-text {
+            cursor: help; /* Change cursor for the text */
+            text-decoration: underline dotted;
+        }
+        #alphas-table th.sortable span.header-text:hover {
+            color: var(--link-color);
+        }
+        /* v8.3.1 End */
 
         /* Column widths */
         #alphas-table th:nth-child(1), #alphas-table td:nth-child(1) { width: 10%; } /* Score */
@@ -52,20 +86,21 @@
         #alphas-table th:nth-child(7), #alphas-table td:nth-child(7) { width: 10%; text-align: center;} /* Actions */
         #alphas-table th:nth-child(8), #alphas-table td:nth-child(8) { width: 7%; text-align: center;}  /* Copy */
 
-        #score-header, .score-value { cursor: pointer; text-decoration: underline dotted; }
-        #score-header:hover, .score-value:hover { color: var(--link-color); }
+        /* Remove #score-header specific styles, handled by span now */
+        /* #score-header, */ .score-value { cursor: pointer; text-decoration: underline dotted; }
+        /* #score-header:hover, */ .score-value:hover { color: var(--link-color); }
 
-        .alpha-expression-container { cursor: pointer; display: block; position: relative; } 
+        .alpha-expression-container { cursor: pointer; display: block; position: relative; }
         .alpha-expression-container .alpha-short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .alpha-expression-container .alpha-full { display: none; white-space: pre-wrap; word-break: break-all; max-width: 100%; }
-        .alpha-expression-container.expanded .alpha-short { display: none; } 
+        .alpha-expression-container.expanded .alpha-short { display: none; }
         .alpha-expression-container.expanded .alpha-full { display: block; }
         .alpha-expression-container:hover .alpha-short { text-decoration: underline; }
-        
-        .alpha-actions { white-space: normal; text-align: center;} 
-        .alpha-actions label { margin-right: 5px; display: inline-block; cursor: pointer; } 
+
+        .alpha-actions { white-space: normal; text-align: center;}
+        .alpha-actions label { margin-right: 5px; display: inline-block; cursor: pointer; }
         .alpha-actions input[type="checkbox"] { margin-right: 3px; vertical-align: middle; cursor: pointer; }
-        .alpha-actions input:disabled + span { opacity: 0.5; cursor: not-allowed; } 
+        .alpha-actions input:disabled + span { opacity: 0.5; cursor: not-allowed; }
         .copy-action button.copy-btn { padding: 5px 8px; border-radius: 4px; text-decoration: none; font-size: 12px; cursor: pointer; border: 1px solid transparent; color: var(--button-text-color); display: inline-block; vertical-align: middle; background-color: var(--button-primary-bg); border-color: var(--button-primary-bg); }
         .copy-action button.copy-btn:hover { background-color: var(--button-primary-hover-bg); }
 
@@ -130,19 +165,21 @@
             <table id="alphas-table">
                 <thead>
                     <tr>
-                        <th id="score-header" onclick="showScoreExplanation()" title="点击查看计算公式">综合分 (*)</th>
+                        <th id="score-header" title="点击文字查看计算公式, 点击单元格排序" class="sortable" data-sort="dashboard_score">
+                            <span class="header-text" onclick="showScoreExplanation(); event.stopPropagation();">综合分 (*)</span>
+                        </th>
                         <th>Expression (点击展开/折叠)</th>
-                        <th>Fitness</th>
-                        <th>Sharpe</th>
-                        <th>Checks</th>
-                        <th>创建时间</th>
+                        <th class="sortable" data-sort="fitness">Fitness</th>
+                        <th class="sortable" data-sort="sharpe">Sharpe</th>
+                        <th class="sortable" data-sort="checks">Checks</th>
+                        <th class="sortable" data-sort="timestamp">创建时间</th>
                         <th>操作</th>
-                        <th>复制</th> 
+                        <th>复制</th>
                     </tr>
                 </thead>
                 <tbody id="alphas-tbody"></tbody>
             </table>
-            <small>(*) 综合分是根据 Fitness, Checks通过数, Sharpe, Turnover 和 Self-Correlation 计算得出的排序依据。点击表头查看公式，点击具体分数查看该 Alpha 的计算过程。</small>
+            <small>(*) 综合分是根据 Fitness, Checks通过数, Sharpe, Turnover 和 Self-Correlation 计算得出的排序依据。点击表头文字查看公式，点击具体分数查看该 Alpha 的计算过程。</small>
         </div>
     </div>
 </div>
@@ -150,11 +187,19 @@
 <div id="score-modal" class="modal"> <div class="modal-content"> <span class="close-button" onclick="closeModal()">&times;</span> <h3 id="modal-title">...</h3> <div id="modal-body">...</div> </div> </div>
 
 <script>
+    // --- v8.3.0: Global state for data and sorting ---
+    let globalAlphaData = [];
+    let currentSort = {
+        key: 'dashboard_score',
+        direction: 'desc'
+    };
+    // --- v8.3.0 End ---
+
     const themeToggle = document.getElementById('theme-toggle');
     const currentTheme = localStorage.getItem('theme') || 'dark'; // Default dark
     document.documentElement.setAttribute('data-theme', currentTheme);
     themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌓';
-    themeToggle.addEventListener('click', () => { /* Theme toggle logic */ 
+    themeToggle.addEventListener('click', () => { /* Theme toggle logic */
         let targetTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', targetTheme);
         localStorage.setItem('theme', targetTheme);
@@ -165,11 +210,11 @@
     function updateStatusDot(element, statusText) { /* ... */ element.className = 'status-dot'; if (statusText === 'RUNNING') element.classList.add('running'); else if (statusText === 'STALLED') element.classList.add('stalled'); else if (statusText === 'ERROR' || statusText === 'NOT FOUND') element.classList.add('error'); }
     function formatLogs(logText) { /* ... */ return logText.replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
     function formatExpression(expr) { /* ... */ const escapedExpr = expr.replace(/</g, "&lt;").replace(/>/g, "&gt;"); const short = escapedExpr.length > 70 ? escapedExpr.substring(0, 70) + '...' : escapedExpr; const full = escapedExpr; return `<span class="alpha-short">${short}</span><span class="alpha-full">${full}</span>`; }
-    
+
     // v8.1.7: Correct toggle logic targeting container, ensure container exists
-     function toggleExpressionView(event) { 
+     function toggleExpressionView(event) {
         const container = event.currentTarget; // The event target IS the container div
-        if (container) { container.classList.toggle('expanded'); } 
+        if (container) { container.classList.toggle('expanded'); }
     }
 
     function formatChecks(checkText) { /* ... (badge logic) ... */ if (!checkText || typeof checkText !== 'string') return ''; const passMatch = checkText.match(/(\d+)\s+PASS/); const failMatch = checkText.match(/(\d+)\s+FAIL/); const pendingMatch = checkText.match(/(\d+)\s+PENDING/); let html = '<div class="check-badges">'; if (passMatch && parseInt(passMatch[1], 10) >= 0) html += `<span class="badge-pass" title="${passMatch[1]} Passed">✓ ${passMatch[1]}</span>`; if (failMatch && parseInt(failMatch[1], 10) > 0) html += `<span class="badge-fail" title="${failMatch[1]} Failed">✗ ${failMatch[1]}</span>`; if (pendingMatch && parseInt(pendingMatch[1], 10) > 0) html += `<span class="badge-pending" title="${pendingMatch[1]} Pending">⏳ ${pendingMatch[1]}</span>`; html += '</div>'; return html !== '<div class="check-badges"></div>' ? html : checkText; }
@@ -183,7 +228,7 @@
     const modal = document.getElementById('score-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
-    function showScoreExplanation() { /* ... (same content as v8.2.0) ... */ 
+    function showScoreExplanation() { /* ... (same content as v8.2.0) ... */
         modalTitle.textContent = "综合分计算公式 (v7.9+)";
         modalBody.innerHTML = `<p>综合分用于精英池排序和种子选择，旨在平衡多个性能指标：</p><code>Score = Fitness + (Passed Checks * 0.2) + (abs(Sharpe) * 0.3) - (Turnover * 0.1) - SelfCorrelation Penalty</code><ul><li><strong>Fitness:</strong> 主要性能指标。</li><li><strong>Passed Checks:</strong> Checks 通过数量，每项加 0.2 分。</li><li><strong>Sharpe:</strong> 夏普比率绝对值，乘以 0.3。</li><li><strong>Turnover:</strong> 换手率，乘以 0.1 作为惩罚项。</li><li><strong>SelfCorrelation Penalty:</strong><ul><li>当 Self-Correlation > 0.7 时计算。</li><li>Penalty = (Self-Correlation - 0.7) * 5.0</li><li>(例如: Self-Corr=0.8, Penalty= (0.8-0.7)*5 = 0.5 分)</li></ul></li></ul><p><small>注意：仪表盘显示的综合分可能基于旧版逻辑（无Self-Corr惩罚），仅供参考。Generator 内部使用此 v7.9+ 逻辑进行筛选和排序。</small></p>`;
         modal.style.display = "block";
@@ -195,14 +240,15 @@
         const getFloat = (val, defaultVal = 0) => {
              if (typeof val === 'number') return val;
              if (typeof val === 'string') {
+                 // v8.3.0: Handle potential non-numeric strings
                  const num = parseFloat(val);
                  return isNaN(num) ? defaultVal : num;
              }
              return defaultVal;
         };
-        const fitness = getFloat(perf.fitness, 0); 
+        const fitness = getFloat(perf.fitness, 0);
         const sharpe = getFloat(perf.sharpe, 0);
-        const turnover = getFloat(perf.turnover, 1.0); 
+        const turnover = getFloat(perf.turnover, 1.0);
 
         let passed_count = 0;
         const summary = alphaData.checks_summary || '';
@@ -217,7 +263,7 @@
                  self_corr_value = getFloat(selfCorrCheck.value, 0.0); // Use robust parsing
             }
         }
-        
+
         let self_corr_penalty = 0.0;
         let penaltyCalculation = "无 (< 0.7)"; // More descriptive default
         if (self_corr_value > 0.7) {
@@ -239,6 +285,111 @@
     function closeModal() { modal.style.display = "none"; }
     window.onclick = function(event) { if (event.target == modal) { closeModal(); } }
 
+
+    // --- v8.3.0: Client-side Sort & Render Logic ---
+    function sortAlphas(key, direction) {
+        const getFloat = (val, defaultVal = -Infinity) => {
+             if (typeof val === 'number') return val;
+             if (typeof val === 'string') {
+                 const num = parseFloat(val);
+                 return isNaN(num) ? defaultVal : num;
+             }
+             return defaultVal;
+        };
+
+        const getChecks = (summary) => {
+            const match = (summary || '').match(/(\d+)\s+PASS/);
+            return match ? parseInt(match[1], 10) : -1;
+        };
+
+        globalAlphaData.sort((a, b) => {
+            let valA, valB;
+
+            switch (key) {
+                case 'dashboard_score':
+                    valA = getFloat(a.dashboard_score);
+                    valB = getFloat(b.dashboard_score);
+                    break;
+                case 'fitness':
+                    valA = getFloat(a.performance?.fitness);
+                    valB = getFloat(b.performance?.fitness);
+                    break;
+                case 'sharpe':
+                    valA = getFloat(a.performance?.sharpe);
+                    valB = getFloat(b.performance?.sharpe);
+                    break;
+                case 'checks':
+                    valA = getChecks(a.checks_summary);
+                    valB = getChecks(b.checks_summary);
+                    break;
+                case 'timestamp':
+                    // 默认 N/A 或无效日期排在最后
+                    valA = new Date(a.timestamp || 0).getTime() || 0;
+                    valB = new Date(b.timestamp || 0).getTime() || 0;
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) {
+                return direction === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+    }
+
+    function renderAlphaTable() {
+        const tbody = document.getElementById('alphas-tbody');
+        tbody.innerHTML = ''; // Clear existing table
+
+        // Update header classes
+        document.querySelectorAll('#alphas-table th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sort === currentSort.key) {
+                th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        });
+
+        // v8.3.0: Check if globalAlphaData is empty
+        if (!globalAlphaData || globalAlphaData.length === 0) {
+            // This is handled by the error catch in fetchData, but good to have a fallback
+             tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">暂无数据。</td></tr>`;
+             return;
+        }
+
+        globalAlphaData.forEach((alpha, index) => {
+            const row = document.createElement('tr');
+            let rowClass = '';
+            if (alpha.is_successfully_submitted) rowClass = 'alpha-status-success'; else if (alpha.is_failed_on_wq) rowClass = 'alpha-status-failed'; else if (alpha.is_submitted) rowClass = 'alpha-status-submitted';
+            row.className = rowClass;
+            const sanitizedExpression = alpha.expression.replace(/'/g, "\\'").replace(/"/g, '\\"');
+            const uniqueIdPrefix = `alpha-${index}`;
+
+            // Actions HTML (Checkboxes)
+            let actionsHTML = `<label for="${uniqueIdPrefix}-submitted" title="标记为已提交到WQ Brain"><input type="checkbox" id="${uniqueIdPrefix}-submitted" class="chk-submitted" data-expression="${sanitizedExpression}" data-type="submitted" onchange="handleCheckboxChange(this)" ${alpha.is_submitted ? 'checked' : ''} ${!alpha.is_submittable ? 'disabled' : ''}><span>提交</span></label><label for="${uniqueIdPrefix}-failed" title="标记为提交后在WQ Brain验证失败"><input type="checkbox" id="${uniqueIdPrefix}-failed" class="chk-failed" data-expression="${sanitizedExpression}" data-type="failed" onchange="handleCheckboxChange(this)" ${alpha.is_failed_on_wq ? 'checked' : ''} ${!alpha.is_submitted ? 'disabled' : ''}><span>失败</span></label>`;
+            // Copy HTML
+            let copyHTML = `<button class="copy-btn" onclick="copyToClipboard('${sanitizedExpression}', this)">复制</button>`;
+
+            // Create cells
+            const score = alpha.dashboard_score;
+            row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${(typeof score === 'number' ? score.toFixed(4) : 'N/A')}</span>`; // Use dashboard_score here
+            row.insertCell().innerHTML = `<div class="alpha-expression-container" onclick="toggleExpressionView(event)">${formatExpression(alpha.expression)}</div>`;
+            row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${(typeof alpha.performance?.fitness === 'number' ? alpha.performance.fitness.toFixed(4) : (alpha.performance?.fitness || 'N/A'))}`; // Access fitness via performance
+            row.insertCell().textContent = (typeof alpha.performance?.sharpe === 'number' ? alpha.performance.sharpe.toFixed(4) : (alpha.performance?.sharpe || 'N/A')); // Access sharpe via performance
+            row.insertCell().innerHTML = formatChecks(alpha.checks_summary); // Use checks_summary for badges
+            row.insertCell().textContent = alpha.timestamp || 'N/A';
+            row.insertCell().innerHTML = actionsHTML; row.cells[6].className = 'alpha-actions'; // Assign class after creation
+            row.insertCell().innerHTML = copyHTML; row.cells[7].className = 'copy-action'; // Assign class
+
+            tbody.appendChild(row);
+        });
+    }
+    // --- v8.3.0 End ---
+
+
     // --- Data Fetching and Rendering ---
     function fetchData() {
         fetch('/status')
@@ -246,43 +397,64 @@
             .then(data => {
                 // Update services
                 ['miner', 'evolver'].forEach(service => { /* ... */ document.getElementById(`${service}-status-text`).textContent = data[service].status; document.getElementById(`${service}-last-seen`).textContent = data[service].last_seen; document.getElementById(`${service}-logs`).innerHTML = formatLogs(data[service].logs); updateStatusDot(document.getElementById(`${service}-status`), data[service].status); });
+
                 // Update Alpha stats
-                const alphas = data.hopeful_alphas; /* ... */ document.getElementById('alphas-count').textContent = alphas.count; document.getElementById('alphas-pending-submission').textContent = alphas.submittable_pending_count; document.getElementById('alphas-max-fitness').textContent = (typeof alphas.max_fitness === 'number' ? alphas.max_fitness.toFixed(4) : 'N/A'); document.getElementById('alphas-avg-fitness').textContent = (typeof alphas.avg_fitness === 'number' ? alphas.avg_fitness.toFixed(4) : 'N/A');
-                // Update Alpha table
-                const tbody = document.getElementById('alphas-tbody');
-                tbody.innerHTML = '';
-                alphas.all_alphas.forEach((alpha, index) => {
-                    const row = document.createElement('tr');
-                    let rowClass = '';
-                    if (alpha.is_successfully_submitted) rowClass = 'alpha-status-success'; else if (alpha.is_failed_on_wq) rowClass = 'alpha-status-failed'; else if (alpha.is_submitted) rowClass = 'alpha-status-submitted';
-                    row.className = rowClass;
-                    const sanitizedExpression = alpha.expression.replace(/'/g, "\\'").replace(/"/g, '\\"');
-                    const uniqueIdPrefix = `alpha-${index}`; 
-                    // Actions HTML (Checkboxes)
-                    let actionsHTML = `<label for="${uniqueIdPrefix}-submitted" title="标记为已提交到WQ Brain"><input type="checkbox" id="${uniqueIdPrefix}-submitted" class="chk-submitted" data-expression="${sanitizedExpression}" data-type="submitted" onchange="handleCheckboxChange(this)" ${alpha.is_submitted ? 'checked' : ''} ${!alpha.is_submittable ? 'disabled' : ''}><span>提交</span></label><label for="${uniqueIdPrefix}-failed" title="标记为提交后在WQ Brain验证失败"><input type="checkbox" id="${uniqueIdPrefix}-failed" class="chk-failed" data-expression="${sanitizedExpression}" data-type="failed" onchange="handleCheckboxChange(this)" ${alpha.is_failed_on_wq ? 'checked' : ''} ${!alpha.is_submitted ? 'disabled' : ''}><span>失败</span></label>`;
-                    // Copy HTML
-                    let copyHTML = `<button class="copy-btn" onclick="copyToClipboard('${sanitizedExpression}', this)">复制</button>`;
-                    
-                    // Create cells
-                    row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${(typeof alpha.dashboard_score === 'number' ? alpha.dashboard_score.toFixed(4) : 'N/A')}</span>`; // Use dashboard_score here
-                    // v8.1.7: Ensure onclick is on the container div
-                    row.insertCell().innerHTML = `<div class="alpha-expression-container" onclick="toggleExpressionView(event)">${formatExpression(alpha.expression)}</div>`; 
-                    row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${(typeof alpha.performance?.fitness === 'number' ? alpha.performance.fitness.toFixed(4) : (alpha.performance?.fitness || 'N/A'))}`; // Access fitness via performance
-                    row.insertCell().textContent = (typeof alpha.performance?.sharpe === 'number' ? alpha.performance.sharpe.toFixed(4) : 'N/A'); // Access sharpe via performance
-                    row.insertCell().innerHTML = formatChecks(alpha.checks_summary); // Use checks_summary for badges
-                    row.insertCell().textContent = alpha.timestamp || 'N/A';
-                    row.insertCell().innerHTML = actionsHTML; row.cells[6].className = 'alpha-actions'; // Assign class after creation
-                    row.insertCell().innerHTML = copyHTML; row.cells[7].className = 'copy-action'; // Assign class
-                                        
-                    tbody.appendChild(row);
-                });
+                const alphas = data.hopeful_alphas; /* ... */
+                document.getElementById('alphas-count').textContent = alphas.count;
+                document.getElementById('alphas-pending-submission').textContent = alphas.submittable_pending_count;
+                document.getElementById('alphas-max-fitness').textContent = (typeof alphas.max_fitness === 'number' ? alphas.max_fitness.toFixed(4) : 'N/A');
+                document.getElementById('alphas-avg-fitness').textContent = (typeof alphas.avg_fitness === 'number' ? alphas.avg_fitness.toFixed(4) : 'N/A');
+
+                // --- v8.3.0: Store data, sort, and render ---
+                globalAlphaData = alphas.all_alphas || []; // Store the raw data
+                sortAlphas(currentSort.key, currentSort.direction); // Sort by current state
+                renderAlphaTable(); // Render the table
+                // --- v8.3.0 End ---
             })
-            .catch(error => { /* ... */ console.error('Error fetching status:', error); const errorMsg = `加载状态失败: ${error}. 请检查仪表盘服务是否运行并刷新页面。`; document.getElementById('miner-logs').textContent = errorMsg; document.getElementById('evolver-logs').textContent = errorMsg; document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="8" style="color: red; text-align: center;">${errorMsg}</td></tr>`; }); // Colspan is 8
+            .catch(error => { /* ... */
+                console.error('Error fetching status:', error);
+                const errorMsg = `加载状态失败: ${error}. 请检查仪表盘服务是否运行并刷新页面。`;
+                document.getElementById('miner-logs').textContent = errorMsg;
+                document.getElementById('evolver-logs').textContent = errorMsg;
+                document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="8" style="color: red; text-align: center;">${errorMsg}</td></tr>`; // Colspan is 8
+            });
     }
 
     function fetchVersionInfo() { /* ... */ fetch('/api/version_info').then(r=>r.json()).then(d=>{document.getElementById('dashboard-version').textContent=d.dashboard_version||'unknown';document.getElementById('generator-version').textContent=d.generator_version||'unknown';}).catch(e=>{console.error('Version fetch error:',e);document.getElementById('dashboard-version').textContent='error';document.getElementById('generator-version').textContent='error';}); }
 
-    document.addEventListener('DOMContentLoaded', () => { /* ... */ fetchData(); fetchVersionInfo(); setInterval(fetchData, 10000); });
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchData();
+        fetchVersionInfo();
+        setInterval(fetchData, 10000);
+
+        // --- v8.3.0: Add click listeners to sortable headers ---
+        document.querySelectorAll('#alphas-table th.sortable').forEach(header => {
+            header.addEventListener('click', (event) => { // v8.3.1: Pass event
+                // --- v8.3.1: Check if the click target was the inner span ---
+                if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) {
+                    // Click was on the text span, let its own onclick handle the modal
+                    return; 
+                }
+                // --- v8.3.1 End ---
+
+                const sortKey = header.dataset.sort;
+
+                if (currentSort.key === sortKey) {
+                    // Toggle direction
+                    currentSort.direction = (currentSort.direction === 'asc' ? 'desc' : 'asc');
+                } else {
+                    // New key, default to descending
+                    currentSort.key = sortKey;
+                    currentSort.direction = 'desc';
+                }
+
+                // Re-sort and re-render the table
+                sortAlphas(currentSort.key, currentSort.direction);
+                renderAlphaTable();
+            });
+        });
+        // --- v8.3.0 End ---
+    });
 </script>
 
 </body>

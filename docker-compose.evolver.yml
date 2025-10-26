@@ -19,14 +19,13 @@ services:
       - ./api_config.json:/app/api_config.json
       - ./alpha_generator_ollama.py:/app/alpha_generator_ollama.py:ro
       - ./invalid_functions.json:/app/invalid_functions.json
+      - ./system_config.json:/app/system_config.json
     command: >
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
       --batch-size 3
-      --concurrency 3
-      --mode evolve
-      --sleep 60      
+      --mode evolve    
       --log-file evolver.log"
     networks:
       - wq-network

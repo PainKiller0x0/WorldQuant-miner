@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v7.8.3 (Fix task_done Bug) ---
+# --- alpha_generator_ollama.py v8.0.0 (Control Panel Integration) ---
 import argparse
 import logging
 import json
@@ -15,16 +15,40 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 import queue # v7.7 新增
 
-CURRENT_GENERATOR_VERSION = "v7.8.3" # v7.8.3: 修复 task_done Bug
+SYSTEM_CONFIG_FILE = "system_config.json" # v8.0
+
+CURRENT_GENERATOR_VERSION = "v8.0.0" # v8.0.0: 集成控制面板配置
+
+# --- v8.0: 辅助函数，用于读取中心化配置 ---
+def load_system_config():
+    """
+    读取并返回 system_config.json 的内容。
+    注意: 这会在每次需要时都读取文件，以获取动态参数。
+    """
+    try:
+        with open(SYSTEM_CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        # 紧急回退 (Fallback)
+        logger.error(f"读取 {SYSTEM_CONFIG_FILE} 失败: {e}。将使用紧急回退值！")
+        return {
+            "wq_api_cooldown": 30,
+            "llm_api_cooldown": 3600,
+            "miner_concurrency": 1,
+            "miner_sleep": 120,
+            "evolver_concurrency": 1,
+            "evolver_sleep": 120
+        }
+# --- v8.0 结束 ---
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
 # --- 修复结束 ---
 
-# --- v7.8 优化: 缩短 WQ 冷却时间 ---
-LLM_API_COOLDOWN = 3600  # 1 小时 (针对 LLM API 500/429 错误)
-WQ_API_COOLDOWN = 30     # v7.8: 缩短至 30 秒 (配合 v7.7 队列)
-# --- v7.8 结束 ---
+# --- v8.0: 移除硬编码的 Cooldowns ---
+# LLM_API_COOLDOWN = 3600  # <--- v8.0 移除
+# WQ_API_COOLDOWN = 30     # <--- v8.0 移除
+# --- v8.0 结束 ---
 
 # --- v7.6 调整: 黑名单文件及计数 ---
 INVALID_FUNCTIONS_FILE = "invalid_functions.json"
@@ -255,10 +279,11 @@ class AlphaGenerator:
         self.hopeful_alphas_cache = [] # 将由 load_evolution_seeds 填充 (已加锁)
 
         # --- v7.4 调整: 冷却状态 ---
-        self.llm_api_cooldown = LLM_API_COOLDOWN
-        self.wq_api_cooldown = WQ_API_COOLDOWN # v7.8: 已在全局改为 30
+        # --- v8.0: 移除硬编码，改为从 _enter_cooldown 动态读取 ---
+        # self.llm_api_cooldown = LLM_API_COOLDOWN # <--- v8.0 移除
+        # self.wq_api_cooldown = WQ_API_COOLDOWN   # <--- v8.0 移除
         self._rate_limit_until = 0
-        # --- v7.4 结束 ---
+        # --- v8.0 结束 ---
 
         # --- v7.6.2 调整: "事不过三"标识符黑名单 ---
         self.invalid_functions_file = INVALID_FUNCTIONS_FILE
@@ -276,12 +301,27 @@ class AlphaGenerator:
         # --- v7.7 结束 ---
 
     # --- v7.4 调整: 冷却触发器接受时长 ---
-    def _enter_cooldown(self, duration_seconds, reason="Rate Limit"):
-        """触发冷却期 (v7.7: 现在由生产者和消费者共享)"""
+    # --- v8.0: 修改为动态读取配置 ---
+    def _enter_cooldown(self, reason="Rate Limit"):
+        """
+        触发冷却期 (v8.0: 动态从 system_config.json 读取时长)
+        """
+        # 动态读取配置
+        config = load_system_config()
+        duration_seconds = 3600 # 默认回退
+        
+        if reason == "WorldQuant 429 Rate Limit":
+            duration_seconds = config.get("wq_api_cooldown", 30)
+        elif reason in ["LLM Gateway 500 Error", "LLM 429 Rate Limit"]:
+            duration_seconds = config.get("llm_api_cooldown", 3600)
+        else:
+            # 其他未知原因，使用 WQ 冷却
+            duration_seconds = config.get("wq_api_cooldown", 60)
+
         self._rate_limit_until = time.time() + duration_seconds
         duration_minutes = duration_seconds / 60
-        logger.warning(f"检测到 {reason}。脚本将进入冷却期 {duration_minutes:.0f} 分钟，直到 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')}")
-    # --- v7.4 结束 ---
+        logger.warning(f"检测到 {reason}。脚本将进入冷却期 {duration_minutes:.0f} 分钟 ({duration_seconds} 秒)，直到 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')}")
+    # --- v8.0 结束 ---
 
     def load_tested_alphas(self):
         # v7.7: 增加线程锁
@@ -408,7 +448,7 @@ class AlphaGenerator:
             fitness = record.get('fitness', -999)
 
             if passed_count == 3 and fitness > -1.0:
-                # v7.8: _calculate_potential_score 已移至类级别
+                # v7.9: _calculate_potential_score 已更新
                 record['potential_score'] = self._calculate_potential_score(record)
                 potential_pearls.append(record)
 
@@ -420,10 +460,9 @@ class AlphaGenerator:
         logger.info(f"考古学家在 {len(sample_records)} 条记录中发现一颗遗珠！潜力分: {best_pearl['potential_score']:.3f}, Expression: {best_pearl['expression']}")
         return {"expression": best_pearl['expression'], "performance": best_pearl.get('performance', {})}
 
-    # --- v7.8: 辅助函数，从 save_hopeful_reports 移出 ---
+    # --- v7.9 优化: 综合评分加入 Self-Correlation 惩罚 ---
     def _calculate_combined_score(self, report):
-        """计算用于精英池排序和种子选择的综合得分"""
-        # v7.8.1: 健壮性检查
+        """计算用于精英池排序和种子选择的综合得分 (v7.9: 加入Self-Corr惩罚)"""
         if not isinstance(report, dict): return -float('inf')
         perf = report.get('performance', {})
         if not isinstance(perf, dict): return -float('inf')
@@ -436,38 +475,79 @@ class AlphaGenerator:
         try:
             match = re.search(r'(\d+)\s+PASS', checks_summary or '')
             if match: passed_count = int(match.group(1))
-        except (ValueError, TypeError): pass # 如果转换失败，passed_count 保持为 0
+        except (ValueError, TypeError): pass
 
-        # v7.8.1: 健壮性检查
-        try: fitness = float(fitness)
-        except (ValueError, TypeError): fitness = -999
-        try: sharpe = float(sharpe)
-        except (ValueError, TypeError): sharpe = 0.0
-        try: turnover = float(turnover)
-        except (ValueError, TypeError): turnover = 1.0
+        # --- v7.9 新增: 解析 Self-Correlation ---
+        self_corr_value = 0.0 # 默认为 0 (安全)
+        try:
+            checks_list = perf.get('checks', []) # 从 performance 中获取
+            if isinstance(checks_list, list):
+                for check in checks_list:
+                    if isinstance(check, dict) and check.get('name') == 'Self-correlation':
+                        self_corr_value = float(check.get('value', 0.0))
+                        break
+        except (ValueError, TypeError):
+            pass # 解析失败, self_corr_value 保持 0.0
+        # --- v7.9 结束 ---
 
-        score = fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
+        try: fitness_f = float(fitness)
+        except (ValueError, TypeError): fitness_f = -999
+        try: sharpe_f = float(sharpe)
+        except (ValueError, TypeError): sharpe_f = 0.0
+        try: turnover_f = float(turnover)
+        except (ValueError, TypeError): turnover_f = 1.0
+
+        # --- v7.9 新增: 计算惩罚项 ---
+        # WQ 阈值是 0.7。我们只惩罚超过 0.7 的部分。
+        self_corr_penalty = 0.0
+        if self_corr_value > 0.7:
+            # 每超过 0.1，惩罚 0.5 分 (乘以 5.0)
+            self_corr_penalty = (self_corr_value - 0.7) * 5.0
+        # --- v7.9 结束 ---
+
+        score = fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1) - self_corr_penalty
+        
+        # 调试日志
+        # if self_corr_penalty > 0:
+        #    logger.info(f"[Score v7.9] Alpha {report.get('expression', 'N/A')[:30]}... Self-Corr: {self_corr_value:.3f}, Penalty: -{self_corr_penalty:.3f}, Final Score: {score:.3f}")
+
         return score
-    # --- v7.8 结束 ---
+    # --- v7.9 结束 ---
 
-    # v7.8: _calculate_potential_score 只是 _calculate_combined_score 的一个早期版本
-    # 我们应该统一它们。_calculate_potential_score 用于考古，_calculate_combined_score 用于精英池。
-    # 暂时保留两者以防万一，但它们逻辑非常相似。
+    # --- v7.9 优化: 同步 Self-Correlation 惩罚 ---
     def _calculate_potential_score(self, record):
-        # v7.8.1: 健壮性检查
+        """(v7.9) 为考古记录计算综合得分"""
         if not isinstance(record, dict): return -999
         perf = record.get('performance', {})
         if not isinstance(perf, dict): return -999
 
         try:
-            fitness = float(record.get('fitness', -999))
-            passed_count = int(record.get('passed_checks', 0))
-            sharpe = float(perf.get('sharpe', 0.0))
-            turnover = float(perf.get('turnover', 1.0))
-            score = fitness + (passed_count * 0.2) + (abs(sharpe) * 0.3) - (turnover * 0.1)
+            fitness_f = float(record.get('fitness', -999)) # 来自 record 顶层
+            passed_count = int(record.get('passed_checks', 0)) # 来自 record 顶层
+            sharpe_f = float(perf.get('sharpe', 0.0)) # 来自 perf
+            turnover_f = float(perf.get('turnover', 1.0)) # 来自 perf
+
+            # --- v7.9 新增: 解析 Self-Correlation ---
+            self_corr_value = 0.0
+            checks_list = perf.get('checks', []) # 从 perf 中获取
+            if isinstance(checks_list, list):
+                for check in checks_list:
+                    if isinstance(check, dict) and check.get('name') == 'Self-correlation':
+                        self_corr_value = float(check.get('value', 0.0))
+                        break
+            # --- v7.9 结束 ---
+
+            # --- v7.9 新增: 计算惩罚项 ---
+            self_corr_penalty = 0.0
+            if self_corr_value > 0.7:
+                self_corr_penalty = (self_corr_value - 0.7) * 5.0
+            # --- v7.9 结束 ---
+
+            score = fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1) - self_corr_penalty
             return score
         except (ValueError, TypeError):
             return -999
+    # --- v7.9 结束 ---
 
     # --- v7.8 优化: 引入“外卡”种子选择 ---
     # --- v7.8.2 优化: 调整分割比例 ---
@@ -508,8 +588,7 @@ class AlphaGenerator:
             logger.warning("精英池为空，且未挖掘到遗珠，无法获取进化种子。")
             return []
 
-        # --- v7.8: “外卡”选择逻辑 ---
-        # 1. 按综合评分排序 (使用健壮的 _calculate_combined_score)
+        # --- v7.9: 使用更新后的 _calculate_combined_score 排序 ---
         seeds.sort(key=self._calculate_combined_score, reverse=True)
 
         # 2. 划分精英池和外卡池
@@ -648,7 +727,8 @@ class AlphaGenerator:
             # --- v7.5 优化: 放宽复杂度 ---
             "4.  **Complexity:** Try to keep operators below 15, but more complex and creative combinations are encouraged.",
             "5.  **Output Format:** Your entire response MUST be ONLY the raw alpha expression.",
-            "6.  **Be Creative:** Do not just combine `close` and `vwap`. Use other fields like `cap`, `adv20`, or `returns`."
+            "6.  **Be Creative:** Do not just combine `close` and `vwap`. Use other fields like `cap`, `adv20`, or `returns`.",
+            "**CRITICAL RULE:** Avoid high Self-Correlation (> 0.7). Your expression should be novel and change signal frequently." # v7.9
             # --- v7.5 结束 ---
         ]
 
@@ -680,26 +760,31 @@ class AlphaGenerator:
 
             if status_code == 500:
                 logger.warning(f"生成 Alpha 时检测到 LLM Gateway 的 HTTP 500 错误: {e}。将其视为 Rate Limit 信号。")
-                self._enter_cooldown(self.llm_api_cooldown, reason="LLM Gateway 500 Error") # v7.4
+                self._enter_cooldown(reason="LLM Gateway 500 Error") # <--- v8.0 修改
             elif status_code == 429:
                 logger.warning(f"生成 Alpha 时检测到 LLM API 429 Rate Limit: {e}。")
-                self._enter_cooldown(self.llm_api_cooldown, reason="LLM 429 Rate Limit") # v7.4
+                self._enter_cooldown(reason="LLM 429 Rate Limit") # <--- v8.0 修改
             else:
                 logger.error(f"从 API 生成 Alpha 失败: {e}")
             return None
             # --- v7.3 结束 ---
 
     # --- v7.8 优化: 大胆进化的 Prompt ---
+    # --- v7.9 优化: 加入 Self-Corr 规则 ---
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         base_expression = base_alpha_obj.get('expression')
         base_settings = base_alpha_obj.get('performance', {}).get('settings', self.wq.default_settings)
-
+        
+        # v7.9: 传递 Self-Corr 进 Prompt
+        base_score_info = self._calculate_combined_score(base_alpha_obj) # 用新函数计算
+        
         prompt_lines = [
             "You are an AI machine that generates code. Your SOLE task is to evolve a given investment strategy for WorldQuant.",
             "You MUST output ONLY a single, valid JSON object in a markdown code block. Do NOT include any explanations, analysis, or introductory text.",
             f"**Base Strategy for Evolution:**",
             f"- Expression: `{base_expression}`",
-            f"- Settings: `{json.dumps(base_settings)}`"
+            f"- Settings: `{json.dumps(base_settings)}`",
+            f"- (Internal Score: {base_score_info:.3f})" # v7.9
         ]
 
         if guidance:
@@ -709,6 +794,7 @@ class AlphaGenerator:
             "\n**Task:** Apply ONE of the following evolution strategies. Your goal is to BREAK 'fitness > 1.0' by escaping local optima. Be creative and bold.",
             "1.  **Evolve Expression (HIGHLY PREFERRED):** Make a significant, creative change. Try to INTRODUCE 1-2 NEW operators or data fields (especially from the strategic guidance), or combine existing parts in a novel way. Do not just change a number.",
             "2.  **Evolve Settings (Low Priority):** Make a small, logical change to ONE numeric setting (`delay`, `decay`, `truncation`). Only do this if you cannot find a good expression evolution.",
+            "**CRITICAL RULE:** Avoid high Self-Correlation (> 0.7). Your evolution *must* aim to reduce correlation if it is high, or keep it low.", # v7.9
             "\n**MANDATORY OUTPUT FORMAT:**",
             "Your entire response MUST be ONLY the raw JSON object inside a markdown code block. Example:",
             "```json",
@@ -719,7 +805,7 @@ class AlphaGenerator:
             "```",
             "Evolved Strategy:"
         ])
-        # --- v7.8 结束 ---
+        # --- v7.9 结束 ---
         prompt = "\n".join(prompt_lines)
 
         try:
@@ -766,10 +852,10 @@ class AlphaGenerator:
 
             if status_code == 500:
                 logger.warning(f"进化 Alpha 时检测到 LLM Gateway 的 HTTP 500 错误: {e}。将其视为 Rate Limit 信号。")
-                self._enter_cooldown(self.llm_api_cooldown, reason="LLM Gateway 500 Error") # v7.4
+                self._enter_cooldown(reason="LLM Gateway 500 Error") # <--- v8.0 修改
             elif status_code == 429:
                 logger.warning(f"进化 Alpha 时检测到 LLM API 429 Rate Limit: {e}。")
-                self._enter_cooldown(self.llm_api_cooldown, reason="LLM 429 Rate Limit") # v7.4
+                self._enter_cooldown(reason="LLM 429 Rate Limit") # <--- v8.0 修改
             else:
                 logger.error(f"从 API '进化' Alpha 策略失败: {e}")
             return None
@@ -879,24 +965,45 @@ class AlphaGenerator:
                     if match: passed_count = int(match.group(1))
                 except (ValueError, TypeError): pass
 
-                # v7.8.1: 健壮性检查
                 try: fitness_float = float(fitness)
                 except (ValueError, TypeError): fitness_float = -999
+
+                # --- v7.9: 增加 Self-Correlation 检查 ---
+                self_corr_value = 0.0 # 默认为 0 (安全)
+                try:
+                    checks_list = report.get('performance', {}).get('checks', [])
+                    if isinstance(checks_list, list):
+                        for check in checks_list:
+                            if isinstance(check, dict) and check.get('name') == 'Self-correlation':
+                                self_corr_value = float(check.get('value', 0.0))
+                                break
+                except (ValueError, TypeError):
+                    pass # 如果解析失败，保持 0.0
+                
+                is_self_corr_ok = self_corr_value < 0.7 
+                # --- v7.9 结束 ---
 
                 is_high_quality = fitness_float > 0 and passed_count >= 4
                 is_high_potential = fitness_float > -0.5 and passed_count >= 5
 
-                if is_high_quality or is_high_potential:
+                # v7.9: 更新判断逻辑
+                if (is_high_quality or is_high_potential) and is_self_corr_ok:
                     purged_reports.append(report)
-                 # v7.8.1: 健壮性检查
+                elif (is_high_quality or is_high_potential) and not is_self_corr_ok:
+                    # 达到了 Fitness/Checks，但 Self-Corr 太高，拒绝并归档
+                    logger.warning(f"策略 {report.get('expression', '')[:40]}... 因 Self-Correlation 过高 ({self_corr_value:.3f} > 0.7) 被精英池拒绝（即使 Fitness/Checks 达标）。")
+                    archived_reports.append(report) # 归档这些“坏基因”
                 elif any(isinstance(r, dict) and r.get('expression') == report.get('expression') for r in existing_reports):
+                    # 未达标，且是旧策略，归档
                     archived_reports.append(report)
+                # else:
+                #   未达标，且是新策略，暂时不归档，也不保留 (默认丢弃)
 
-            logger.info(f"精英池清洗: {len(unique_reports_map)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时策略)")
+            logger.info(f"精英池清洗: {len(unique_reports_map)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时/高相关性策略)")
 
-            self.archive_purged_alphas(archived_reports, reason="标准清洗")
+            self.archive_purged_alphas(archived_reports, reason="标准清洗 (含Self-Corr > 0.7)")
 
-            # v7.8: 使用 self._calculate_combined_score
+            # v7.9: 使用更新后的 _calculate_combined_score 排序
             purged_reports.sort(key=self._calculate_combined_score, reverse=True)
 
             final_pool = purged_reports[:max_pool_size]
@@ -952,45 +1059,28 @@ class AlphaGenerator:
                 # 3. 处理 WQ 429 Rate Limit (核心)
                 if result == "RATE_LIMIT":
                     logger.warning(f"遭遇 WQ 429 (针对: {idea_expr})。")
-                    logger.info(f"触发 {self.wq_api_cooldown}s 冷却... 策略将放回队列重试。")
-                    self._enter_cooldown(self.wq_api_cooldown, "WorldQuant 429 Rate Limit")
-                    time.sleep(self.wq_api_cooldown)
+                    
+                    # --- v8.0: 动态触发冷却 ---
+                    config = load_system_config()
+                    current_wq_cooldown = config.get("wq_api_cooldown", 30)
+                    logger.info(f"触发 {current_wq_cooldown}s 冷却... 策略将放回队列重试。")
+                    self._enter_cooldown(reason="WorldQuant 429 Rate Limit")
+                    time.sleep(current_wq_cooldown) # 睡眠时长也动态读取
+                    # --- v8.0 结束 ---
 
                     try:
                         self.strategy_queue.put(strategy)
                         logger.info(f"策略 {idea_expr[:60]}... 已放回队列。")
-                        
-                        # --- v7.8.3 BUG 修复 ---
-                        # 成功放回队列，我们 *不能* 在这里调用 task_done()
-                        # 因为这个任务 (strategy) 实际上还没有“完成”，它只是被放回去了。
-                        # 我们依赖 finally 块中的 task_done() 来标记 *原始* 的 get() 任务已完成。
-                        # --- 修复开始 ---
-                        
-                        # self.strategy_queue.task_done() # <--- v7.8.2 的 BUG 在这里 (移除)
-                        
-                        # --- 修复结束 ---
-
                     except queue.Full:
                          logger.error(f"尝试放回策略 {idea_expr[:60]}... 时队列已满！该策略将被丢弃。")
-                         # --- v7.8.3 BUG 修复 ---
-                         # 只有在放回失败 (队列满) 导致策略被丢弃时，
-                         # 我们才需要在这里调用 task_done()，因为 finally 块不会被 continue 跳过。
-                         # 但为了逻辑统一，我们让 finally 去处理。
-                         # 关键是：我们必须 continue 来跳过 finally 块中的 task_done()，
-                         # 因为我们不想为 *同一个* get() 任务调用两次 task_done()。
-                         
-                         # v7.8.3 正确逻辑:
-                         # 策略放回失败 (Full)，这个 get() 任务被丢弃了，
+                         # v7.8.3: 策略放回失败 (Full)，这个 get() 任务被丢弃了，
                          # 我们必须在这里调用 task_done() 来平衡 get()。
-                         # 然后我们 continue，跳过 finally 的第二次调用。
                          self.strategy_queue.task_done()
                          continue # <--- 确保在丢弃时也 continue
 
-                    # --- v7.8.3 BUG 修复 ---
-                    # 无论策略是成功放回 (put) 还是放回失败 (Full)，
-                    # 我们都必须 continue 来跳过 finally 块中的 task_done()，
-                    # 避免对同一次 get() 重复调用。
-                    continue # <--- 移到这里，确保 put() 成功后也 continue
+                    # v7.8.3: 无论策略是成功放回 (put) 还是放回失败 (Full)，
+                    # 我们都必须 continue 来跳过 finally 块中的 task_done()。
+                    continue 
 
                 # 4. 处理 ERROR (黑名单逻辑)
                 if isinstance(result, dict) and result.get("status") == "ERROR":
@@ -1024,7 +1114,6 @@ class AlphaGenerator:
                     else:
                         logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...")
                     
-                    # 错误处理后，依赖 finally 中的 task_done()
                     continue 
 
                 # 5. 处理 TIMEOUT
@@ -1033,7 +1122,6 @@ class AlphaGenerator:
                     self.log_tested_alphas([log_report])
                     logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
                     
-                    # 超时处理后，依赖 finally 中的 task_done()
                     continue 
 
                 # 6. 处理 COMPLETE
@@ -1042,7 +1130,7 @@ class AlphaGenerator:
                     alpha_id = result.get("id")
                     if not isinstance(is_stats, dict) or not alpha_id:
                         logger.warning(f"模拟返回不完整 (缺少 'is' 或 'id')，已丢弃: {idea_expr}")
-                        continue # 依赖 finally
+                        continue 
 
                     checks = is_stats.get("checks", [])
                     passed_count = 0
@@ -1060,17 +1148,31 @@ class AlphaGenerator:
                     log_report["status"] = "COMPLETE"
                     log_report["fitness"] = fitness_float
                     log_report["passed_checks"] = passed_count
-                    log_report["performance"] = is_stats
+                    log_report["performance"] = is_stats # v7.9: 确保完整的 is_stats 被存入
                     self.log_tested_alphas([log_report])
                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
+
+                    # --- v7.9: 增加 Self-Correlation 检查 (用于日志) ---
+                    self_corr_value = 0.0
+                    try:
+                        if isinstance(checks, list):
+                            for check in checks:
+                                if isinstance(check, dict) and check.get('name') == 'Self-correlation':
+                                    self_corr_value = float(check.get('value', 0.0))
+                                    break
+                    except (ValueError, TypeError): pass
+                    is_self_corr_ok = self_corr_value < 0.7
+                    # --- v7.9 结束 ---
+
                     is_high_quality = fitness_float > 0 and passed_count >= 4
                     is_high_potential = fitness_float > -0.5 and passed_count >= 5
 
-                    if is_high_quality or is_high_potential:
+                    # v7.9: 更新判断逻辑
+                    if (is_high_quality or is_high_potential) and is_self_corr_ok:
                         if is_high_potential and not is_high_quality:
-                            logger.info(f"发现一个高潜力策略 (Fitness < 0, 但 Checks >= 5)，破格录用！ Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+                            logger.info(f"发现一个高潜力策略 (Fitness < 0, 但 Checks >= 5)，破格录用！ Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
                         else:
-                            logger.info(f"发现一个高质量策略！ Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+                            logger.info(f"发现一个高质量策略！ Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
 
                         regular_code = result.get("regular", {}).get("code") if isinstance(result.get("regular"), dict) else None
                         hopeful_report = {
@@ -1085,9 +1187,14 @@ class AlphaGenerator:
                         perf_items = is_stats.items()
                         stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
                         logger.info(f"生成高质量策略战报 [{checks_summary}] -> {stats_str}")
-                        self.save_hopeful_reports([hopeful_report])
+                        self.save_hopeful_reports([hopeful_report]) # v7.9: save_hopeful_reports 内部会再次检查 self-corr
+                    
+                    elif (is_high_quality or is_high_potential) and not is_self_corr_ok:
+                         logger.info(f"策略因 Self-Correlation 过高被拒绝。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
+                         # v7.9: 我们在 save_hopeful_reports 中归档，这里只打印日志
+                    
                     else:
-                        logger.info(f"策略未达到高质量标准，已丢弃。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS. Alpha: {idea_expr}")
+                        logger.info(f"策略未达到高质量标准，已丢弃。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
                 else:
                      logger.error(f"收到未知的模拟结果类型: {type(result)} for alpha: {idea_expr}")
 
@@ -1105,7 +1212,6 @@ class AlphaGenerator:
                         logger.critical(f"在异常处理中再次发生错误，无法记录: {log_exc}")
             finally:
                 # 7. 标记任务完成 (确保即使出错也调用)
-                # 无论上面发生什么 (除了 continue)，这个 get() 任务都需要被标记为 done。
                 self.strategy_queue.task_done()
     # --- v7.8.3 修复结束 ---
 
@@ -1113,14 +1219,14 @@ class AlphaGenerator:
     # --- v7.7 重构: run 方法现在是 生产者 ---
     def run(self, mode='discover', sleep_time=10):
 
-        logger.info(f"Alpha 生成器启动 | 版本: {CURRENT_GENERATOR_VERSION} | 模式: {mode.upper()} | 并发 Workers: {self.concurrency_level} | 队列大小: {self.queue_max_size}") # v7.8.1: 显示版本
+        logger.info(f"Alpha 生成器启动 | 版本: {CURRENT_GENERATOR_VERSION} | 模式: {mode.upper()} | 并发 Workers: {self.concurrency_level} | 队列大小: {self.queue_max_size}") # v8.0
 
         self.fields = self.wq.get_data_fields()
         self.operators = self.wq.get_operators()
 
         if self.operators == "RATE_LIMIT":
             logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
-            self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit")
+            self._enter_cooldown(reason="WorldQuant 429 Rate Limit") # v8.0: 动态冷却
 
         if not self.fields or not self.operators or self.operators == "RATE_LIMIT":
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
@@ -1141,7 +1247,7 @@ class AlphaGenerator:
         # --- v7.7: 生产者 (Producer) 循环 ---
         while True:
             try:
-                # 1. 检查 LLM 冷却状态
+                # 1. 检查 LLM 冷却状态 (v8.0: _rate_limit_until 是动态设置的)
                 if time.time() < self._rate_limit_until:
                     remaining = self._rate_limit_until - time.time()
                     logger.info(f"[生产者] 当前处于冷却期。将在 {remaining/60:.1f} 分钟后恢复...")
@@ -1154,7 +1260,7 @@ class AlphaGenerator:
                 self.operators = self.wq.get_operators()
                 if self.operators == "RATE_LIMIT":
                      logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429，触发冷却。")
-                     self._enter_cooldown(self.wq_api_cooldown, reason="WorldQuant 429 Rate Limit")
+                     self._enter_cooldown(reason="WorldQuant 429 Rate Limit") # v8.0: 动态冷却
                      continue
                 if not self.fields or not self.operators:
                      logger.error("[生产者] 无法获取字段或操作符，将在60秒后重试。")
@@ -1165,7 +1271,7 @@ class AlphaGenerator:
                 # 3. (Evolve 模式) 更新种子和指导
                 # v7.8: 每次循环都重新加载，以获取最新数据 (已加锁)
                 if mode == 'evolve':
-                    # v7.8.2: load_evolution_seeds 已更新 (分割比例)
+                    # v7.9: load_evolution_seeds 内部使用新评分
                     evolution_seeds = self.load_evolution_seeds()
                     if not evolution_seeds:
                         mode = 'discover'
@@ -1193,7 +1299,7 @@ class AlphaGenerator:
                          time.sleep(sleep_time) # 仍然休眠
                          continue
                     base_alpha_obj = random.choice(evolution_seeds)
-                    # v7.8: generate_evolved_alpha_idea 已更新 (Prompt)
+                    # v7.9: generate_evolved_alpha_idea 已更新 (Prompt 加入 Self-Corr 规则)
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance)
 
                 # 6. 预检
@@ -1240,13 +1346,35 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")
     parser.add_argument('--api-config-path', type=str, default="api_config.json", help="Path to the API configuration file")
-    parser.add_argument('--concurrency', type=int, default=2, help="Number of concurrent simulation workers (v7.7)")
-    parser.add_argument('--sleep', type=int, default=10, help="Seconds to wait between generation cycles (Producer sleep time)")
+    
+    # --- v8.0: 移除静态参数，改为从 config 文件读取 ---
+    # parser.add_argument('--concurrency', type=int, default=2, help="Number of concurrent simulation workers (v7.7)")
+    # parser.add_argument('--sleep', type=int, default=10, help="Seconds to wait between generation cycles (Producer sleep time)")
+    # --- v8.0 结束 ---
+    
     parser.add_argument('--mode', type=str, default='discover', choices=['discover', 'evolve'], help="Generation mode")
     parser.add_argument('--log-file', type=str, default='alpha_generator.log', help="Name of the log file in the logs directory")
     args = parser.parse_args()
 
     setup_logging(args.log_file)
+    
+    # --- v8.0: 读取静态配置 ---
+    logger.info(f"正在加载 {SYSTEM_CONFIG_FILE} 以确定启动参数...")
+    config = load_system_config()
+    
+    if args.mode == 'discover':
+        concurrency = config.get("miner_concurrency", 1)
+        sleep_time = config.get("miner_sleep", 120)
+        logger.info(f"[v8.0 Config] 启动 Miner (discover) 模式: Concurrency={concurrency}, Sleep={sleep_time}s")
+    elif args.mode == 'evolve':
+        concurrency = config.get("evolver_concurrency", 1)
+        sleep_time = config.get("evolver_sleep", 120)
+        logger.info(f"[v8.0 Config] 启动 Evolver (evolve) 模式: Concurrency={concurrency}, Sleep={sleep_time}s")
+    else:
+        logger.error(f"未知的模式: {args.mode}。使用默认值 1/120。")
+        concurrency = 1
+        sleep_time = 120
+    # --- v8.0 结束 ---
 
     MAX_INIT_RETRIES = 5
     SHORT_SLEEP = 30
@@ -1264,15 +1392,13 @@ if __name__ == "__main__":
             # --- v7.3 修改: 捕获 WQ 初始化时的 429 错误 ---
             if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
                 logger.critical(f"初始化 WorldQuant 客户端时检测到 429 Rate Limit: {e}。")
-                # --- v7.8 优化: 使用更新后的 WQ_API_COOLDOWN (30s) ---
-                cooldown_end = time.time() + WQ_API_COOLDOWN
-                logger.warning(f"将进入 {WQ_API_COOLDOWN} 秒冷却期，直到 {datetime.fromtimestamp(cooldown_end).strftime('%Y-%m-%d %H:%M:%S')}") # v7.8.1: 显示秒数
-
-                while time.time() < cooldown_end:
-                    remaining = cooldown_end - time.time()
-                    logger.info(f"初始化冷却中... {remaining:.0f} 秒后重试。")
-                    time.sleep(min(remaining, WQ_API_COOLDOWN)) # 睡 30 秒或剩余时间
-                # --- v7.8 结束 ---
+                
+                # --- v8.0: 动态读取 WQ Cooldown ---
+                config_init = load_system_config()
+                wq_cooldown_init = config_init.get("wq_api_cooldown", 30)
+                logger.warning(f"将进入 {wq_cooldown_init} 秒冷却期...")
+                time.sleep(wq_cooldown_init)
+                # --- v8.0 结束 ---
 
                 retry_count = 0 # 重置重试次数
                 continue # 返回循环顶部，再次尝试初始化
@@ -1289,14 +1415,14 @@ if __name__ == "__main__":
                 retry_count = 0
 
     try:
-        # v7.7: 将 concurrency 传递给构造函数
+        # v8.0: 使用从配置中读取的静态参数
         generator = AlphaGenerator(wq_client,
                                  api_config_path=args.api_config_path,
                                  batch_size=args.batch_size,
-                                 concurrency_level=args.concurrency)
+                                 concurrency_level=concurrency) # <--- v8.0 修改
 
-        # v7.7: run 不再需要 concurrency_level
-        generator.run(mode=args.mode, sleep_time=args.sleep)
+        # v8.0: 使用从配置中读取的静态参数
+        generator.run(mode=args.mode, sleep_time=sleep_time) # <--- v8.0 修改
 
     except Exception as e:
         logger.critical(f"生成器运行时发生致命错误: {e}", exc_info=True)

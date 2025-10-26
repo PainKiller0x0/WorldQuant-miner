@@ -15,15 +15,15 @@ services:
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
       - ./tested_alphas_log.json:/app/tested_alphas_log.json
       - ./api_config.json:/app/api_config.json
+      - ./system_config.json:/app/system_config.json
     command: >
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
       --batch-size 6
-      --concurrency 3
       --mode discover
       --log-file miner.log
-      --sleep 60" 
+      " 
     networks:
       - wq-network
     restart: always

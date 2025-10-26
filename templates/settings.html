@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v8.1 控制面板 - WQminer</title> <style>
+        /* CSS (与 v8.1.2 完全相同) */
+         :root {
+            --bg-color: #f4f7f6;
+            --card-bg-color: #fff;
+            --text-color: #333;
+            --muted-text-color: #7f8c8d;
+            --header-bg-color: #3498db;
+            --header-text-color: white;
+            --link-color: #2980b9;
+            --border-color: #ddd;
+            --input-border-color: #ddd;
+            --button-primary-bg: #007bff;
+            --button-primary-hover-bg: #0056b3;
+            --button-secondary-bg: #6c757d;
+            --button-secondary-hover-bg: #5a6268;
+            --button-text-color: white;
+            --message-success-bg: #d4edda;
+            --message-success-text: #155724;
+            --message-success-border: #c3e6cb;
+            --message-error-bg: #f8d7da;
+            --message-error-text: #721c24;
+            --message-error-border: #f5c6cb;
+            --message-warning-bg: #fff3cd;
+            --message-warning-text: #856404;
+            --message-warning-border: #ffeeba;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --card-bg-color: #2c2c2c;
+            --text-color: #e0e0e0;
+            --muted-text-color: #999;
+            --header-bg-color: #0056b3;
+            --header-text-color: #f0f0f0;
+            --link-color: #5dade2;
+            --border-color: #444;
+            --input-border-color: #555;
+            --button-primary-bg: #0056b3;
+            --button-primary-hover-bg: #004494;
+            --button-secondary-bg: #5a6268;
+            --button-secondary-hover-bg: #495057;
+            --message-success-bg: #2d5a2d;
+            --message-success-text: #c3e6cb;
+            --message-success-border: #3a7d44;
+            --message-error-bg: #5a2d2d;
+            --message-error-text: #f5c6cb;
+            --message-error-border: #a73c47;
+            --message-warning-bg: #7d6608;
+            --message-warning-text: #ffeeba;
+            --message-warning-border: #b3930b;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
+        .container { max-width: 800px; margin: 20px auto; background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: background-color 0.3s; }
+        .header { background: var(--header-bg-color); color: var(--header-text-color); padding: 20px; border-top-left-radius: 8px; border-top-right-radius: 8px; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
+        .header h1 { margin: 0; }
+        .header a { color: var(--header-text-color); text-decoration: none; font-size: 14px; opacity: 0.8; }
+        .header a:hover { opacity: 1; }
+        form { padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; color: var(--muted-text-color); transition: color 0.3s; }
+        .form-group input { width: calc(100% - 22px); padding: 10px; border: 1px solid var(--input-border-color); border-radius: 4px; font-size: 16px; background-color: var(--card-bg-color); color: var(--text-color); transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        .form-group input:focus { outline: none; border-color: var(--link-color); box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25); }
+        .form-group small { display: block; color: var(--muted-text-color); margin-top: 5px; transition: color 0.3s; }
+        .section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; border-top: 1px solid var(--border-color); padding-top: 20px; transition: border-color 0.3s; }
+        h2 { border-bottom: 2px solid var(--header-bg-color); padding-bottom: 5px; color: var(--link-color); transition: border-color 0.3s, color 0.3s; margin-bottom: 20px; }
+        .button-group { margin-top: 20px; }
+        button { background-color: var(--button-primary-bg); color: var(--button-text-color); padding: 12px 20px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background-color 0.3s ease; margin-right: 10px; margin-bottom: 10px; }
+        button:hover { background-color: var(--button-primary-hover-bg); }
+        .copy-button { background-color: var(--button-secondary-bg); }
+        .copy-button:hover { background-color: var(--button-secondary-hover-bg); }
+        #message { margin-top: 20px; padding: 15px; border-radius: 4px; display: none; }
+        .success { background-color: var(--message-success-bg); color: var(--message-success-text); border: 1px solid var(--message-success-border); }
+        .error { background-color: var(--message-error-bg); color: var(--message-error-text); border: 1px solid var(--message-error-border); }
+        .warning { background-color: var(--message-warning-bg); color: var(--message-warning-text); border: 1px solid var(--message-warning-border); }
+        #theme-toggle { cursor: pointer; font-size: 20px; background: none; border: none; color: var(--header-text-color); margin-left: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>WQminer v8.1 控制面板</h1>
+        <div>
+            <a href="/">&larr; 返回主仪表盘</a>
+            <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
+        </div>
+    </div>
+    <form id="settings-form">
+        <h2>动态参数 (实时生效)</h2>
+        <div class="section">
+            <div class="form-group">
+                <label for="wq_api_cooldown">WQ API 429 冷却 (秒)</label>
+                <input type="number" id="wq_api_cooldown" name="wq_api_cooldown" min="0">
+                <small>Worker 遇到 WQ 429 时的冷却时间。</small>
+            </div>
+            <div class="form-group">
+                <label for="llm_api_cooldown">LLM API 冷却 (秒)</label>
+                <input type="number" id="llm_api_cooldown" name="llm_api_cooldown" min="0">
+                <small>生产者 (LLM) 遇到 API 错误时的冷却时间。</small>
+            </div>
+        </div>
+
+        <h2>静态参数 (需要重启服务生效)</h2>
+        <div class="section">
+            <div class="form-group">
+                <label for="miner_concurrency">Miner 并发数</label>
+                <input type="number" id="miner_concurrency" name="miner_concurrency" min="0">
+                <small>Miner (Discover) 的 Worker 线程数。</small>
+            </div>
+            <div class="form-group">
+                <label for="miner_sleep">Miner 生产者休眠 (秒)</label>
+                <input type="number" id="miner_sleep" name="miner_sleep" min="0">
+                <small>Miner (Discover) 生成新 Alpha 的间隔。</small>
+            </div>
+        </div>
+        <div class="section">
+            <div class="form-group">
+                <label for="evolver_concurrency">Evolver 并发数</label>
+                <input type="number" id="evolver_concurrency" name="evolver_concurrency" min="0">
+                <small>Evolver (Evolve) 的 Worker 线程数。</small>
+            </div>
+            <div class="form-group">
+                <label for="evolver_sleep">Evolver 生产者休眠 (秒)</label>
+                <input type="number" id="evolver_sleep" name="evolver_sleep" min="0">
+                <small>Evolver (Evolve) 生成新 Alpha 的间隔。</small>
+            </div>
+        </div>
+
+        <div class="button-group">
+             <button type="submit">保存设置</button>
+             <button type="button" class="copy-button" id="copy-restart-cmd">复制重启命令</button>
+        </div>
+        
+        <div id="message"></div>
+    </form>
+</div>
+
+<script>
+    const themeToggle = document.getElementById('theme-toggle');
+    const currentTheme = localStorage.getItem('theme') || 'dark'; // Default dark
+
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌓';
+
+    themeToggle.addEventListener('click', () => {
+        let targetTheme = 'light';
+        if (document.documentElement.getAttribute('data-theme') === 'light') {
+            targetTheme = 'dark';
+            themeToggle.textContent = '☀️';
+        } else {
+             themeToggle.textContent = '🌓';
+        }
+        document.documentElement.setAttribute('data-theme', targetTheme);
+        localStorage.setItem('theme', targetTheme);
+    });
+
+    // Define copy function globally or ensure it's accessible
+    const restartCommand = 'docker compose -f docker-compose.yml -f docker-compose.evolver.yml -f docker-compose.dashboard.yml up -d --build';
+    function copyRestartCommand(buttonElement) {
+         navigator.clipboard.writeText(restartCommand).then(() => {
+            const originalText = buttonElement.textContent;
+            buttonElement.textContent = '已复制!';
+            buttonElement.disabled = true;
+            setTimeout(() => {
+                buttonElement.textContent = originalText || '复制重启命令';
+                buttonElement.disabled = false;
+            }, 2000);
+        }, (err) => {
+            // Use showMessage defined later in DOMContentLoaded
+            const messageEl = document.getElementById('message');
+             if (messageEl) { // Check if messageEl exists
+                 showMessage('error', '复制命令失败: ' + err); // Use showMessage here
+             }
+            console.error('Copy failed: ', err);
+        });
+    }
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('settings-form');
+        const messageEl = document.getElementById('message');
+        const copyButton = document.getElementById('copy-restart-cmd');
+
+        // Define showMessage inside DOMContentLoaded to ensure messageEl is available
+        function showMessage(type, html) {
+            messageEl.className = type;
+            messageEl.innerHTML = html;
+            messageEl.style.display = 'block';
+        }
+
+
+        // 1. Load current settings
+        fetch('/api/get_settings')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showMessage('error', `加载配置失败: ${data.error}`);
+                    return;
+                }
+                for (const key in data) {
+                    if (form.elements[key]) {
+                        form.elements[key].value = data[key];
+                    } else if (key !== 'comment') {
+                         console.warn(`Form element not found for key: ${key}`);
+                    }
+                }
+            })
+            .catch(err => showMessage('error', `加载配置时发生网络错误: ${err}`));
+
+        // 2. Save settings
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(form);
+            const data = {};
+            let hasError = false;
+            formData.forEach((value, key) => {
+                const numValue = Number(value);
+                if (isNaN(numValue) || numValue < 0) {
+                     showMessage('error', `无效值: ${key} 必须是一个非负数字。`);
+                     hasError = true;
+                     return;
+                }
+                data[key] = numValue;
+            });
+
+            if (hasError) return;
+
+            showMessage('warning', '正在保存...');
+
+            fetch('/api/save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success') {
+                    // Use button with onclick attribute within innerHTML
+                     showMessage('success', `<b>配置已保存！</b><br>动态参数 (Cooldowns) 已即时生效。<br>静态参数 (并发数/休眠) 需要您点击<button type="button" class="copy-button" onclick="copyRestartCommand(this)">复制重启命令</button>并在主机上<b>手动执行</b>才能应用。`);
+                } else {
+                    showMessage('error', `保存失败: ${result.message}`);
+                }
+            })
+            .catch(err => showMessage('error', `保存时发生网络错误: ${err}`));
+        });
+
+        // 3. Attach listener to the main copy button
+        copyButton.addEventListener('click', function() {
+             copyRestartCommand(this);
+        });
+
+    });
+</script>
+
+</body>
+</html>

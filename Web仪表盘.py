@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v5.8 (Show Version Info) ---
+# --- Web仪表盘.py v6.0 (Add Settings Panel) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -9,9 +9,9 @@ from collections import deque
 import os.path
 import logging
 
-# --- v5.8: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v5.8"
-# --- v5.8: 结束 ---
+# --- v6.0: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v6.0"
+# --- v6.0: 结束 ---
 
 # --- 配置基础日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,19 +26,23 @@ SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas
 FAILED_SUBMISSIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json'))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 # --- v5.8: 新增文件路径 ---
-# (这些路径是在容器内的路径，假设 generator 文件被挂载到同级)
 GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
 DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py") # 指向自身
 # --- v5.8: 结束 ---
 
+# --- v8.0 (Dashboard v6.0) 新增 ---
+SYSTEM_CONFIG_FILE = os.path.join(BASE_DIR, 'system_config.json')
+# --- v8.0 结束 ---
 
-# v5.8: 不再需要 FILES_TO_TRACK 字典，改为直接读取
-# FILES_TO_TRACK = { ... } # 已删除
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
 file_lock = threading.Lock() # 用于 submitted_alphas.json
 hopeful_lock = threading.Lock() # 用于 hopeful_alphas.json
 failed_lock = threading.Lock() # 用于 failed_submissions.json
+
+# --- v8.0 (Dashboard v6.0) 新增 ---
+config_lock = threading.Lock() # 用于 system_config.json
+# --- v8.0 结束 ---
 
 # --- 加强日志: load_submitted_alphas (保持 v5.3) ---
 def load_submitted_alphas():
@@ -114,6 +118,10 @@ def get_service_status(log_file):
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
 # --- v5.7: 优化 get_hopeful_alphas_stats (加入 is_successfully_submitted 标志) ---
+# --- v7.9: 注意! AlphaGenerator v7.9+ 的评分逻辑已更新，但仪表盘的评分逻辑 (calculate_combined_score)
+# --- 暂时保持原样 (v5.8)，因为它不解析 checks 列表，只解析 summary 字符串。
+# --- 这会导致仪表盘的“综合分”和 Generator 内部的“综合分”不一致。
+# --- 这是一个已知待办事项，将在未来版本中修复。
 def get_hopeful_alphas_stats():
     stats = {
         "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
@@ -160,7 +168,11 @@ def get_hopeful_alphas_stats():
             if valid_sharpe:
                  stats['max_sharpe'] = max(valid_sharpe) if valid_sharpe else 0.0
 
-
+            # --- v7.9 (Dashboard v6.0) 警告: ---
+            # --- 下方的 calculate_combined_score 评分函数与 v7.9 Generator 内部的评分函数 *不一致* ---
+            # --- Generator (v7.9) 会解析 'checks' 列表并惩罚 Self-Correlation。 ---
+            # --- 仪表盘 (v6.0) 仍然使用 v7.8 的逻辑 (只看 summary 字符串)。 ---
+            # --- 这会导致排序与 Generator 内部排序不完全一致，待 v8.1 修复。 ---
             def calculate_combined_score(report):
                 # ... (此函数逻辑不变, 但稍作清理) ...
                 if not isinstance(report, dict): return -float('inf')
@@ -184,7 +196,8 @@ def get_hopeful_alphas_stats():
                 except (ValueError, TypeError): sharpe_f = 0.0
                 try: turnover_f = float(turnover)
                 except (ValueError, TypeError): turnover_f = 1.0
-
+                
+                # --- v7.9 (Dashboard v6.0) 警告: 此处 *未* 包含 Self-Correlation 惩罚 ---
                 return fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1)
 
 
@@ -226,7 +239,7 @@ def get_hopeful_alphas_stats():
                         "is_all_pass": is_all_pass, "is_submittable": is_submittable,
                         "is_submitted": is_submitted, "is_failed_on_wq": is_failed_on_wq,
                         "is_successfully_submitted": is_successfully_submitted, # <-- v5.7: 传递给前端
-                        "combined_score": calculate_combined_score(alpha)
+                        "combined_score": calculate_combined_score(alpha) # v7.9 警告: 此分值可能不准
                     })
                     processed_count += 1
                 except Exception as e: logger.error(f"[Stats Process] Error processing alpha: {alpha.get('expression', 'N/A')}. Error: {e}", exc_info=True)
@@ -252,9 +265,6 @@ def get_hopeful_alphas_stats():
     return stats
 # --- v5.7 结束 ---
 
-# v5.8: 不再使用 get_file_versions
-# def get_file_versions(): ... # 已删除
-
 # --- v5.8: 新增辅助函数 - 从文件读取版本号 ---
 def get_version_from_file(file_path, version_regex_str):
     logger.info(f"[Version] Attempting to read version from {file_path}")
@@ -279,9 +289,97 @@ def get_version_from_file(file_path, version_regex_str):
         return "read_error"
 # --- v5.8: 结束 ---
 
+# --- 路由 ---
 
 @app.route('/')
-def dashboard(): return render_template('dashboard_v4.html')
+def dashboard(): 
+    # v6.0: 传入 settings_page=True 变量 (如果模板需要)
+    return render_template('dashboard_v4.html', settings_page=True)
+
+# --- v8.0 (Dashboard v6.0) 新增: 设置页面路由 ---
+@app.route('/settings')
+def settings_page():
+    """渲染设置页面"""
+    logger.info("[API /settings] Request received for settings page.")
+    return render_template('settings.html')
+
+@app.route('/api/get_settings', methods=['GET'])
+def get_settings():
+    """读取并返回 system_config.json"""
+    logger.info("[API /api/get_settings] Request received.")
+    with config_lock:
+        try:
+            if not os.path.exists(SYSTEM_CONFIG_FILE):
+                logger.error(f"[API /api/get_settings] {SYSTEM_CONFIG_FILE} not found!")
+                return jsonify({"error": "Config file not found on server."}), 404
+            
+            with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            response = make_response(jsonify(data))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            return response
+        
+        except Exception as e:
+            logger.error(f"[API /api/get_settings] Error reading config file: {e}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/api/save_settings', methods=['POST'])
+def save_settings():
+    """接收 JSON 并写入 system_config.json"""
+    logger.info("[API /api/save_settings] Request received.")
+    if not request.is_json:
+        return jsonify(status='error', message='Request must be JSON'), 400
+    
+    new_config = request.json
+    
+    # --- 安全验证 (非常重要) ---
+    expected_keys = {
+        "wq_api_cooldown": int, "llm_api_cooldown": int,
+        "miner_concurrency": int, "miner_sleep": int,
+        "evolver_concurrency": int, "evolver_sleep": int
+    }
+    
+    if not isinstance(new_config, dict):
+        return jsonify(status='error', message='Invalid JSON format (must be an object)'), 400
+
+    validated_config = {}
+    
+    with config_lock:
+        try:
+            # 1. 先读取旧配置，以防新配置缺少字段
+            if os.path.exists(SYSTEM_CONFIG_FILE):
+                with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                    validated_config = json.load(f)
+            
+            # 2. 验证并覆盖新值
+            for key, expected_type in expected_keys.items():
+                if key not in new_config:
+                    # v6.0.1 修复: 如果 key 不在 new_config 中，不应报错，应使用旧值
+                    if key not in validated_config: # 仅在旧配置也没有时才报错
+                         return jsonify(status='error', message=f"Missing key: {key}"), 400
+                    continue # 如果新配置没有，则保留旧配置的值
+                
+                value = new_config[key]
+                try:
+                    validated_config[key] = expected_type(value) # 强制类型转换
+                    if validated_config[key] < 0: # 检查转换后的值
+                         return jsonify(status='error', message=f"{key} must be >= 0"), 400
+                except (ValueError, TypeError):
+                     return jsonify(status='error', message=f"Invalid type for {key}. Expected {expected_type.__name__}"), 400
+
+            # 3. 写回文件
+            with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(validated_config, f, indent=2)
+            
+            logger.info(f"[API /api/save_settings] Successfully saved new config: {validated_config}")
+            return jsonify(status='success', message='Config saved')
+
+        except Exception as e:
+            logger.error(f"[API /api/save_settings] Error saving config file: {e}", exc_info=True)
+            return jsonify(status='error', message=f"Internal server error: {e}"), 500
+# --- v8.0 结束 ---
+
 
 # ... ( /status 路由保持不变, 但调用 get_file_versions 已删除) ...
 @app.route('/status')
@@ -401,5 +499,5 @@ if __name__ == '__main__':
         except OSError as e: logger.error(f"Error creating log directory {LOG_DIR}: {e}")
     try: os.stat_cache.clear(); logger.info("Cleared os.stat_cache() on startup.")
     except AttributeError: logger.info("os.stat_cache() not available on this platform, skipping.")
-    logger.info(f"Starting Flask application (Version: {CURRENT_DASHBOARD_VERSION})...") # v5.8: 显示版本
+    logger.info(f"Starting Flask application (Version: {CURRENT_DASHBOARD_VERSION})...") # v6.0: 显示版本
     app.run(host='0.0.0.0', port=8080, threaded=True, debug=False)

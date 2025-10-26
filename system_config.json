@@ -1,0 +1,9 @@
+{
+  "comment": "WQminer v8.0 全局配置文件",
+  "wq_api_cooldown": 45,
+  "llm_api_cooldown": 3600,
+  "miner_concurrency": 3,
+  "miner_sleep": 90,
+  "evolver_concurrency": 2,
+  "evolver_sleep": 60
+}

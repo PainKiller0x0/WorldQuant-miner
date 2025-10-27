@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v8.3.1)</title>
+    <title>WQ Alpha 监控仪表盘 (v8.4.0)</title>
 <style>
         /* v8.2.1: Minor style adjustments */
         :root { /* Color variables */
@@ -13,7 +13,7 @@
              --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0; --muted-text-color: #999; --header-bg-color: #0056b3; --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444; --table-header-bg: #3a3a3a; --log-bg-color: #1c1c1c; --log-text-color: #ccc; --alpha-submitted-bg: #3a3a3a; --alpha-failed-bg: #5a2d2d; --alpha-failed-text: #f5c6cb; --alpha-success-bg: #2d5a2d; --alpha-success-text: #c3e6cb; --button-primary-bg: #0056b3; --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268; --button-secondary-hover-bg: #495057; --badge-pass-bg: #218838; --badge-fail-bg: #c82333; --badge-pending-bg: #e0710a; --badge-text-color: #f0f0f0; --modal-bg: rgba(0, 0, 0, 0.7); --modal-content-bg: #3a3a3a;
         }
         body { font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
-        .container { max-width: 1400px; margin: 0 auto; }
+        .container { max-width: 1600px; margin: 0 auto; } /* v8.4.0: Increased max-width */
         h1, h2 { font-weight: 600; }
         h1 { color: var(--link-color); border-bottom: 2px solid var(--header-bg-color); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
@@ -35,60 +35,39 @@
 
         #alphas-table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
         #alphas-table th,
-        #alphas-table td { border: 1px solid var(--border-color); padding: 10px; text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; }
+        #alphas-table td { border: 1px solid var(--border-color); padding: 8px; /* v8.4.0: Reduced padding slightly */ text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; }
         #alphas-table th { background: var(--table-header-bg); transition: background-color 0.3s; font-weight: 600; }
-        #alphas-table td { font-size: 13px; vertical-align: top; }
+        #alphas-table td { font-size: 12px; /* v8.4.0: Reduced font size slightly */ vertical-align: top; }
         /* Keep specific font for expression & logs */
         #alphas-table td:nth-child(2), .logs { font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; }
          /* Ensure checkbox labels use body font */
-         .alpha-actions label span { font-family: inherit !important; font-size: 13px; }
+         .alpha-actions label span { font-family: inherit !important; font-size: 12px; /* v8.4.0: Reduced font size */ }
 
         /* v8.3.0: Sortable Header Styles */
-        #alphas-table th.sortable {
-            cursor: pointer;
-            position: relative;
-        }
-        #alphas-table th.sortable::after {
-            content: '';
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            margin-top: -6px;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            opacity: 0.3;
-        }
-        #alphas-table th.sortable.sort-asc::after {
-            border-bottom: 6px solid var(--text-color);
-            opacity: 1;
-        }
-        #alphas-table th.sortable.sort-desc::after {
-            border-top: 6px solid var(--text-color);
-            opacity: 1;
-        }
-        /* v8.3.1: Style for the span inside the sortable header */
-        #alphas-table th.sortable span.header-text {
-            cursor: help; /* Change cursor for the text */
-            text-decoration: underline dotted;
-        }
-        #alphas-table th.sortable span.header-text:hover {
-            color: var(--link-color);
-        }
+        #alphas-table th.sortable { cursor: pointer; position: relative; }
+        #alphas-table th.sortable::after { content: ''; position: absolute; right: 8px; top: 50%; margin-top: -6px; border-left: 5px solid transparent; border-right: 5px solid transparent; opacity: 0.3; }
+        #alphas-table th.sortable.sort-asc::after { border-bottom: 6px solid var(--text-color); opacity: 1; }
+        #alphas-table th.sortable.sort-desc::after { border-top: 6px solid var(--text-color); opacity: 1; }
+        #alphas-table th.sortable span.header-text { cursor: help; text-decoration: underline dotted; }
+        #alphas-table th.sortable span.header-text:hover { color: var(--link-color); }
         /* v8.3.1 End */
 
-        /* Column widths */
-        #alphas-table th:nth-child(1), #alphas-table td:nth-child(1) { width: 10%; } /* Score */
-        #alphas-table th:nth-child(2), #alphas-table td:nth-child(2) { width: 30%; } /* Expression */
-        #alphas-table th:nth-child(3), #alphas-table td:nth-child(3) { width: 10%; } /* Fitness */
-        #alphas-table th:nth-child(4), #alphas-table td:nth-child(4) { width: 10%; } /* Sharpe */
-        #alphas-table th:nth-child(5), #alphas-table td:nth-child(5) { width: 15%; } /* Checks */
-        #alphas-table th:nth-child(6), #alphas-table td:nth-child(6) { width: 10%; } /* Time */
-        #alphas-table th:nth-child(7), #alphas-table td:nth-child(7) { width: 10%; text-align: center;} /* Actions */
-        #alphas-table th:nth-child(8), #alphas-table td:nth-child(8) { width: 7%; text-align: center;}  /* Copy */
+        /* v8.4.0: Adjusted Column widths */
+        #alphas-table th:nth-child(1), #alphas-table td:nth-child(1) { width: 8%; } /* Score */
+        #alphas-table th:nth-child(2), #alphas-table td:nth-child(2) { width: 25%; } /* Expression */
+        #alphas-table th:nth-child(3), #alphas-table td:nth-child(3) { width: 8%; } /* Fitness */
+        #alphas-table th:nth-child(4), #alphas-table td:nth-child(4) { width: 8%; } /* Sharpe */
+        #alphas-table th:nth-child(5), #alphas-table td:nth-child(5) { width: 8%; } /* Returns */
+        #alphas-table th:nth-child(6), #alphas-table td:nth-child(6) { width: 8%; } /* Turnover */
+        #alphas-table th:nth-child(7), #alphas-table td:nth-child(7) { width: 12%; } /* Checks */
+        #alphas-table th:nth-child(8), #alphas-table td:nth-child(8) { width: 8%; } /* Time */
+        #alphas-table th:nth-child(9), #alphas-table td:nth-child(9) { width: 10%; text-align: center;} /* Actions */
+        #alphas-table th:nth-child(10), #alphas-table td:nth-child(10) { width: 5%; text-align: center;}  /* Copy */
+        /* v8.4.0 End */
 
-        /* Remove #score-header specific styles, handled by span now */
-        /* #score-header, */ .score-value { cursor: pointer; text-decoration: underline dotted; }
-        /* #score-header:hover, */ .score-value:hover { color: var(--link-color); }
+
+        .score-value { cursor: pointer; text-decoration: underline dotted; }
+        .score-value:hover { color: var(--link-color); }
 
         .alpha-expression-container { cursor: pointer; display: block; position: relative; }
         .alpha-expression-container .alpha-short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -171,6 +150,8 @@
                         <th>Expression (点击展开/折叠)</th>
                         <th class="sortable" data-sort="fitness">Fitness</th>
                         <th class="sortable" data-sort="sharpe">Sharpe</th>
+                        <th class="sortable" data-sort="returns">Returns</th>
+                        <th class="sortable" data-sort="turnover">Turnover</th>
                         <th class="sortable" data-sort="checks">Checks</th>
                         <th class="sortable" data-sort="timestamp">创建时间</th>
                         <th>操作</th>
@@ -318,6 +299,16 @@
                     valA = getFloat(a.performance?.sharpe);
                     valB = getFloat(b.performance?.sharpe);
                     break;
+                // --- v8.4.0: Add Returns and Turnover ---
+                case 'returns':
+                    valA = getFloat(a.performance?.returns);
+                    valB = getFloat(b.performance?.returns);
+                    break;
+                case 'turnover':
+                    valA = getFloat(a.performance?.turnover);
+                    valB = getFloat(b.performance?.turnover);
+                    break;
+                // --- v8.4.0 End ---
                 case 'checks':
                     valA = getChecks(a.checks_summary);
                     valB = getChecks(b.checks_summary);
@@ -355,8 +346,8 @@
 
         // v8.3.0: Check if globalAlphaData is empty
         if (!globalAlphaData || globalAlphaData.length === 0) {
-            // This is handled by the error catch in fetchData, but good to have a fallback
-             tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">暂无数据。</td></tr>`;
+            // v8.4.0: Update colspan
+             tbody.innerHTML = `<tr><td colspan="10" style="text-align: center;">暂无数据。</td></tr>`;
              return;
         }
 
@@ -373,16 +364,23 @@
             // Copy HTML
             let copyHTML = `<button class="copy-btn" onclick="copyToClipboard('${sanitizedExpression}', this)">复制</button>`;
 
+            // Helper for formatting numbers
+            const formatNum = (num, digits = 4) => (typeof num === 'number' ? num.toFixed(digits) : (num || 'N/A'));
+
             // Create cells
             const score = alpha.dashboard_score;
-            row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${(typeof score === 'number' ? score.toFixed(4) : 'N/A')}</span>`; // Use dashboard_score here
+            row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${formatNum(score)}</span>`; // Use dashboard_score here
             row.insertCell().innerHTML = `<div class="alpha-expression-container" onclick="toggleExpressionView(event)">${formatExpression(alpha.expression)}</div>`;
-            row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${(typeof alpha.performance?.fitness === 'number' ? alpha.performance.fitness.toFixed(4) : (alpha.performance?.fitness || 'N/A'))}`; // Access fitness via performance
-            row.insertCell().textContent = (typeof alpha.performance?.sharpe === 'number' ? alpha.performance.sharpe.toFixed(4) : (alpha.performance?.sharpe || 'N/A')); // Access sharpe via performance
+            row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${formatNum(alpha.performance?.fitness)}`;
+            row.insertCell().textContent = formatNum(alpha.performance?.sharpe);
+            // --- v8.4.0: Add Returns and Turnover ---
+            row.insertCell().textContent = formatNum(alpha.performance?.returns);
+            row.insertCell().textContent = formatNum(alpha.performance?.turnover);
+            // --- v8.4.0 End ---
             row.insertCell().innerHTML = formatChecks(alpha.checks_summary); // Use checks_summary for badges
             row.insertCell().textContent = alpha.timestamp || 'N/A';
-            row.insertCell().innerHTML = actionsHTML; row.cells[6].className = 'alpha-actions'; // Assign class after creation
-            row.insertCell().innerHTML = copyHTML; row.cells[7].className = 'copy-action'; // Assign class
+            row.insertCell().innerHTML = actionsHTML; row.cells[8].className = 'alpha-actions'; // v8.4.0: Index updated
+            row.insertCell().innerHTML = copyHTML; row.cells[9].className = 'copy-action'; // v8.4.0: Index updated
 
             tbody.appendChild(row);
         });
@@ -416,7 +414,8 @@
                 const errorMsg = `加载状态失败: ${error}. 请检查仪表盘服务是否运行并刷新页面。`;
                 document.getElementById('miner-logs').textContent = errorMsg;
                 document.getElementById('evolver-logs').textContent = errorMsg;
-                document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="8" style="color: red; text-align: center;">${errorMsg}</td></tr>`; // Colspan is 8
+                // v8.4.0: Update colspan
+                document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="10" style="color: red; text-align: center;">${errorMsg}</td></tr>`;
             });
     }
 
@@ -431,8 +430,10 @@
         document.querySelectorAll('#alphas-table th.sortable').forEach(header => {
             header.addEventListener('click', (event) => { // v8.3.1: Pass event
                 // --- v8.3.1: Check if the click target was the inner span ---
+                // Allow click on text span only if it's the score explanation one
                 if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) {
-                    // Click was on the text span, let its own onclick handle the modal
+                    // Let its own onclick handle the modal and stop propagation
+                    // showScoreExplanation is already called by the span's onclick
                     return; 
                 }
                 // --- v8.3.1 End ---
@@ -443,9 +444,10 @@
                     // Toggle direction
                     currentSort.direction = (currentSort.direction === 'asc' ? 'desc' : 'asc');
                 } else {
-                    // New key, default to descending
+                    // New key, default to descending for most, ascending for timestamp
                     currentSort.key = sortKey;
-                    currentSort.direction = 'desc';
+                    // v8.4.0: Default timestamp sort to ascending
+                    currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc'); 
                 }
 
                 // Re-sort and re-render the table

@@ -24,31 +24,41 @@
              --chart-tooltip-text: #333;
              --button-refresh-bg: #138496; --button-refresh-hover-bg: #117a8b;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
-        .container { max-width: 1200px; margin: 20px auto; }
-        .header { background: var(--header-bg-color); color: var(--header-text-color); padding: 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
-        .header h1 { margin: 0; }
-        .header a { color: var(--header-text-color); text-decoration: none; font-size: 14px; opacity: 0.8; margin-left: 10px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; /* v10.0.3: Reduced padding */ transition: background-color 0.3s, color 0.3s; }
+        .container { max-width: 1200px; margin: 10px auto; /* v10.0.3: Reduced margin */ }
+        .header { background: var(--header-bg-color); color: var(--header-text-color); padding: 15px; /* v10.0.3: Reduced padding */ border-radius: 8px 8px 0 0; display: flex; flex-wrap: wrap; /* v10.0.3: Allow wrap */ justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
+        .header h1 { margin: 0; font-size: 1.5rem; /* v10.0.3: Smaller title */ margin-bottom: 5px; /* Add margin when wrapped */}
+        .header a { color: var(--header-text-color); text-decoration: none; font-size: 13px; /* v10.0.3: Smaller */ opacity: 0.8; margin-left: 8px; /* v10.0.3: Smaller */ }
         .header a:hover { opacity: 1; }
-        .header-controls { display: flex; align-items: center; } /* v10.0.2: Wrapper for buttons */
-        .chart-container { background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; padding: 20px; transition: background-color 0.3s; border: 1px solid var(--border-color); }
-        .chart-container h2 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .header-controls { display: flex; align-items: center; margin-top: 5px; /* Add margin when wrapped */ }
+        .chart-container { background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 15px; /* v10.0.3: Reduced margin */ padding: 15px; /* v10.0.3: Reduced padding */ transition: background-color 0.3s; border: 1px solid var(--border-color); }
+        .chart-container h2 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; font-size: 1.1rem; /* v10.0.3: Smaller */}
         /* v10.0.2: Set explicit height for chart wrapper */
         .chart-canvas-wrapper {
             position: relative;
-            height: 350px; /* Adjust as needed */
+            height: 300px; /* v10.0.3: Slightly reduced default height */
             width: 100%;
         }
-        #loading-message, #error-message { text-align: center; padding: 20px; font-size: 1.1em; color: var(--muted-text-color); }
-        #theme-toggle { cursor: pointer; font-size: 20px; background: none; border: none; color: var(--header-text-color); margin-left: 15px; }
+        #loading-message, #error-message { text-align: center; padding: 15px; font-size: 1em; /* v10.0.3: Smaller */ color: var(--muted-text-color); }
+        #theme-toggle { cursor: pointer; font-size: 18px; /* v10.0.3: Smaller */ background: none; border: none; color: var(--header-text-color); margin-left: 10px; /* v10.0.3: Smaller */}
         /* v10.0.2: Refresh button style */
          #refresh-button {
             background-color: var(--button-refresh-bg); color: var(--button-text-color);
-            padding: 8px 15px; border: none; border-radius: 4px; font-size: 14px;
-            cursor: pointer; transition: background-color 0.3s ease; margin-left: 15px;
+            padding: 6px 12px; /* v10.0.3: Smaller */ border: none; border-radius: 4px; font-size: 13px; /* v10.0.3: Smaller */
+            cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px; /* v10.0.3: Smaller */
         }
         #refresh-button:hover { background-color: var(--button-refresh-hover-bg); }
         #refresh-button:disabled { background-color: var(--muted-text-color); cursor: not-allowed; }
+
+        /* --- v10.0.3: Responsive Media Queries --- */
+        @media (max-width: 768px) {
+            .header { padding: 10px; }
+            .header h1 { font-size: 1.3rem; width: 100%; margin-bottom: 8px; text-align: center;} /* Full width title on mobile */
+            .header-controls { width: 100%; justify-content: space-around; /* Space out controls */}
+             .chart-canvas-wrapper { height: 250px; /* Further reduce height on mobile */ }
+             .chart-container h2 { font-size: 1rem; }
+        }
+         /* --- v10.0.3 End --- */
     </style>
 </head>
 <body>
@@ -94,7 +104,7 @@
     const countChartContainer = document.getElementById('count-chart-container');
     const fitnessChartContainer = document.getElementById('fitness-chart-container');
     const hqChartContainer = document.getElementById('hq-chart-container');
-    const refreshButton = document.getElementById('refresh-button'); // v10.0.2
+    const refreshButton = document.getElementById('refresh-button');
 
     let alphaCountChartInstance = null;
     let averageFitnessChartInstance = null;
@@ -104,7 +114,7 @@
         document.documentElement.setAttribute('data-theme', theme);
         themeToggle.textContent = theme === 'dark' ? '☀️' : '🌓';
         [alphaCountChartInstance, averageFitnessChartInstance, highQualityCountChartInstance].forEach(chart => {
-            if (chart && chart.options) { // v6.1.1: Check if chart.options exists
+            if (chart && chart.options) {
                 const isDark = theme === 'dark';
                 const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                 const textColor = isDark ? '#e0e0e0' : '#333';
@@ -154,7 +164,7 @@
 
         const commonOptions = {
              responsive: true,
-             maintainAspectRatio: false, // v10.0.2: Set to false as container has height
+             maintainAspectRatio: false, // Keep false
              interaction: { mode: 'index', intersect: false },
              scales: {
                 x: {
@@ -212,14 +222,14 @@
                     fill: true,
                     pointRadius: 1,
                     pointHoverRadius: 5,
-                    spanGaps: true // v10.0.3: Connect line across null data points
+                    spanGaps: true // Connect line across null data points
                 }]
             },
             options: JSON.parse(JSON.stringify(commonOptions)) // Deep copy
         });
         // v10.0.3: Remove suggestedMin, keep beginAtZero=false
         averageFitnessChartInstance.options.scales.y.beginAtZero = false;
-        // delete averageFitnessChartInstance.options.scales.y.suggestedMin; // Or simply don't set it
+        // delete averageFitnessChartInstance.options.scales.y.suggestedMin; // Removed this line
         fitnessChartContainer.style.display = 'block';
         averageFitnessChartInstance.update();
 

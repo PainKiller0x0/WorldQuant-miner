@@ -3,14 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v8.4.0)</title>
+    <title>WQ Alpha 监控仪表盘 (v8.4.1)</title>
 <style>
         /* v8.2.1: Minor style adjustments */
         :root { /* Color variables */
-            --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333; --muted-text-color: #7f8c8d; --header-bg-color: #3498db; --header-text-color: white; --link-color: #2980b9; --border-color: #ddd; --table-header-bg: #ecf0f1; --log-bg-color: #2c3e50; --log-text-color: #ecf0f1; --dot-default-bg: #95a5a6; --dot-running-bg: #2ecc71; --dot-stalled-bg: #e67e22; --dot-error-bg: #e74c3c; --status-pass-color: #28a745; --status-fail-color: #dc3545; --status-pending-color: #fd7e14; --alpha-submitted-bg: #e2e3e5; --alpha-failed-bg: #f8d7da; --alpha-failed-text: #721c24; --alpha-success-bg: #d4edda; --alpha-success-text: #155724; --button-primary-bg: #007bff; --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d; --button-secondary-hover-bg: #5a6268; --button-text-color: white; --badge-pass-bg: #28a745; --badge-fail-bg: #dc3545; --badge-pending-bg: #fd7e14; --badge-text-color: white; --modal-bg: rgba(0, 0, 0, 0.5); --modal-content-bg: #fff;
+            --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333; --muted-text-color: #7f8c8d; --header-bg-color: #3498db; --header-text-color: white; --link-color: #2980b9; --border-color: #ddd; --table-header-bg: #ecf0f1; --log-bg-color: #2c3e50; --log-text-color: #ecf0f1; --dot-default-bg: #95a5a6; --dot-running-bg: #2ecc71; --dot-stalled-bg: #e67e22; --dot-error-bg: #e74c3c; --status-pass-color: #28a745; --status-fail-color: #dc3545; --status-pending-color: #fd7e14; --alpha-submitted-bg: #e2e3e5; --alpha-failed-bg: #f8d7da; --alpha-failed-text: #721c24; --alpha-success-bg: #d4edda; --alpha-success-text: #155724; 
+            /* v8.4.1: New color for submittable */
+            --alpha-submittable-bg: #cfe2ff; --alpha-submittable-text: #052c65; 
+            --button-primary-bg: #007bff; --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d; --button-secondary-hover-bg: #5a6268; --button-text-color: white; --badge-pass-bg: #28a745; --badge-fail-bg: #dc3545; --badge-pending-bg: #fd7e14; --badge-text-color: white; --modal-bg: rgba(0, 0, 0, 0.5); --modal-content-bg: #fff;
         }
         [data-theme="dark"] { /* Dark theme variables */
-             --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0; --muted-text-color: #999; --header-bg-color: #0056b3; --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444; --table-header-bg: #3a3a3a; --log-bg-color: #1c1c1c; --log-text-color: #ccc; --alpha-submitted-bg: #3a3a3a; --alpha-failed-bg: #5a2d2d; --alpha-failed-text: #f5c6cb; --alpha-success-bg: #2d5a2d; --alpha-success-text: #c3e6cb; --button-primary-bg: #0056b3; --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268; --button-secondary-hover-bg: #495057; --badge-pass-bg: #218838; --badge-fail-bg: #c82333; --badge-pending-bg: #e0710a; --badge-text-color: #f0f0f0; --modal-bg: rgba(0, 0, 0, 0.7); --modal-content-bg: #3a3a3a;
+             --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0; --muted-text-color: #999; --header-bg-color: #0056b3; --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444; --table-header-bg: #3a3a3a; --log-bg-color: #1c1c1c; --log-text-color: #ccc; --alpha-submitted-bg: #3a3a3a; --alpha-failed-bg: #5a2d2d; --alpha-failed-text: #f5c6cb; --alpha-success-bg: #2d5a2d; --alpha-success-text: #c3e6cb; 
+             /* v8.4.1: New color for submittable (dark) */
+             --alpha-submittable-bg: #03285a; --alpha-submittable-text: #a6c8ff;
+             --button-primary-bg: #0056b3; --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268; --button-secondary-hover-bg: #495057; --badge-pass-bg: #218838; --badge-fail-bg: #c82333; --badge-pending-bg: #e0710a; --badge-text-color: #f0f0f0; --modal-bg: rgba(0, 0, 0, 0.7); --modal-content-bg: #3a3a3a;
         }
         body { font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
         .container { max-width: 1600px; margin: 0 auto; } /* v8.4.0: Increased max-width */
@@ -87,6 +93,9 @@
         .alpha-status-failed { background-color: var(--alpha-failed-bg); color: var(--alpha-failed-text); }
         .alpha-status-failed .alpha-expression-container span { text-decoration: line-through; }
         .alpha-status-success { background-color: var(--alpha-success-bg); color: var(--alpha-success-text); font-weight: bold; }
+        /* v8.4.1: New style for submittable but not submitted */
+        .alpha-status-submittable { background-color: var(--alpha-submittable-bg); color: var(--alpha-submittable-text); }
+        
         .submittable-marker { display: inline-block; background-color: var(--status-pass-color); color: white; padding: 2px 5px; font-size: 10px; border-radius: 3px; margin-right: 5px; font-weight: bold; vertical-align: middle; }
         .check-badges span { display: inline-block; padding: 3px 6px; font-size: 11px; font-weight: bold; border-radius: 4px; margin-right: 4px; color: var(--badge-text-color); line-height: 1; margin-bottom: 2px; }
         .check-badges .badge-pass { background-color: var(--badge-pass-bg); }
@@ -353,9 +362,22 @@
 
         globalAlphaData.forEach((alpha, index) => {
             const row = document.createElement('tr');
+            
+            // --- v8.4.1: Updated rowClass logic ---
             let rowClass = '';
-            if (alpha.is_successfully_submitted) rowClass = 'alpha-status-success'; else if (alpha.is_failed_on_wq) rowClass = 'alpha-status-failed'; else if (alpha.is_submitted) rowClass = 'alpha-status-submitted';
+            if (alpha.is_successfully_submitted) { // Green (Already Submitted & OK)
+                rowClass = 'alpha-status-success';
+            } else if (alpha.is_failed_on_wq) { // Red (Submitted & Failed)
+                rowClass = 'alpha-status-failed';
+            } else if (alpha.is_submittable && !alpha.is_submitted) { // Light Blue (Submittable but NOT Submitted)
+                rowClass = 'alpha-status-submittable'; // New class!
+            } else if (alpha.is_submitted) { // Grey (Submitted but maybe not Submittable or status pending)
+                rowClass = 'alpha-status-submitted';
+            }
+            // else: No color (Not submittable, not submitted)
             row.className = rowClass;
+            // --- v8.4.1 End ---
+            
             const sanitizedExpression = alpha.expression.replace(/'/g, "\\'").replace(/"/g, '\\"');
             const uniqueIdPrefix = `alpha-${index}`;
 
@@ -429,16 +451,17 @@
         // --- v8.3.0: Add click listeners to sortable headers ---
         document.querySelectorAll('#alphas-table th.sortable').forEach(header => {
             header.addEventListener('click', (event) => { // v8.3.1: Pass event
-                // --- v8.3.1: Check if the click target was the inner span ---
-                // Allow click on text span only if it's the score explanation one
+                // --- v8.3.1: Check if the click target was the inner span for score explanation ---
                 if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) {
                     // Let its own onclick handle the modal and stop propagation
                     // showScoreExplanation is already called by the span's onclick
-                    return; 
+                    return;
                 }
                 // --- v8.3.1 End ---
 
                 const sortKey = header.dataset.sort;
+                // v8.4.1: Ensure sortKey is valid before proceeding
+                if (!sortKey) return; 
 
                 if (currentSort.key === sortKey) {
                     // Toggle direction
@@ -446,8 +469,7 @@
                 } else {
                     // New key, default to descending for most, ascending for timestamp
                     currentSort.key = sortKey;
-                    // v8.4.0: Default timestamp sort to ascending
-                    currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc'); 
+                    currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc');
                 }
 
                 // Re-sort and re-render the table

@@ -1,4 +1,4 @@
-# --- wq_client.py v9.4.1 (Add Re-auth to get_operators) ---
+# --- wq_client.py v9.4.2 (Remove problematic advXX fields) ---
 # WorldQuant API 交互模块
 
 import logging
@@ -88,16 +88,22 @@ class WorldQuant:
                  raise general_e # Raise unexpected error
 
 
+    # --- v9.4.2: Remove problematic advXX fields ---
     def get_data_fields(self):
-        logger.info("正在使用扩展的、针对高级用户的官方核心数据字段列表...")
+        logger.info("正在使用筛选后的核心及高级数据字段列表...")
         safe_fields = [
             "open", "high", "low", "close", "volume", "vwap",
             "cap", "returns", "turnover", "beta", "momentum",
-            "adv20", "adv40", "adv60", "adv80", "adv120",
+            "adv20", 
+            # "adv40", # Commented out due to API errors
+            # "adv60", # Commented out due to API errors
+            # "adv80", # Commented out due to API errors
+            # "adv120",# Commented out due to API errors
             "buy_turnover", "sell_turnover", "indneutral_beta"
         ]
-        logger.info(f"成功加载 {len(safe_fields)} 个核心及高级数据字段。")
+        logger.info(f"成功加载 {len(safe_fields)} 个筛选后的数据字段。")
         return safe_fields
+    # --- v9.4.2 End ---
 
     # --- v9.4.1: Updated get_operators with robust re-authentication ---
     def get_operators(self):
@@ -131,8 +137,17 @@ class WorldQuant:
         submit_url = f"{self.base_url}/simulations"
         current_settings = self.default_settings.copy()
         if custom_settings:
-            current_settings.update(custom_settings)
-            logger.info(f"使用自定义参数进行测试: {custom_settings}")
+            # v9.4.2: Ensure settings used are aligned with available keys in default_settings
+            # This prevents potentially invalid settings from being sent
+            valid_custom_settings = {k: v for k, v in custom_settings.items() if k in self.default_settings}
+            current_settings.update(valid_custom_settings)
+            if len(valid_custom_settings) < len(custom_settings):
+                 ignored_keys = set(custom_settings.keys()) - set(valid_custom_settings.keys())
+                 logger.warning(f"Ignoring invalid/unknown settings keys: {ignored_keys}")
+            logger.info(f"使用自定义参数进行测试: {current_settings}") # Log the final settings used
+        else:
+             logger.info(f"使用默认参数进行测试: {current_settings}")
+
 
         payload = {'type': 'REGULAR', 'regular': alpha_expression, 'settings': current_settings}
 
@@ -169,10 +184,9 @@ class WorldQuant:
         while time.time() - polling_start_time < POLLING_TIMEOUT:
             try:
                 # Use helper for polling
-                # Add absolute URL if progress_url is relative (it should be absolute based on API docs)
                 poll_url = progress_url
                 if not poll_url.startswith('http'):
-                    poll_url = f"{self.base_url}{poll_url}" # Assuming relative path needs base_url
+                    poll_url = f"{self.base_url}{poll_url}" 
 
                 poll_response = self._make_request('GET', poll_url, timeout=120)
                 result_data = poll_response.json()
@@ -182,18 +196,17 @@ class WorldQuant:
                     alpha_id = result_data.get("alpha")
                     if not alpha_id:
                         logger.error(f"模拟完成，但未找到 alpha id。 Data: {result_data}")
-                        return None # Return None or error structure
+                        return None 
                     
-                    # Fetch final alpha details using the helper
                     final_alpha_url = f"{self.base_url}/alphas/{alpha_id}"
-                    final_response = self._make_request('GET', final_alpha_url, timeout=60) # Increased timeout
+                    final_response = self._make_request('GET', final_alpha_url, timeout=60) 
                     final_data = final_response.json()
                     logger.info(f"Alpha '{alpha_id}' 模拟完成。")
                     return final_data
 
                 elif status == "ERROR":
                     logger.error(f"Alpha 模拟出错，服务器返回的完整错误报告: {result_data}")
-                    return result_data # Return the error structure
+                    return result_data 
                 else:
                     logger.debug(f"Alpha '{alpha_expression}' 仍在模拟中... 状态: {status}")
                     time.sleep(10) # Wait before next poll
@@ -209,9 +222,7 @@ class WorldQuant:
                  time.sleep(15)
             except Exception as e:
                 logger.error(f"处理轮询结果时发生未知错误: {e}", exc_info=True)
-                # Decide whether to return None or keep polling based on the error type
-                # For now, let's return None to avoid infinite loops on unexpected errors
-                return None # Or consider a specific error state like "POLLING_ERROR"
+                return None 
 
         logger.warning(f"Alpha '{alpha_expression}' 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
         return "TIMEOUT"

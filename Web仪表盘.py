@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v6.1.4 (Fix round() TypeError & DeprecationWarning) ---
+# --- Web仪表盘.py v6.1.5 (Add Submission Stats & Fix Sticky Header Logic) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -11,9 +11,9 @@ import logging
 import pandas as pd # v10.0: Added for timeseries analysis
 import numpy as np # v6.1.3: Import numpy for NaN checks
 
-# --- v6.1.4: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v6.1.4"
-# --- v6.1.4: 结束 ---
+# --- v6.1.5: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v6.1.5"
+# --- v6.1.5: 结束 ---
 
 # --- 配置基础日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -125,12 +125,14 @@ def get_service_status(log_file):
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
 
-# --- v6.0.2: Fix get_hopeful_alphas_stats (Remove backend sort) ---
+# --- v6.1.5: Add submission counts to get_hopeful_alphas_stats ---
 def get_hopeful_alphas_stats():
-    # ... (代码不变) ...
     stats = {
         "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
-        "submittable_pending_count": 0, "all_alphas": []
+        "submittable_pending_count": 0,
+        "successfully_submitted_count": 0, # v6.1.5 New
+        "total_submitted_count": 0,       # v6.1.5 New
+        "all_alphas": []
     }
     submitted_set = load_submitted_alphas()
     failed_set = load_failed_submissions()
@@ -190,6 +192,9 @@ def get_hopeful_alphas_stats():
 
             processed_alphas_temp = []
             processed_count = 0
+            # v6.1.5: Initialize new counters
+            successfully_submitted_count_local = 0
+            total_submitted_count_local = 0
 
             for alpha_report in valid_alphas_list:
                 try:
@@ -205,7 +210,15 @@ def get_hopeful_alphas_stats():
                     is_submitted = expression in submitted_set
                     is_failed_on_wq = expression in failed_set
                     is_successfully_submitted = is_submittable and is_submitted and not is_failed_on_wq
+
                     if is_submittable and not is_submitted and not is_failed_on_wq: stats['submittable_pending_count'] += 1
+
+                    # v6.1.5: Increment submission counts
+                    if is_submitted:
+                         total_submitted_count_local += 1
+                         if is_successfully_submitted: # Only count as successful if also submittable and not failed
+                             successfully_submitted_count_local += 1
+
                     processed_alpha_data = {
                         "expression": expression, "timestamp": alpha_report.get('timestamp', 'N/A'),
                         "checks_summary": summary_str, "is_submittable": is_submittable,
@@ -217,11 +230,16 @@ def get_hopeful_alphas_stats():
                     processed_alphas_temp.append(processed_alpha_data)
                     processed_count += 1
                 except Exception as e: logger.error(f"[Stats Process] Error processing alpha: {alpha_report.get('expression', 'N/A')}. Error: {e}", exc_info=True)
+
             logger.info(f"[Stats] Processed {processed_count}/{len(valid_alphas_list)} valid alphas for stats.")
             stats['all_alphas'] = processed_alphas_temp
+            # v6.1.5: Assign calculated counts to stats dict
+            stats['successfully_submitted_count'] = successfully_submitted_count_local
+            stats['total_submitted_count'] = total_submitted_count_local
+
         except Exception as e: logger.error(f"[Stats] Unexpected error processing alphas list: {e}", exc_info=True)
     return stats
-# --- v6.0.2 End Fix ---
+# --- v6.1.5 End Fix ---
 
 
 # --- get_version_from_file remains unchanged ---
@@ -328,12 +346,8 @@ def save_settings():
 
             with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(validated_config, f, indent=2)
             logger.info(f"[API /api/save_settings] Successfully saved new config: {validated_config}")
-            # v6.1.4: Invalidate cache on settings save, as settings might affect future data
-            global _timeseries_cache, _timeseries_cache_time
-            with _cache_lock:
-                 _timeseries_cache = None
-                 _timeseries_cache_time = None
-                 logger.info("[API /api/save_settings] Timeseries cache invalidated.")
+            global _timeseries_cache, _timeseries_cache_time # Invalidate cache on settings save
+            with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None; logger.info("[API /api/save_settings] Timeseries cache invalidated.")
             return jsonify(status='success', message='Config saved')
 
         except Exception as e:
@@ -347,7 +361,7 @@ def status():
     try:
         data = { "miner": get_service_status('miner.log'),
                  "evolver": get_service_status('evolver.log'),
-                 "hopeful_alphas": get_hopeful_alphas_stats() }
+                 "hopeful_alphas": get_hopeful_alphas_stats() } # This now includes submission counts
         response = make_response(jsonify(data))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; response.headers['Pragma'] = 'no-cache'; response.headers['Expires'] = '0'
         logger.info("[API /status] Request completed successfully."); return response
@@ -365,25 +379,23 @@ def version_info():
 # --- v6.1.4: Updated API Endpoint with corrected Fitness Mean & round order ---
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
+    # ... (代码不变) ...
     global _timeseries_cache, _timeseries_cache_time
     logger.info("[API /api/v1/stats/timeseries] Request received.")
 
     with _cache_lock:
         now = datetime.now(timezone.utc)
-        # Check if cache exists and is still valid
         if _timeseries_cache and _timeseries_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
             logger.info("[API Timeseries] Returning cached data.")
             return jsonify(_timeseries_cache)
 
-        # Cache is invalid or doesn't exist, proceed to generate data
         logger.info("[API Timeseries] Cache invalid or expired. Generating new data...")
         data = []
-        with tested_log_lock: # Use the lock for reading the log file
+        with tested_log_lock:
             if not os.path.exists(TESTED_ALPHAS_LOG_FILE):
                 logger.warning(f"[API Timeseries] File not found: {TESTED_ALPHAS_LOG_FILE}")
                 return jsonify({"error": "Log file not found."}), 404
             try:
-                # Load data using pandas for efficient parsing
                 df = pd.read_json(TESTED_ALPHAS_LOG_FILE)
                 if df.empty:
                     logger.info("[API Timeseries] Log file is empty.")
@@ -391,65 +403,43 @@ def api_stats_timeseries():
                     _timeseries_cache_time = now
                     return jsonify(_timeseries_cache)
 
-                # --- Data Processing ---
                 df['timestamp_dt'] = pd.to_datetime(df['timestamp'], errors='coerce')
                 df = df.dropna(subset=['timestamp_dt'])
-
-                # v6.1.3 -> v6.1.4: Convert fitness to numeric, coerce errors to NaN (DO NOT FILLNA)
-                df['fitness_num'] = pd.to_numeric(df['fitness'], errors='coerce')
-                # Keep only rows where fitness_num is a valid number (not NaN) for mean calculation
+                df['fitness_num'] = pd.to_numeric(df['fitness'], errors='coerce') # Keep NaN
                 df_valid_fitness = df.dropna(subset=['fitness_num'])
-
-                # Convert passed_checks to numeric, coerce errors to NaN, fill NaN with 0
                 df['passed_checks_num'] = pd.to_numeric(df['passed_checks'], errors='coerce').fillna(0)
-
-                # Set datetime as index for resampling (use the original df for counts)
                 df = df.set_index('timestamp_dt')
-                # Use df_valid_fitness for fitness mean calculation
                 df_valid_fitness = df_valid_fitness.set_index('timestamp_dt')
 
-                # v6.1.4: Use 'h' instead of deprecated 'H' for hourly frequency
+                # v6.1.4: Use 'h'
                 resampler_all = df.resample('h')
                 resampler_valid = df_valid_fitness.resample('h')
 
-                # Calculate count from all entries
                 agg_counts = resampler_all['expression'].size()
-
-                # Calculate mean fitness ONLY from valid fitness entries
-                agg_mean_fitness = resampler_valid['fitness_num'].mean()
-
-                # Calculate high quality count
+                agg_mean_fitness = resampler_valid['fitness_num'].mean() # Skips NaN by default
                 df_hq = df[(df['fitness_num'] > 0.5) & (df['passed_checks_num'] >= 4)]
-                hq_counts = df_hq.resample('h').size() # v6.1.4: Use 'h'
+                hq_counts = df_hq.resample('h').size()
 
-                # Combine the aggregated series, reindex to ensure all hours are present
                 combined_index = agg_counts.index.union(agg_mean_fitness.index).union(hq_counts.index)
-
                 output_df = pd.DataFrame(index=combined_index)
                 output_df['count'] = agg_counts.reindex(combined_index).fillna(0).astype(int)
-                # Apply mean calculation result (which already skipped NaNs)
-                output_df['mean_fitness'] = agg_mean_fitness.reindex(combined_index) # Keep NaN where no valid fitness existed
+                output_df['mean_fitness'] = agg_mean_fitness.reindex(combined_index) # Keep NaN
                 output_df['high_quality_count'] = hq_counts.reindex(combined_index).fillna(0).astype(int)
 
-                # Format for JSON output
                 output = {
                     "timestamps": output_df.index.strftime('%Y-%m-%dT%H:%M:%S').tolist(),
                     "count": output_df['count'].tolist(),
-                    # v6.1.4: Round first (on numeric data), then replace NaN for JSON
-                    "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(),
+                    "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(), # Round then replace NaN
                     "high_quality_count": output_df['high_quality_count'].tolist()
                 }
-                # --- End Data Processing ---
 
                 _timeseries_cache = output
                 _timeseries_cache_time = now
                 logger.info(f"[API Timeseries] Successfully processed {len(df)} log entries. Cached result.")
                 return jsonify(output)
 
-            # --- Error Handling (same as before) ---
             except json.JSONDecodeError as e:
                 logger.error(f"[API Timeseries] Error decoding JSON from {TESTED_ALPHAS_LOG_FILE}: {e}")
-                # v6.1.4: Clear cache on error
                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
                 return jsonify({"error": "Log file is corrupted."}), 500
             except FileNotFoundError:

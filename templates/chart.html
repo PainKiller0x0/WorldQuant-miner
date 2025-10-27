@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v10.0 统计图表 - WQminer</title>
+    <script src="/static/js/chart.umd.min.js"></script>
+    <script src="/static/js/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        /* Basic styles, similar to settings page, adapt as needed */
+         :root {
+            --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333;
+            --muted-text-color: #7f8c8d; --header-bg-color: #3498db;
+            --header-text-color: white; --link-color: #2980b9; --border-color: #ddd;
+            --chart-grid-color: rgba(0, 0, 0, 0.1); --chart-tooltip-bg: rgba(0, 0, 0, 0.7);
+            --chart-tooltip-text: white;
+            --button-refresh-bg: #17a2b8; --button-refresh-hover-bg: #138496; --button-text-color: white;
+         }
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0;
+            --muted-text-color: #999; --header-bg-color: #0056b3;
+            --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444;
+             --chart-grid-color: rgba(255, 255, 255, 0.1); --chart-tooltip-bg: rgba(255, 255, 255, 0.7);
+             --chart-tooltip-text: #333;
+             --button-refresh-bg: #138496; --button-refresh-hover-bg: #117a8b;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
+        .container { max-width: 1200px; margin: 20px auto; }
+        .header { background: var(--header-bg-color); color: var(--header-text-color); padding: 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
+        .header h1 { margin: 0; }
+        .header a { color: var(--header-text-color); text-decoration: none; font-size: 14px; opacity: 0.8; margin-left: 10px; }
+        .header a:hover { opacity: 1; }
+        .header-controls { display: flex; align-items: center; } /* v10.0.2: Wrapper for buttons */
+        .chart-container { background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; padding: 20px; transition: background-color 0.3s; border: 1px solid var(--border-color); }
+        .chart-container h2 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        /* v10.0.2: Set explicit height for chart wrapper */
+        .chart-canvas-wrapper {
+            position: relative;
+            height: 350px; /* Adjust as needed */
+            width: 100%;
+        }
+        #loading-message, #error-message { text-align: center; padding: 20px; font-size: 1.1em; color: var(--muted-text-color); }
+        #theme-toggle { cursor: pointer; font-size: 20px; background: none; border: none; color: var(--header-text-color); margin-left: 15px; }
+        /* v10.0.2: Refresh button style */
+         #refresh-button {
+            background-color: var(--button-refresh-bg); color: var(--button-text-color);
+            padding: 8px 15px; border: none; border-radius: 4px; font-size: 14px;
+            cursor: pointer; transition: background-color 0.3s ease; margin-left: 15px;
+        }
+        #refresh-button:hover { background-color: var(--button-refresh-hover-bg); }
+        #refresh-button:disabled { background-color: var(--muted-text-color); cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+             <h1>WQminer v10.0 统计图表</h1>
+             <div class="header-controls">
+                 <button id="refresh-button" onclick="fetchDataAndRender()">手动刷新</button>
+                 <a href="/">&larr; 返回主仪表盘</a>
+                 <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
+             </div>
+        </div>
+
+        <div id="loading-message">正在加载统计数据...</div>
+        <div id="error-message" style="display: none; color: red;"></div>
+
+        <div class="chart-container" id="count-chart-container" style="display: none;">
+             <h2>每小时 Alpha 测试数量</h2>
+             <div class="chart-canvas-wrapper">
+                 <canvas id="alphaCountChart"></canvas>
+             </div>
+        </div>
+
+        <div class="chart-container" id="fitness-chart-container" style="display: none;">
+            <h2>每小时平均 Fitness</h2>
+             <div class="chart-canvas-wrapper">
+                 <canvas id="averageFitnessChart"></canvas>
+             </div>
+        </div>
+
+        <div class="chart-container" id="hq-chart-container" style="display: none;">
+             <h2>每小时高质量 Alpha 数量 (Fitness > 0.5, Checks >= 4)</h2>
+             <div class="chart-canvas-wrapper">
+                 <canvas id="highQualityCountChart"></canvas>
+             </div>
+        </div>
+    </div>
+
+<script>
+    const themeToggle = document.getElementById('theme-toggle');
+    const loadingMessage = document.getElementById('loading-message');
+    const errorMessage = document.getElementById('error-message');
+    const countChartContainer = document.getElementById('count-chart-container');
+    const fitnessChartContainer = document.getElementById('fitness-chart-container');
+    const hqChartContainer = document.getElementById('hq-chart-container');
+    const refreshButton = document.getElementById('refresh-button'); // v10.0.2
+
+    let alphaCountChartInstance = null;
+    let averageFitnessChartInstance = null;
+    let highQualityCountChartInstance = null;
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌓';
+        [alphaCountChartInstance, averageFitnessChartInstance, highQualityCountChartInstance].forEach(chart => {
+            if (chart && chart.options) { // v6.1.1: Check if chart.options exists
+                const isDark = theme === 'dark';
+                const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                const textColor = isDark ? '#e0e0e0' : '#333';
+                const tooltipBg = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)';
+                const tooltipText = isDark ? '#333' : 'white';
+                if (chart.options.scales) {
+                    if (chart.options.scales.x) { chart.options.scales.x.grid.color = gridColor; chart.options.scales.x.ticks.color = textColor; }
+                    if (chart.options.scales.y) { chart.options.scales.y.grid.color = gridColor; chart.options.scales.y.ticks.color = textColor; }
+                }
+                if (chart.options.plugins) {
+                    if (chart.options.plugins.legend) { chart.options.plugins.legend.labels.color = textColor; }
+                    if (chart.options.plugins.title) { chart.options.plugins.title.color = textColor; }
+                    if (chart.options.plugins.tooltip) { chart.options.plugins.tooltip.backgroundColor = tooltipBg; chart.options.plugins.tooltip.titleColor = tooltipText; chart.options.plugins.tooltip.bodyColor = tooltipText; }
+                }
+                chart.update();
+            }
+        });
+    }
+
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+    applyTheme(currentTheme);
+
+    themeToggle.addEventListener('click', () => {
+        let targetTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', targetTheme);
+        applyTheme(targetTheme);
+    });
+
+    // Chart rendering function
+    function renderCharts(data) {
+        if (typeof Chart === 'undefined') {
+             console.error('Chart.js is not loaded!');
+             errorMessage.textContent = '加载图表库失败，请检查网络连接或浏览器控制台。';
+             errorMessage.style.display = 'block';
+             loadingMessage.style.display = 'none';
+             countChartContainer.style.display = 'none';
+             fitnessChartContainer.style.display = 'none';
+             hqChartContainer.style.display = 'none';
+             return;
+         }
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        const textColor = isDark ? '#e0e0e0' : '#333';
+        const tooltipBg = isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)';
+        const tooltipText = isDark ? '#333' : 'white';
+
+        const commonOptions = {
+             responsive: true,
+             maintainAspectRatio: false, // v10.0.2: Set to false as container has height
+             interaction: { mode: 'index', intersect: false },
+             scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'hour', tooltipFormat: 'yyyy-MM-dd HH:mm', displayFormats: { hour: 'MM-dd HH:mm' } },
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, source: 'auto', maxRotation: 45, autoSkip: true }
+                },
+                y: {
+                     beginAtZero: true,
+                     grid: { color: gridColor },
+                     ticks: { color: textColor }
+                }
+             },
+             plugins: {
+                 tooltip: { backgroundColor: tooltipBg, titleColor: tooltipText, bodyColor: tooltipText } ,
+                 legend: { labels: { color: textColor } },
+                 title: { display: false }
+            }
+        };
+
+        // 1. Alpha Count Chart
+        const countCtx = document.getElementById('alphaCountChart').getContext('2d');
+        if (alphaCountChartInstance) alphaCountChartInstance.destroy();
+        alphaCountChartInstance = new Chart(countCtx, {
+            type: 'bar',
+            data: {
+                labels: data.timestamps,
+                datasets: [{
+                    label: '每小时测试数',
+                    data: data.count,
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: { ...commonOptions }
+        });
+        countChartContainer.style.display = 'block';
+
+
+        // 2. Average Fitness Chart
+        const fitnessCtx = document.getElementById('averageFitnessChart').getContext('2d');
+        if (averageFitnessChartInstance) averageFitnessChartInstance.destroy();
+        averageFitnessChartInstance = new Chart(fitnessCtx, {
+            type: 'line',
+            data: {
+                labels: data.timestamps,
+                datasets: [{
+                    label: '每小时平均 Fitness',
+                    data: data.mean_fitness,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 1,
+                    pointHoverRadius: 5,
+                    spanGaps: true // v10.0.3: Connect line across null data points
+                }]
+            },
+            options: JSON.parse(JSON.stringify(commonOptions)) // Deep copy
+        });
+        // v10.0.3: Remove suggestedMin, keep beginAtZero=false
+        averageFitnessChartInstance.options.scales.y.beginAtZero = false;
+        // delete averageFitnessChartInstance.options.scales.y.suggestedMin; // Or simply don't set it
+        fitnessChartContainer.style.display = 'block';
+        averageFitnessChartInstance.update();
+
+
+        // 3. High Quality Count Chart
+        const hqCtx = document.getElementById('highQualityCountChart').getContext('2d');
+        if (highQualityCountChartInstance) highQualityCountChartInstance.destroy();
+        highQualityCountChartInstance = new Chart(hqCtx, {
+            type: 'bar',
+            data: {
+                labels: data.timestamps,
+                datasets: [{
+                    label: '每小时高质量 Alpha 数',
+                    data: data.high_quality_count,
+                    backgroundColor: 'rgba(255, 159, 64, 0.6)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: { ...commonOptions }
+        });
+        hqChartContainer.style.display = 'block';
+    }
+
+    // v10.0.2: Encapsulate fetch and render logic
+    function fetchDataAndRender() {
+        loadingMessage.style.display = 'block';
+        errorMessage.style.display = 'none';
+        countChartContainer.style.display = 'none';
+        fitnessChartContainer.style.display = 'none';
+        hqChartContainer.style.display = 'none';
+        refreshButton.disabled = true;
+
+        fetch('/api/v1/stats/timeseries')
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                         throw new Error(err.error || `HTTP ${response.status}: ${response.statusText}`);
+                     }).catch(() => {
+                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                     });
+                }
+                return response.json();
+            })
+            .then(data => {
+                loadingMessage.style.display = 'none';
+                if (data && data.timestamps && data.timestamps.length > 0) {
+                     if (typeof Chart === 'undefined') {
+                         throw new Error('Chart.js library failed to load.');
+                     }
+                    renderCharts(data);
+                } else if (data && data.timestamps && data.timestamps.length === 0) {
+                     errorMessage.textContent = '统计日志为空，暂无图表数据。';
+                     errorMessage.style.display = 'block';
+                } else {
+                    throw new Error('Received invalid data structure from API.');
+                }
+            })
+            .catch(error => {
+                loadingMessage.style.display = 'none';
+                errorMessage.textContent = `加载图表数据失败: ${error.message}`;
+                errorMessage.style.display = 'block';
+                console.error('Error fetching or rendering timeseries data:', error);
+            })
+            .finally(() => {
+                refreshButton.disabled = false;
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+         fetchDataAndRender(); // Initial load
+    });
+
+</script>
+
+</body>
+</html>

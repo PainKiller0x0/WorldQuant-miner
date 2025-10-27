@@ -1,23 +1,26 @@
-# --- Web仪表盘.py v6.0.2 (Remove Backend Sort) ---
+# --- Web仪表盘.py v6.1.4 (Fix round() TypeError & DeprecationWarning) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
-import re 
+import re
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone # v6.1.1: Added timezone
 from collections import deque
 import os.path
 import logging
+import pandas as pd # v10.0: Added for timeseries analysis
+import numpy as np # v6.1.3: Import numpy for NaN checks
 
-# --- v6.0.2: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v6.0.2" 
-# --- v6.0.2: 结束 ---
+# --- v6.1.4: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v6.1.4"
+# --- v6.1.4: 结束 ---
 
 # --- 配置基础日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# v6.1.2: Configure static folder for Flask
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
@@ -26,15 +29,24 @@ SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas
 FAILED_SUBMISSIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json'))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
-DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py") 
+DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py")
 SYSTEM_CONFIG_FILE = os.path.join(BASE_DIR, 'system_config.json')
+TESTED_ALPHAS_LOG_FILE = os.path.join(BASE_DIR, 'tested_alphas_log.json')
 
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
+CACHE_DURATION = timedelta(seconds=300) # v6.1.1: Cache duration (5 minutes)
+
 file_lock = threading.Lock() # submitted_alphas.json
 hopeful_lock = threading.Lock() # hopeful_alphas.json
 failed_lock = threading.Lock() # failed_submissions.json
 config_lock = threading.Lock() # system_config.json
+tested_log_lock = threading.Lock()
+
+# v6.1.1: Global cache variables
+_timeseries_cache = None
+_timeseries_cache_time = None
+_cache_lock = threading.Lock() # Lock for accessing cache variables
 
 # --- Load/Save functions (load_submitted_alphas, save_submitted_alphas, load_failed_submissions, save_failed_submissions) remain unchanged ---
 def load_submitted_alphas():
@@ -43,7 +55,6 @@ def load_submitted_alphas():
         filepath = SUBMITTED_ALPHAS_FILE
         if not os.path.exists(filepath): logger.info(f"[Submit Load] File not found: {filepath}. Returning empty set."); return set()
         try:
-            # v6.0.1: Check size robustly
             if not os.path.isfile(filepath) or os.path.getsize(filepath) < 2: logger.info(f"[Submit Load] File empty/invalid: {filepath}. Returning empty set."); return set()
             with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
             if isinstance(data, (list, set)):
@@ -60,7 +71,6 @@ def save_submitted_alphas(submitted_set):
         filepath = SUBMITTED_ALPHAS_FILE
         logger.info(f"[Submit Save] Attempting to save {len(submitted_set)} items to {filepath}")
         try:
-            # v6.0.1: Ensure submitted_set is actually a set before converting
             if not isinstance(submitted_set, set):
                  logger.error(f"[Submit Save] Invalid data type passed: {type(submitted_set)}. Aborting save."); return False
             with open(filepath, 'w', encoding='utf-8') as f: json.dump(list(submitted_set), f, indent=4)
@@ -69,7 +79,7 @@ def save_submitted_alphas(submitted_set):
         except Exception as e: logger.error(f"[Submit Save] Unexpected error saving {filepath}: {e}", exc_info=True); return False
 
 def load_failed_submissions():
-    # ... (代码不变, similar robustness checks as load_submitted_alphas) ...
+    # ... (代码不变) ...
     with failed_lock:
         filepath = FAILED_SUBMISSIONS_FILE
         if not os.path.exists(filepath): logger.info(f"[Failed Load] File not found: {filepath}. Returning empty set."); return set()
@@ -85,7 +95,7 @@ def load_failed_submissions():
         except Exception as e: logger.error(f"[Failed Load] Unexpected error loading {filepath}: {e}", exc_info=True); return set()
 
 def save_failed_submissions(failed_set):
-    # ... (代码不变, similar robustness checks as save_submitted_alphas) ...
+    # ... (代码不变) ...
     with failed_lock:
         filepath = FAILED_SUBMISSIONS_FILE
         logger.info(f"[Failed Save] Attempting to save {len(failed_set)} items to {filepath}")
@@ -108,7 +118,6 @@ def get_service_status(log_file):
             last_seen = last_modified_time.strftime('%Y-%m-%d %H:%M:%S')
             if datetime.now() - last_modified_time < HEARTBEAT_TIMEOUT: status = "RUNNING"
             else: status = "STALLED"
-            # v6.0.1: Ensure errors='ignore' for robust log reading
             with open(log_path, 'r', encoding='utf-8', errors='ignore') as f: latest_lines_deque = deque(f, maxlen=50)
             latest_lines = list(latest_lines_deque); latest_lines.reverse(); logs = "".join(latest_lines)
         except Exception as e: logs = f"Error reading log file: {e}"; status = "ERROR"; logger.error(f"Error getting service status for {log_file}: {e}", exc_info=True)
@@ -118,9 +127,10 @@ def get_service_status(log_file):
 
 # --- v6.0.2: Fix get_hopeful_alphas_stats (Remove backend sort) ---
 def get_hopeful_alphas_stats():
+    # ... (代码不变) ...
     stats = {
         "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
-        "submittable_pending_count": 0, "all_alphas": [] # This will hold the structured data
+        "submittable_pending_count": 0, "all_alphas": []
     }
     submitted_set = load_submitted_alphas()
     failed_set = load_failed_submissions()
@@ -129,7 +139,7 @@ def get_hopeful_alphas_stats():
     pass_pattern = re.compile(r'(\d+)\s+PASS')
     fail_pattern = re.compile(r'(\d+)\s+FAIL')
     pending_pattern = re.compile(r'(\d+)\s+PENDING')
-    alphas = [] # Raw data loaded from hopeful_alphas.json
+    alphas = []
 
     with hopeful_lock:
         if os.path.exists(HOPEFUL_ALPHAS_FILE):
@@ -148,96 +158,68 @@ def get_hopeful_alphas_stats():
             valid_alphas_list = [a for a in alphas if isinstance(a, dict)]
             stats['count'] = len(valid_alphas_list)
 
-            # Calculate overall max/avg based on performance data
             all_fitness = [a.get('performance', {}).get('fitness') for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
             all_sharpe = [a.get('performance', {}).get('sharpe') for a in valid_alphas_list if isinstance(a.get('performance'), dict)]
-            
-            valid_fitness = [float(f) for f in all_fitness if isinstance(f, (int, float, str)) and (str(f).replace('.', '', 1).isdigit() or str(f).replace('-', '', 1).replace('.', '', 1).isdigit())] # v6.0.2 fix for negative
-            valid_sharpe = [float(s) for s in all_sharpe if isinstance(s, (int, float, str)) and (str(s).replace('.', '', 1).isdigit() or str(s).replace('-', '', 1).replace('.', '', 1).isdigit())] # v6.0.2 fix for negative
+
+            valid_fitness = [float(f) for f in all_fitness if isinstance(f, (int, float, str)) and (str(f).replace('.', '', 1).isdigit() or str(f).replace('-', '', 1).replace('.', '', 1).isdigit())]
+            valid_sharpe = [float(s) for s in all_sharpe if isinstance(s, (int, float, str)) and (str(s).replace('.', '', 1).isdigit() or str(s).replace('-', '', 1).replace('.', '', 1).isdigit())]
 
             if valid_fitness:
                  stats['max_fitness'] = max(valid_fitness) if valid_fitness else 0.0
                  stats['avg_fitness'] = sum(valid_fitness) / len(valid_fitness) if valid_fitness else 0.0
             if valid_sharpe:
-                 stats['max_sharpe'] = max(valid_sharpe) if valid_sharpe else 0.0 
+                 stats['max_sharpe'] = max(valid_sharpe) if valid_sharpe else 0.0
 
-            # Dashboard's score calculation (still based on v5.8 logic, without self-corr penalty)
             def calculate_dashboard_score(report):
                 if not isinstance(report, dict): return -float('inf')
                 perf = report.get('performance', {})
-                if not isinstance(perf, dict): return -float('inf') 
-
-                fitness = perf.get('fitness', -999)
-                sharpe = perf.get('sharpe', 0.0)
-                turnover = perf.get('turnover', 1.0)
-                checks_summary = report.get('checks_summary', '0 PASS')
-                passed_count = 0
-                try: 
+                if not isinstance(perf, dict): return -float('inf')
+                fitness = perf.get('fitness', -999); sharpe = perf.get('sharpe', 0.0); turnover = perf.get('turnover', 1.0)
+                checks_summary = report.get('checks_summary', '0 PASS'); passed_count = 0
+                try:
                     match = pass_pattern.search(checks_summary or '')
                     if match: passed_count = int(match.group(1))
-                except (ValueError, TypeError): pass 
-
+                except (ValueError, TypeError): pass
                 try: fitness_f = float(fitness)
                 except (ValueError, TypeError): fitness_f = -999
                 try: sharpe_f = float(sharpe)
                 except (ValueError, TypeError): sharpe_f = 0.0
                 try: turnover_f = float(turnover)
                 except (ValueError, TypeError): turnover_f = 1.0
-                
                 return fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1)
 
-
-            processed_alphas_temp = [] # This will hold the correctly structured data
+            processed_alphas_temp = []
             processed_count = 0
 
-            for alpha_report in valid_alphas_list: # Iterate through raw reports
+            for alpha_report in valid_alphas_list:
                 try:
                     expression = alpha_report.get('expression')
                     if not expression: continue
-
-                    perf_data = alpha_report.get('performance', {})
-                    if not isinstance(perf_data, dict): perf_data = {} 
-                    
-                    summary_str = alpha_report.get('checks_summary', '') or '' # Ensure it's a string
-
+                    perf_data = alpha_report.get('performance', {});
+                    if not isinstance(perf_data, dict): perf_data = {}
+                    summary_str = alpha_report.get('checks_summary', '') or ''
                     fail_match = fail_pattern.search(summary_str); has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
                     pending_match = pending_pattern.search(summary_str); has_pending = bool(pending_match and int(pending_match.group(1)) > 0)
                     pass_match = pass_pattern.search(summary_str); passed_count = int(pass_match.group(1)) if pass_match else 0
-
                     is_submittable = passed_count >= 7 and not has_fail
                     is_submitted = expression in submitted_set
                     is_failed_on_wq = expression in failed_set
                     is_successfully_submitted = is_submittable and is_submitted and not is_failed_on_wq
-
-                    if is_submittable and not is_submitted and not is_failed_on_wq:
-                        stats['submittable_pending_count'] += 1
-
-                    # --- v6.0.1 FIX: Structure data correctly for frontend ---
+                    if is_submittable and not is_submitted and not is_failed_on_wq: stats['submittable_pending_count'] += 1
                     processed_alpha_data = {
-                        "expression": expression,
-                        "timestamp": alpha_report.get('timestamp', 'N/A'),
-                        "checks_summary": summary_str, # Pass the summary string for display
-                        "is_submittable": is_submittable,
-                        "is_submitted": is_submitted, 
-                        "is_failed_on_wq": is_failed_on_wq,
-                        "is_successfully_submitted": is_successfully_submitted, 
-                        "dashboard_score": calculate_dashboard_score(alpha_report), # Use dashboard's calculation for sorting
-                        "performance": perf_data 
+                        "expression": expression, "timestamp": alpha_report.get('timestamp', 'N/A'),
+                        "checks_summary": summary_str, "is_submittable": is_submittable,
+                        "is_submitted": is_submitted, "is_failed_on_wq": is_failed_on_wq,
+                        "is_successfully_submitted": is_successfully_submitted,
+                        "dashboard_score": calculate_dashboard_score(alpha_report),
+                        "performance": perf_data
                     }
                     processed_alphas_temp.append(processed_alpha_data)
-                    # --- FIX END ---
                     processed_count += 1
                 except Exception as e: logger.error(f"[Stats Process] Error processing alpha: {alpha_report.get('expression', 'N/A')}. Error: {e}", exc_info=True)
-
             logger.info(f"[Stats] Processed {processed_count}/{len(valid_alphas_list)} valid alphas for stats.")
-
-            # --- v6.0.2: REMOVE BACKEND SORTING ---
-            # processed_alphas_temp.sort(key=sort_key, reverse=True)
             stats['all_alphas'] = processed_alphas_temp
-            # --- v6.0.2 END ---
-
         except Exception as e: logger.error(f"[Stats] Unexpected error processing alphas list: {e}", exc_info=True)
-
     return stats
 # --- v6.0.2 End Fix ---
 
@@ -248,7 +230,7 @@ def get_version_from_file(file_path, version_regex_str):
     logger.info(f"[Version] Attempting to read version from {file_path}")
     version_regex = re.compile(version_regex_str)
     try:
-        if not os.path.isfile(file_path): # v6.0.1 Check if file exists
+        if not os.path.isfile(file_path):
             logger.error(f"[Version] File not found: {file_path}")
             return "file_not_found"
         with open(file_path, 'r', encoding='utf-8') as f: content = f.read()
@@ -259,18 +241,29 @@ def get_version_from_file(file_path, version_regex_str):
     except IOError as e: logger.error(f"[Version] IOError reading {file_path}: {e}"); return "read_error"
     except Exception as e: logger.error(f"[Version] Unexpected error reading {file_path}: {e}"); return "read_error"
 
-# --- Routes (/, /settings, /api/get_settings, /api/save_settings, /status, /api/version_info, /download_logs, /api/mark_*, /api/unmark_*) remain unchanged ---
+# --- Main Routes ---
 @app.route('/')
-def dashboard(): 
-    return render_template('dashboard_v4.html', settings_page=True)
+def dashboard():
+    # v10.0: Add chart_page link variable
+    return render_template('dashboard_v4.html', settings_page=True, chart_page=True)
 
 @app.route('/settings')
 def settings_page():
     logger.info("[API /settings] Request received for settings page.")
     return render_template('settings.html')
 
+# --- v10.0: New Route for Chart Page ---
+@app.route('/chart')
+def chart_page():
+    logger.info("[API /chart] Request received for chart page.")
+    return render_template('chart.html') # Assumes chart.html exists in templates
+# --- v10.0 End ---
+
+
+# --- API Routes ---
 @app.route('/api/get_settings', methods=['GET'])
 def get_settings():
+    # ... (代码不变) ...
     logger.info("[API /api/get_settings] Request received.")
     with config_lock:
         try:
@@ -291,57 +284,56 @@ def get_settings():
 
 @app.route('/api/save_settings', methods=['POST'])
 def save_settings():
+    # ... (代码不变) ...
     logger.info("[API /api/save_settings] Request received.")
     if not request.is_json: return jsonify(status='error', message='Request must be JSON'), 400
     
     new_config = request.json
-    # v9.1: Add producer_queue_full_sleep
     expected_keys = {
         "wq_api_cooldown": int, "llm_api_cooldown": int,
         "miner_concurrency": int, "miner_sleep": int,
         "evolver_concurrency": int, "evolver_sleep": int,
-        "producer_queue_full_sleep": int 
+        "producer_queue_full_sleep": int
     }
     if not isinstance(new_config, dict): return jsonify(status='error', message='Invalid JSON format (must be an object)'), 400
 
     validated_config = {}
     with config_lock:
         try:
-            # Load old config first
             if os.path.exists(SYSTEM_CONFIG_FILE):
                 try:
                     with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f: validated_config = json.load(f)
                 except json.JSONDecodeError:
                     logger.warning(f"Existing {SYSTEM_CONFIG_FILE} is corrupt, will overwrite.")
-                    validated_config = {} # Start fresh if old is corrupt
+                    validated_config = {}
 
-            # Validate and update with new values
             for key, expected_type in expected_keys.items():
-                if key not in new_config: 
-                    # v9.1: Handle loading evolver_search_space (which isn't in expected_keys)
-                    if key not in validated_config and key in expected_keys: 
+                if key not in new_config:
+                    if key not in validated_config and key in expected_keys:
                         return jsonify(status='error', message=f"Missing key: {key}"), 400
-                    continue # Keep old value if not provided in new config
-                
+                    continue
+
                 value = new_config[key]
                 try:
-                    converted_value = expected_type(value) 
+                    converted_value = expected_type(value)
                     if converted_value < 0: return jsonify(status='error', message=f"{key} must be >= 0"), 400
-                    validated_config[key] = converted_value # Store converted value
+                    validated_config[key] = converted_value
                 except (ValueError, TypeError):
                      return jsonify(status='error', message=f"Invalid type for {key}. Expected {expected_type.__name__}, got '{value}'"), 400
-            
-            # v9.2: Preserve the evolver_search_space if it exists
+
             if 'evolver_search_space' in new_config and isinstance(new_config['evolver_search_space'], dict):
                 validated_config['evolver_search_space'] = new_config['evolver_search_space']
             elif 'evolver_search_space' not in validated_config:
-                # Add a default empty one if it doesn't exist at all
                 validated_config['evolver_search_space'] = {}
 
-
-            # Write back
             with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(validated_config, f, indent=2)
             logger.info(f"[API /api/save_settings] Successfully saved new config: {validated_config}")
+            # v6.1.4: Invalidate cache on settings save, as settings might affect future data
+            global _timeseries_cache, _timeseries_cache_time
+            with _cache_lock:
+                 _timeseries_cache = None
+                 _timeseries_cache_time = None
+                 logger.info("[API /api/save_settings] Timeseries cache invalidated.")
             return jsonify(status='success', message='Config saved')
 
         except Exception as e:
@@ -350,11 +342,12 @@ def save_settings():
 
 @app.route('/status')
 def status():
+    # ... (代码不变) ...
     logger.info("[API /status] Request received.")
     try:
-        data = { "miner": get_service_status('miner.log'), 
+        data = { "miner": get_service_status('miner.log'),
                  "evolver": get_service_status('evolver.log'),
-                 "hopeful_alphas": get_hopeful_alphas_stats() } # Call updated function
+                 "hopeful_alphas": get_hopeful_alphas_stats() }
         response = make_response(jsonify(data))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; response.headers['Pragma'] = 'no-cache'; response.headers['Expires'] = '0'
         logger.info("[API /status] Request completed successfully."); return response
@@ -365,9 +358,110 @@ def version_info():
     # ... (代码不变) ...
     logger.info("[API /version_info] Request received.")
     dashboard_version = CURRENT_DASHBOARD_VERSION
-    generator_version = get_version_from_file(GENERATOR_FILE_PATH, r'CURRENT_GENERATOR_VERSION\s*=\s*["\'](v[0-9]+\.[0-9]+\.[0-9]+[^"\']*)["\']')
+    generator_version = get_version_from_file(GENERATOR_FILE_PATH, r'CURRENT_GENERATOR_VERSION\s*=\s*["\'](v[0-9]+\.[0-9]+\.[^"\']*)["\']')
     data = {"dashboard_version": dashboard_version, "generator_version": generator_version}
     response = make_response(jsonify(data)); response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; return response
+
+# --- v6.1.4: Updated API Endpoint with corrected Fitness Mean & round order ---
+@app.route('/api/v1/stats/timeseries')
+def api_stats_timeseries():
+    global _timeseries_cache, _timeseries_cache_time
+    logger.info("[API /api/v1/stats/timeseries] Request received.")
+
+    with _cache_lock:
+        now = datetime.now(timezone.utc)
+        # Check if cache exists and is still valid
+        if _timeseries_cache and _timeseries_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
+            logger.info("[API Timeseries] Returning cached data.")
+            return jsonify(_timeseries_cache)
+
+        # Cache is invalid or doesn't exist, proceed to generate data
+        logger.info("[API Timeseries] Cache invalid or expired. Generating new data...")
+        data = []
+        with tested_log_lock: # Use the lock for reading the log file
+            if not os.path.exists(TESTED_ALPHAS_LOG_FILE):
+                logger.warning(f"[API Timeseries] File not found: {TESTED_ALPHAS_LOG_FILE}")
+                return jsonify({"error": "Log file not found."}), 404
+            try:
+                # Load data using pandas for efficient parsing
+                df = pd.read_json(TESTED_ALPHAS_LOG_FILE)
+                if df.empty:
+                    logger.info("[API Timeseries] Log file is empty.")
+                    _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
+                    _timeseries_cache_time = now
+                    return jsonify(_timeseries_cache)
+
+                # --- Data Processing ---
+                df['timestamp_dt'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                df = df.dropna(subset=['timestamp_dt'])
+
+                # v6.1.3 -> v6.1.4: Convert fitness to numeric, coerce errors to NaN (DO NOT FILLNA)
+                df['fitness_num'] = pd.to_numeric(df['fitness'], errors='coerce')
+                # Keep only rows where fitness_num is a valid number (not NaN) for mean calculation
+                df_valid_fitness = df.dropna(subset=['fitness_num'])
+
+                # Convert passed_checks to numeric, coerce errors to NaN, fill NaN with 0
+                df['passed_checks_num'] = pd.to_numeric(df['passed_checks'], errors='coerce').fillna(0)
+
+                # Set datetime as index for resampling (use the original df for counts)
+                df = df.set_index('timestamp_dt')
+                # Use df_valid_fitness for fitness mean calculation
+                df_valid_fitness = df_valid_fitness.set_index('timestamp_dt')
+
+                # v6.1.4: Use 'h' instead of deprecated 'H' for hourly frequency
+                resampler_all = df.resample('h')
+                resampler_valid = df_valid_fitness.resample('h')
+
+                # Calculate count from all entries
+                agg_counts = resampler_all['expression'].size()
+
+                # Calculate mean fitness ONLY from valid fitness entries
+                agg_mean_fitness = resampler_valid['fitness_num'].mean()
+
+                # Calculate high quality count
+                df_hq = df[(df['fitness_num'] > 0.5) & (df['passed_checks_num'] >= 4)]
+                hq_counts = df_hq.resample('h').size() # v6.1.4: Use 'h'
+
+                # Combine the aggregated series, reindex to ensure all hours are present
+                combined_index = agg_counts.index.union(agg_mean_fitness.index).union(hq_counts.index)
+
+                output_df = pd.DataFrame(index=combined_index)
+                output_df['count'] = agg_counts.reindex(combined_index).fillna(0).astype(int)
+                # Apply mean calculation result (which already skipped NaNs)
+                output_df['mean_fitness'] = agg_mean_fitness.reindex(combined_index) # Keep NaN where no valid fitness existed
+                output_df['high_quality_count'] = hq_counts.reindex(combined_index).fillna(0).astype(int)
+
+                # Format for JSON output
+                output = {
+                    "timestamps": output_df.index.strftime('%Y-%m-%dT%H:%M:%S').tolist(),
+                    "count": output_df['count'].tolist(),
+                    # v6.1.4: Round first (on numeric data), then replace NaN for JSON
+                    "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(),
+                    "high_quality_count": output_df['high_quality_count'].tolist()
+                }
+                # --- End Data Processing ---
+
+                _timeseries_cache = output
+                _timeseries_cache_time = now
+                logger.info(f"[API Timeseries] Successfully processed {len(df)} log entries. Cached result.")
+                return jsonify(output)
+
+            # --- Error Handling (same as before) ---
+            except json.JSONDecodeError as e:
+                logger.error(f"[API Timeseries] Error decoding JSON from {TESTED_ALPHAS_LOG_FILE}: {e}")
+                # v6.1.4: Clear cache on error
+                with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
+                return jsonify({"error": "Log file is corrupted."}), 500
+            except FileNotFoundError:
+                 logger.error(f"[API Timeseries] File disappeared: {TESTED_ALPHAS_LOG_FILE}")
+                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
+                 return jsonify({"error": "Log file not found."}), 404
+            except Exception as e:
+                logger.error(f"[API Timeseries] Error processing log file: {e}", exc_info=True)
+                with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
+                return jsonify({"error": "Internal server error processing log file."}), 500
+# --- v6.1.4 End ---
+
 
 @app.route('/download_logs/<log_filename>')
 def download_logs(log_filename):
@@ -378,6 +472,7 @@ def download_logs(log_filename):
     except FileNotFoundError: return f"Log file '{log_filename}' not found.", 404
     except Exception as e: logger.error(f"[API /download_logs] Error: {e}"); return "Error downloading file", 500
 
+# --- Mark/Unmark API routes remain unchanged ---
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_alpha_submitted():
     # ... (代码不变) ...
@@ -440,7 +535,13 @@ if __name__ == '__main__':
     if not os.path.exists(LOG_DIR):
         try: os.makedirs(LOG_DIR); logger.info(f"Created log directory: {LOG_DIR}")
         except OSError as e: logger.error(f"Error creating log directory {LOG_DIR}: {e}")
-    try: os.stat_cache.clear(); logger.info("Cleared os.stat_cache() on startup.") # Attempt to clear cache
-    except AttributeError: pass # Ignore if os.stat_cache() doesn't exist
-    logger.info(f"Starting Flask application (Version: {CURRENT_DASHBOARD_VERSION})...") 
+    try: os.stat_cache.clear(); logger.info("Cleared os.stat_cache() on startup.")
+    except AttributeError: pass
+    logger.info(f"Starting Flask application (Version: {CURRENT_DASHBOARD_VERSION})...")
+    try:
+        import pandas
+        logger.info(f"Pandas version {pandas.__version__} detected.")
+    except ImportError:
+         logger.warning("Pandas library not found. Timeseries API will not work until installed (pip install pandas).")
+
     app.run(host='0.0.0.0', port=8080, threaded=True, debug=False)

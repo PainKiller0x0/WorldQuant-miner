@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v8.4.1)</title>
+    <title>WQ Alpha 监控仪表盘 (v8.4.2)</title>
 <style>
         /* v8.2.1: Minor style adjustments */
         :root { /* Color variables */
@@ -22,6 +22,7 @@
         .container { max-width: 1600px; margin: 0 auto; } /* v8.4.0: Increased max-width */
         h1, h2 { font-weight: 600; }
         h1 { color: var(--link-color); border-bottom: 2px solid var(--header-bg-color); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .header-links a { margin-left: 15px; } /* v8.4.2: Style for header links */
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
         .card { background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; transition: background-color 0.3s; }
         .card-header { background: var(--header-bg-color); color: var(--header-text-color); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
@@ -102,7 +103,7 @@
         .check-badges .badge-fail { background-color: var(--badge-fail-bg); }
         .check-badges .badge-pending { background-color: var(--badge-pending-bg); }
         .version-info { font-size: 12px; color: var(--muted-text-color); text-align: right; padding: 10px 0; transition: color 0.3s; }
-        .settings-link { font-size: 16px; font-weight: 600; background: var(--button-secondary-bg); color: var(--button-text-color); padding: 8px 12px; border-radius: 5px; text-decoration: none; transition: background-color 0.3s, color 0.3s; }
+        .settings-link { font-size: 16px; font-weight: 600; background: var(--button-secondary-bg); color: var(--button-text-color); padding: 8px 12px; border-radius: 5px; text-decoration: none; transition: background-color 0.3s, color 0.3s; margin-left: 10px; /* v8.4.2: Added margin */}
         .settings-link:hover { background-color: var(--button-secondary-hover-bg); color: var(--button-text-color); }
         #theme-toggle { cursor: pointer; font-size: 20px; background: none; border: none; color: var(--header-text-color); margin-left: 15px; }
 
@@ -124,7 +125,8 @@
 <div class="container">
     <h1>
         <span>WQ Alpha 监控仪表盘</span>
-        <div>
+        <div class="header-links">
+             <a href="/chart" class="settings-link">v10.0 统计图表 &rarr;</a> 
              <a href="/settings" class="settings-link">v8.1 控制面板 &rarr;</a>
              <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
         </div>
@@ -362,7 +364,7 @@
 
         globalAlphaData.forEach((alpha, index) => {
             const row = document.createElement('tr');
-            
+
             // --- v8.4.1: Updated rowClass logic ---
             let rowClass = '';
             if (alpha.is_successfully_submitted) { // Green (Already Submitted & OK)
@@ -377,7 +379,7 @@
             // else: No color (Not submittable, not submitted)
             row.className = rowClass;
             // --- v8.4.1 End ---
-            
+
             const sanitizedExpression = alpha.expression.replace(/'/g, "\\'").replace(/"/g, '\\"');
             const uniqueIdPrefix = `alpha-${index}`;
 
@@ -452,6 +454,7 @@
         document.querySelectorAll('#alphas-table th.sortable').forEach(header => {
             header.addEventListener('click', (event) => { // v8.3.1: Pass event
                 // --- v8.3.1: Check if the click target was the inner span for score explanation ---
+                // Allow click on text span only if it's the score explanation one
                 if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) {
                     // Let its own onclick handle the modal and stop propagation
                     // showScoreExplanation is already called by the span's onclick
@@ -469,7 +472,7 @@
                 } else {
                     // New key, default to descending for most, ascending for timestamp
                     currentSort.key = sortKey;
-                    currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc');
+                    currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc'); 
                 }
 
                 // Re-sort and re-render the table

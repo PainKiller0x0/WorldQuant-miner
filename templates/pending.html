@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待提交的 Alphas - WorldQuant Miner 仪表盘</title>
+    <style>
+        /* 借用 v8.4.9 (legacy) 的暗黑主题样式 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        h1, h2 {
+            color: #ffffff;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        h1 a {
+            color: #4dabf7;
+            text-decoration: none;
+            font-size: 0.7em;
+            margin-left: 15px;
+        }
+        h1 a:hover { text-decoration: underline; }
+        
+        #loading { font-size: 1.2em; color: #f0ad4e; text-align: center; padding: 40px; }
+
+        /* --- 表格样式 --- */
+        #alphaTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        #alphaTable th, #alphaTable td {
+            border: 1px solid #333;
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+            white-space: normal;
+        }
+        #alphaTable th {
+            background-color: #2a2a2a;
+            color: #f1f1f1;
+            cursor: pointer;
+            position: relative;
+            white-space: nowrap;
+        }
+        #alphaTable th:hover .sort-icon { opacity: 0.7; }
+        
+        /* --- 排序图标 --- */
+        .sort-icon {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            margin-left: 8px;
+            opacity: 0.3;
+            vertical-align: middle;
+        }
+        .sort-icon.asc { border-bottom: 5px solid #fff; }
+        .sort-icon.desc { border-top: 5px solid #fff; }
+
+        /* --- Alpha 表达式 --- */
+        .alpha-expression {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 0.9em;
+            color: #7ec699; /* 绿色高亮 */
+            max-width: 350px;
+            overflow-x: auto;
+            background-color: #272822;
+            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #444;
+        }
+        .alpha-expression:hover { border-color: #888; }
+        
+        /* [需求 3] Checks Summary 标签 */
+        .checks-cell { min-width: 140px; }
+        .check-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin: 2px;
+            color: #fff;
+        }
+        .check-tag.pass { background-color: #28a745; }
+        .check-tag.fail { background-color: #dc3545; }
+        .check-tag.pending { background-color: #ffc107; color: #333; }
+        .check-tag.unknown { background-color: #6c757d; }
+
+        /* [需求 2] 可复制的性能指标 */
+        .perf-cell { font-size: 0.9em; line-height: 1.6; min-width: 180px; }
+        .perf-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .perf-item strong { color: #f1f1f1; min-width: 70px; display: inline-block;}
+        .perf-item span { color: #b0b0b0; }
+        .perf-value-copy {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #333;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            border: 1px solid #555;
+            transition: background-color 0.2s;
+        }
+        .perf-value-copy:hover { background-color: #007bff; color: #fff; }
+        
+        /* [需求 1] 操作按钮 */
+        .actions-cell { min-width: 130px; }
+        .btn-action {
+            display: block;
+            width: 100%;
+            background-color: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            opacity: 0.85;
+            transition: opacity 0.2s, background-color 0.2s;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .btn-action:hover { opacity: 1; }
+        .btn-action.submit { background-color: #007bff; }
+        .btn-action.submit:hover { background-color: #0056b3; }
+        .btn-action.fail { background-color: #dc3545; }
+        .btn-action.fail:hover { background-color: #a71d2a; }
+        
+        /* --- 提示消息 --- */
+        #toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s, top 0.5s;
+            font-size: 1.1em;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #toast.show {
+            opacity: 1;
+            top: 30px;
+        }
+        #toast.error {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>
+            待提交的 Alphas
+            <a href="/" title="返回主仪表盘">« 返回主仪表盘</a>
+        </h1>
+        <h2 id="summary">总数: 0</h2>
+        <div id="loading">正在加载数据，请稍候...</div>
+        <table id="alphaTable" style="display:none;">
+            <thead>
+                <tr>
+                    <th>操作</th>
+                    <th data-sort-key="dashboard_score" data-sort-dir="desc">得分 <span class="sort-icon desc"></span></th>
+                    <th data-sort-key="expression">Alpha 表达式 (点击复制)</th>
+                    <th data-sort-key="fitness">性能指标 (点击复制数值)</th>
+                    <th data-sort-key="checks_summary_pass">检查摘要</th>
+                    <th data-sort-key="timestamp">时间戳</th>
+                </tr>
+            </thead>
+            <tbody id="alphaTableBody">
+                </tbody>
+        </table>
+    </div>
+    
+    <div id="toast"></div>
+
+<script>
+    let allAlphas = [];
+    let currentSortKey = 'dashboard_score';
+    let currentSortDir = 'desc';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchPendingAlphas();
+        setupSortHeaders();
+    });
+
+    function fetchPendingAlphas() {
+        const loadingDiv = document.getElementById('loading');
+        const table = document.getElementById('alphaTable');
+        const summaryH2 = document.getElementById('summary');
+
+        loadingDiv.style.display = 'block';
+        table.style.display = 'none';
+        summaryH2.textContent = '总数: 0';
+
+        fetch('/api/get_pending_alphas')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // [需求 3] 解析检查摘要，用于排序
+                allAlphas = data.map(alpha => {
+                    const { pass, fail, pending } = parseChecksSummary(alpha.checks_summary);
+                    alpha.checks_summary_pass = pass;
+                    alpha.checks_summary_fail = fail;
+                    alpha.checks_summary_pending = pending;
+                    
+                    // [需求 2] 解析性能，用于排序
+                    alpha.fitness = parseFloat(alpha.fitness) || -999;
+                    alpha.sharpe = parseFloat(alpha.sharpe) || -999;
+                    
+                    return alpha;
+                });
+                
+                updateSummaryCount();
+                renderTable();
+                loadingDiv.style.display = 'none';
+                table.style.display = 'table';
+            })
+            .catch(error => {
+                console.error('Error fetching pending alphas:', error);
+                loadingDiv.textContent = `加载失败: ${error.message}。请检查后端服务是否运行。`;
+            });
+    }
+    
+    function updateSummaryCount() {
+        document.getElementById('summary').textContent = `总数: ${allAlphas.length}`;
+    }
+
+    function setupSortHeaders() {
+        document.querySelectorAll('#alphaTable th[data-sort-key]').forEach(th => {
+            th.addEventListener('click', () => {
+                const sortKey = th.getAttribute('data-sort-key');
+                let sortDir = 'desc';
+                if (currentSortKey === sortKey) {
+                    sortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+                }
+                currentSortKey = sortKey;
+                currentSortDir = sortDir;
+                
+                updateSortIcons();
+                renderTable();
+            });
+        });
+    }
+
+    function updateSortIcons() {
+        document.querySelectorAll('#alphaTable th .sort-icon').forEach(icon => {
+            icon.style.opacity = '0.3';
+            icon.className = 'sort-icon';
+        });
+        
+        const activeTh = document.querySelector(`#alphaTable th[data-sort-key="${currentSortKey}"]`);
+        if (activeTh) {
+            const icon = activeTh.querySelector('.sort-icon');
+            icon.style.opacity = '1';
+            icon.classList.add(currentSortDir);
+        }
+    }
+    
+    /**
+     * [需求 3] 辅助函数：解析 X PASS Y FAIL Z PENDING
+     */
+    function parseChecksSummary(summaryStr) {
+        if (typeof summaryStr !== 'string') return { pass: 0, fail: 0, pending: 0 };
+        const pass = parseInt((summaryStr.match(/(\d+)\s+PASS/i) || [])[1] || 0, 10);
+        const fail = parseInt((summaryStr.match(/(\d+)\s+FAIL/i) || [])[1] || 0, 10);
+        const pending = parseInt((summaryStr.match(/(\d+)\s+PENDING/i) || [])[1] || 0, 10);
+        return { pass, fail, pending };
+    }
+    
+    /**
+     * [需求 3] 辅助函数：格式化检查摘要为 HTML 标签
+     */
+    function formatChecksSummary(alpha) {
+        const { pass, fail, pending } = alpha;
+        let html = '';
+        if (pass > 0) html += `<span class="check-tag pass">${pass} PASS</span>`;
+        if (fail > 0) html += `<span class="check-tag fail">${fail} FAIL</span>`;
+        if (pending > 0) html += `<span class="check-tag pending">${pending} PENDING</span>`;
+        if (html === '') html = `<span class="check-tag unknown">N/A</span>`;
+        return html;
+    }
+
+    function renderTable() {
+        const tableBody = document.getElementById('alphaTableBody');
+        tableBody.innerHTML = ''; // Clear existing rows
+
+        // 1. Sort the data
+        const sortedAlphas = [...allAlphas].sort((a, b) => {
+            let valA = a[currentSortKey];
+            let valB = b[currentSortKey];
+
+            if (currentSortKey === 'expression' || currentSortKey === 'timestamp') {
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+            } else {
+                valA = parseFloat(valA) || -Infinity;
+                valB = parseFloat(valB) || -Infinity;
+            }
+
+            if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
+            if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        // 2. Render rows
+        if (sortedAlphas.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">太棒了！所有待提交的 Alphas 都已处理。</td></tr>';
+            return;
+        }
+
+        sortedAlphas.forEach(alpha => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-expression', alpha.expression); // 方便JS定位
+            
+            // [需求 2] 格式化性能指标
+            const fitness = alpha.fitness.toFixed(4);
+            const sharpe = alpha.sharpe.toFixed(4);
+            const returnsRaw = parseFloat(alpha.returns) || 0;
+            const turnoverRaw = parseFloat(alpha.turnover) || 0;
+            const returnsDisplay = (returnsRaw * 100).toFixed(2) + '%';
+            const turnoverDisplay = (turnoverRaw * 100).toFixed(2) + '%';
+            
+            // [需求 4] 格式化时间戳
+            let timestampDisplay = 'N/A';
+            if (alpha.timestamp) {
+                try {
+                    timestampDisplay = new Date(alpha.timestamp).toLocaleString();
+                } catch(e) { timestampDisplay = alpha.timestamp; }
+            }
+
+            row.innerHTML = `
+                <td class="actions-cell">
+                    <button class="btn-action submit" data-action="mark-submitted">标记提交</button>
+                    <button class="btn-action fail" data-action="mark-failed">标记失败</button>
+                </td>
+                
+                <td>${parseFloat(alpha.dashboard_score).toFixed(4)}</td>
+                
+                <td>
+                    <div class="alpha-expression" title="点击复制表达式"
+                         data-copy-value="${escapeHTML(alpha.expression)}">
+                        ${escapeHTML(alpha.expression)}
+                    </div>
+                </td>
+                
+                <td class="perf-cell">
+                    <div class="perf-item">
+                        <strong>Fitness:</strong>
+                        <span class="perf-value-copy" title="点击复制 ${fitness}" data-copy-value="${fitness}">${fitness}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Sharpe:</strong>
+                        <span class="perf-value-copy" title="点击复制 ${sharpe}" data-copy-value="${sharpe}">${sharpe}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Returns:</strong>
+                        <span class="perf-value-copy" title="点击复制 ${returnsRaw}" data-copy-value="${returnsRaw}">${returnsDisplay}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Turnover:</strong>
+                        <span class="perf-value-copy" title="点击复制 ${turnoverRaw}" data-copy-value="${turnoverRaw}">${turnoverDisplay}</span>
+                    </div>
+                </td>
+                
+                <td class="checks-cell">
+                    ${formatChecksSummary(alpha)}
+                </td>
+                
+                <td>${timestampDisplay}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+        
+        // 3. 绑定所有交互事件
+        setupActionHandlers(tableBody);
+    }
+    
+    /**
+     * 绑定所有点击事件 (操作按钮 + 复制)
+     */
+    function setupActionHandlers(container) {
+        container.addEventListener('click', function(e) {
+            const target = e.target;
+            
+            // --- [需求 1] 操作按钮 ---
+            if (target.classList.contains('btn-action')) {
+                const action = target.getAttribute('data-action');
+                const row = target.closest('tr');
+                const expression = row.getAttribute('data-expression');
+                
+                if (action === 'mark-submitted') {
+                    handleMarkSubmitted(expression, row);
+                } else if (action === 'mark-failed') {
+                    handleMarkFailed(expression, row);
+                }
+            }
+            
+            // --- [需求 2 & 表达式] 复制功能 ---
+            if (target.matches('.alpha-expression') || target.matches('.perf-value-copy')) {
+                const textToCopy = target.getAttribute('data-copy-value');
+                copyToClipboard(textToCopy, target);
+            }
+        });
+    }
+
+    /**
+     * [需求 1] 处理标记提交
+     */
+    function handleMarkSubmitted(expression, rowElement) {
+        if (!confirm(`是否确认将以下 Alpha 标记为“已提交”？\n\n${expression}`)) return;
+        
+        callApi('/api/mark_submitted', { expression: expression })
+            .then(() => {
+                showToast('标记成功！已从列表移除。');
+                removeRowAndUpdate(rowElement);
+            })
+            .catch(err => showToast(`标记失败: ${err.message}`, 'error'));
+    }
+
+    /**
+     * [需求 1 & v11.0] 处理标记失败 (带原因)
+     */
+    function handleMarkFailed(expression, rowElement) {
+        const reason = prompt(`[v11.0 核心功能]\n请为 Alpha 标记失败原因 (例如: HIGH_SELF_CORR, LOW_PERF, WQ_REJECTED):\n\n${expression}`);
+        
+        if (!reason || reason.trim() === '') {
+            showToast('操作取消。未提供失败原因。', 'error');
+            return;
+        }
+
+        callApi('/api/mark_failed_on_wq', { expression: expression, reason: reason.trim() })
+            .then(() => {
+                showToast(`标记失败 (原因: ${reason})！已从列表移除。`);
+                removeRowAndUpdate(rowElement);
+            })
+            .catch(err => showToast(`标记失败: ${err.message}`, 'error'));
+    }
+    
+    /**
+     * 标记成功后，从UI移除该行并更新总数
+     */
+    function removeRowAndUpdate(rowElement) {
+        const expression = rowElement.getAttribute('data-expression');
+        // 从DOM移除
+        rowElement.style.opacity = '0';
+        setTimeout(() => rowElement.remove(), 300);
+        // 从数据源移除
+        allAlphas = allAlphas.filter(a => a.expression !== expression);
+        // 更新总数
+        updateSummaryCount();
+        
+        // 如果清空了，显示提示
+        if (allAlphas.length === 0) {
+            renderTable();
+        }
+    }
+    
+    /**
+     * 通用的 API 调用函数
+     */
+    async function callApi(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (!response.ok || data.status !== 'success') {
+            throw new Error(data.message || 'API 请求失败');
+        }
+        return data;
+    }
+
+    /**
+     * 复制到剪贴板 (带提示)
+     */
+    function copyToClipboard(text, buttonElement) {
+        navigator.clipboard.writeText(text).then(() => {
+            if (buttonElement) {
+                const originalTitle = buttonElement.title;
+                buttonElement.title = '已复制!';
+                setTimeout(() => {
+                    buttonElement.title = originalTitle;
+                }, 1500);
+            }
+            showToast('已复制到剪贴板！');
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            showToast('复制失败！', 'error');
+        });
+    }
+
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    
+    /**
+     * 显示一个提示消息
+     */
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = type === 'error' ? 'error' : '';
+        
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+</script>
+
+</body>
+</html>

@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v11.0.3)</title> <style>
-        /* v8.4.8 Styles + v8.4.9 Fixes + v11.0.3 Additions */
+    <title>WQ Alpha 监控仪表盘 (v11.0.4)</title> <style>
+        /* v8.4.8 Styles + v8.4.9 Fixes + v11.0.4 Additions */
         :root {
             --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333; --muted-text-color: #7f8c8d; --header-bg-color: #3498db; --header-text-color: white; --link-color: #2980b9; --border-color: #ddd; --table-header-bg: #ecf0f1; --log-bg-color: #2c3e50; --log-text-color: #ecf0f1; --dot-default-bg: #95a5a6; --dot-running-bg: #2ecc71; --dot-stalled-bg: #e67e22; --dot-error-bg: #e74c3c; --status-pass-color: #28a745; --status-fail-color: #dc3545; --status-pending-color: #fd7e14; --alpha-submitted-bg: #e2e3e5; --alpha-failed-bg: #f8d7da; --alpha-failed-text: #721c24; --alpha-success-bg: #d4edda; --alpha-success-text: #155724;
             --alpha-submittable-bg: #cfe2ff; --alpha-submittable-text: #052c65;
             --button-primary-bg: #007bff; --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d; --button-secondary-hover-bg: #5a6268; --button-text-color: white; --badge-pass-bg: #28a745; --badge-fail-bg: #dc3545; --badge-pending-bg: #fd7e14; --badge-text-color: white; --modal-bg: rgba(0, 0, 0, 0.5); --modal-content-bg: #fff;
             --sticky-header-bg: var(--table-header-bg);
-            /* v11.0.3: Modal Button Colors */
             --button-red-bg: #dc3545;
             --button-red-hover-bg: #c82333;
         }
@@ -19,7 +18,7 @@
              --alpha-submittable-bg: #03285a; --alpha-submittable-text: #a6c8ff;
              --button-primary-bg: #0056b3; --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268; --button-secondary-hover-bg: #495057; --badge-pass-bg: #218838; --badge-fail-bg: #c82333; --badge-pending-bg: #e0710a; --badge-text-color: #f0f0f0; --modal-bg: rgba(0, 0, 0, 0.7); --modal-content-bg: #3a3a3a;
              --sticky-header-bg: var(--table-header-bg);
-             --button-red-bg: #c82333; /* Dark theme red */
+             --button-red-bg: #c82333;
              --button-red-hover-bg: #a31c28;
         }
         body { font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; transition: background-color 0.3s, color 0.3s; }
@@ -47,11 +46,11 @@
 
         .table-responsive { width: 100%; overflow: auto; max-height: 75vh; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 15px; position: relative; }
         #alphas-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; border: none; }
-        #alphas-table th, #alphas-table td { border: none; border-bottom: 1px solid var(--border-color); padding: 6px; text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; white-space: nowrap; }
+        #alphas-table th, #alphas-table td { border: none; border-bottom: 1px solid var(--border-color); padding: 6px; text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; white-space: nowrap; vertical-align: top; } /* v11.0.4: added vertical-align */
         #alphas-table tr:last-child td { border-bottom: none; }
         #alphas-table th { transition: background-color 0.3s; font-weight: 600; font-size: 12px; border-bottom-width: 2px; }
-        #alphas-table td { font-size: 11px; vertical-align: top; }
-        #alphas-table td:nth-child(2) { font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; white-space: nowrap !important; }
+        #alphas-table td { font-size: 11px; }
+        #alphas-table td:nth-child(2) { font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; white-space: normal !important; word-break: break-all; } /* v11.0.4: Allow expression wrap */
         .alpha-actions label span { font-family: inherit !important; font-size: 11px; white-space: nowrap; }
         #alphas-table th.sortable { cursor: pointer; position: relative; }
         #alphas-table th.sortable::after { content: ''; position: absolute; right: 5px; top: 50%; margin-top: -5px; border-left: 4px solid transparent; border-right: 4px solid transparent; opacity: 0.3; }
@@ -62,7 +61,7 @@
 
         #alphas-table thead th { position: -webkit-sticky; position: sticky; top: 0; background-color: var(--sticky-header-bg); z-index: 10; border-bottom: 2px solid var(--border-color) !important; }
 
-        /* Column widths */
+        /* Column widths (保持 v8.4.9) */
         #alphas-table th:nth-child(1), #alphas-table td:nth-child(1) { width: 80px; } /* Score */
         #alphas-table th:nth-child(2), #alphas-table td:nth-child(2) { width: 250px; } /* Expression */
         #alphas-table th:nth-child(3), #alphas-table td:nth-child(3) { width: 70px; } /* Fitness */
@@ -80,11 +79,12 @@
         .copyable-value:hover { color: var(--link-color); }
         .copyable-value.copy-feedback::after { content: '已复制!'; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background-color: var(--log-bg-color); color: var(--log-text-color); padding: 2px 5px; border-radius: 3px; font-size: 9px; white-space: nowrap; z-index: 20; }
         .alpha-expression-container { cursor: pointer; display: block; position: relative; }
-        .alpha-expression-container .alpha-short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 230px; }
-        .alpha-expression-container .alpha-full { display: none; white-space: pre-wrap; word-break: break-all; max-width: 100%; }
-        .alpha-expression-container.expanded .alpha-short { display: none; }
-        .alpha-expression-container.expanded .alpha-full { display: block; white-space: pre-wrap !important; }
-        .alpha-expression-container:hover .alpha-short { text-decoration: underline; }
+        /* v11.0.4: 移除 .alpha-short/.alpha-full 以简化并允许自然换行 */
+        /* .alpha-expression-container .alpha-short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 230px; } */
+        /* .alpha-expression-container .alpha-full { display: none; white-space: pre-wrap; word-break: break-all; max-width: 100%; } */
+        /* .alpha-expression-container.expanded .alpha-short { display: none; } */
+        /* .alpha-expression-container.expanded .alpha-full { display: block; white-space: pre-wrap !important; } */
+        /* .alpha-expression-container:hover .alpha-short { text-decoration: underline; } */
         .alpha-actions { white-space: nowrap; text-align: center;}
         .alpha-actions label { margin-right: 3px; display: inline-block; cursor: pointer; }
         .alpha-actions input[type="checkbox"] { margin-right: 2px; vertical-align: middle; cursor: pointer; }
@@ -106,7 +106,7 @@
         .settings-link:hover { background-color: var(--button-secondary-hover-bg); color: var(--button-text-color); }
         #theme-toggle { cursor: pointer; font-size: 18px; background: none; border: none; color: var(--header-text-color); margin-left: 10px; }
 
-        /* Modal Styles (Score Explanation) */
+        /* Modal Styles (Score Explanation - v8.4.9) */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-bg); }
         .modal-content { background-color: var(--modal-content-bg); margin: 15% auto; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); position: relative; color: var(--text-color); }
         .close-button { color: var(--muted-text-color); position: absolute; top: 8px; right: 15px; font-size: 24px; font-weight: bold; }
@@ -117,67 +117,23 @@
         .modal li { margin-bottom: 6px; font-size: 0.95em; }
         .modal strong { color: var(--link-color); }
 
-        /* v11.0.3: Failure Reason Modal Styles */
-        .failure-modal-overlay {
-            display: none; /* Hidden by default */
-            position: fixed;
-            z-index: 1050; /* Higher than score modal */
-            left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto;
-            background-color: var(--modal-bg);
-            justify-content: center; /* Center horizontally */
-            align-items: center; /* Center vertically */
-        }
-        .failure-modal-content {
-            background-color: var(--modal-content-bg);
-            margin: auto;
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            width: 90%;
-            max-width: 450px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            color: var(--text-color);
-        }
-        .failure-modal-content h3 {
-            margin-top: 0;
-            color: var(--link-color);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-        }
-        .failure-modal-content .reason-option {
-            display: block;
-            margin: 12px 0;
-            font-size: 1em; /* Adjusted size */
-            cursor: pointer;
-        }
-        .failure-modal-content .reason-option input {
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-        .failure-modal-buttons {
-            margin-top: 25px;
-            text-align: right;
-        }
-        .failure-modal-buttons button {
-            padding: 8px 16px; /* Slightly larger buttons */
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 0.95em; /* Adjusted size */
-            margin-left: 10px;
-            color: var(--button-text-color);
-        }
+        /* v11.0.4: Failure Reason Modal Styles */
+        .failure-modal-overlay { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-bg); justify-content: center; align-items: center; }
+        .failure-modal-content { background-color: var(--modal-content-bg); margin: auto; padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); color: var(--text-color); }
+        .failure-modal-content h3 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .failure-modal-content .reason-option { display: block; margin: 12px 0; font-size: 1em; cursor: pointer; }
+        .failure-modal-content .reason-option input { margin-right: 8px; vertical-align: middle; }
+        .failure-modal-buttons { margin-top: 25px; text-align: right; }
+        .failure-modal-buttons button { padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.95em; margin-left: 10px; color: var(--button-text-color); }
         .failure-modal-confirm-btn { background-color: var(--button-red-bg); }
         .failure-modal-confirm-btn:hover { background-color: var(--button-red-hover-bg); }
         .failure-modal-cancel-btn { background-color: var(--button-secondary-bg); }
         .failure-modal-cancel-btn:hover { background-color: var(--button-secondary-hover-bg); }
-        /* v11.0.3: End Failure Reason Modal Styles */
+        /* v11.0.4: End Failure Reason Modal Styles */
 
-        /* Media Queries remain unchanged from v8.4.9 */
+        /* Media Queries (保持 v8.4.9) */
         @media (max-width: 768px) {
-             body { padding: 5px; } h1 { font-size: 1.5rem; } .header-links a { font-size: 0.8rem; padding: 4px 6px; margin-left: 5px; } #theme-toggle { font-size: 16px; margin-left: 5px; } .grid { grid-template-columns: 1fr; gap: 10px; } .card-header h2 { font-size: 1rem; } .card-content { padding: 10px; } .info-grid { grid-template-columns: 1fr; } .logs { font-size: 11px; max-height: 100px; white-space: pre-wrap; word-wrap: break-word; overflow: auto; } #alphas-table th, #alphas-table td { padding: 4px; font-size: 10px; } #alphas-table td:nth-child(2) { font-size: 10px !important; } .alpha-actions label span { font-size: 10px; } .copy-action button.copy-btn { font-size: 10px; padding: 3px 5px; } .check-badges span { font-size: 9px; padding: 2px 4px; margin-right: 2px;} .submittable-marker { font-size: 8px; padding: 1px 3px; } small { font-size: 10px; } .modal-content { width: 95%; margin: 10% auto; padding: 10px; } .modal h3 { font-size: 1rem; } .modal li { font-size: 0.9em; } .close-button { top: 5px; right: 10px; font-size: 20px; } #alphas-table thead th { top: -1px; } .table-responsive { max-height: 65vh; }
-             /* v11.0.3: Ensure modal works on mobile */
+             body { padding: 5px; } h1 { font-size: 1.5rem; } .header-links a { font-size: 0.8rem; padding: 4px 6px; margin-left: 5px; } #theme-toggle { font-size: 16px; margin-left: 5px; } .grid { grid-template-columns: 1fr; gap: 10px; } .card-header h2 { font-size: 1rem; } .card-content { padding: 10px; } .info-grid { grid-template-columns: 1fr; } .logs { font-size: 11px; max-height: 100px; white-space: pre-wrap; word-wrap: break-word; overflow: auto; } #alphas-table th, #alphas-table td { padding: 4px; font-size: 10px; white-space: normal !important; word-break: break-all; } /* v11.0.4: Allow wrap on mobile */ #alphas-table td:nth-child(2) { font-size: 10px !important; } .alpha-actions label span { font-size: 10px; } .copy-action button.copy-btn { font-size: 10px; padding: 3px 5px; } .check-badges span { font-size: 9px; padding: 2px 4px; margin-right: 2px;} .submittable-marker { font-size: 8px; padding: 1px 3px; } small { font-size: 10px; } .modal-content { width: 95%; margin: 10% auto; padding: 10px; } .modal h3 { font-size: 1rem; } .modal li { font-size: 0.9em; } .close-button { top: 5px; right: 10px; font-size: 20px; } #alphas-table thead th { top: -1px; } .table-responsive { max-height: 65vh; }
              .failure-modal-content { width: 95%; margin: 10% auto; padding: 15px; }
         }
 
@@ -201,8 +157,8 @@
 
     <h2>服务状态</h2>
     <div class="grid">
-        <div class="card"> <div class="card-header"> <h2>Miner (Discover)</h2> <div class="status-dot" id="miner-status"></div> </div> <div class="card-content"> <strong>状态: <span id="miner-status-text">...</span></strong><br> 最后心跳: <span id="miner-last-seen">...</span><br> <a href="/download_logs/miner.log" download class="download-btn">miner.log</a> <a href="/download_logs/miner_issues.log" download class="download-btn">miner_issues.log</a> <div class="logs" id="miner-logs">...</div> </div> </div>
-         <div class="card"> <div class="card-header"> <h2>Evolver (Evolve)</h2> <div class="status-dot" id="evolver-status"></div> </div> <div class="card-content"> <strong>状态: <span id="evolver-status-text">...</span></strong><br> 最后心跳: <span id="evolver-last-seen">...</span><br> <a href="/download_logs/evolver.log" download class="download-btn">evolver.log</a> <a href="/download_logs/evolver_issues.log" download class="download-btn">evolver_issues.log</a> <div class="logs" id="evolver-logs">...</div> </div> </div>
+        <div class="card"> <div class="card-header"> <h2>Miner (Discover)</h2> <div class="status-dot" id="miner-status"></div> </div> <div class="card-content"> <strong>状态: <span id="miner-status-text">...</span></strong><br> 最后心跳: <span id="miner-last-seen">...</span><br> <a href="/download_logs/miner.log" download class="download-btn">miner.log</a> <a href="/download_logs/miner_issues.log" download class="download-btn">miner_issues.log</a> <div class="logs" id="miner-logs">加载中...</div> </div> </div>
+         <div class="card"> <div class="card-header"> <h2>Evolver (Evolve)</h2> <div class="status-dot" id="evolver-status"></div> </div> <div class="card-content"> <strong>状态: <span id="evolver-status-text">...</span></strong><br> 最后心跳: <span id="evolver-last-seen">...</span><br> <a href="/download_logs/evolver.log" download class="download-btn">evolver.log</a> <a href="/download_logs/evolver_issues.log" download class="download-btn">evolver_issues.log</a> <div class="logs" id="evolver-logs">加载中...</div> </div> </div>
     </div>
 
     <h2>精英池 (Hopeful Alphas)</h2>
@@ -223,8 +179,7 @@
                             <th id="score-header" title="点击文字查看计算公式, 点击单元格排序" class="sortable" data-sort="dashboard_score">
                                 <span class="header-text" onclick="showScoreExplanation(); event.stopPropagation();">综合分 (*)</span>
                             </th>
-                            <th>Expression (点击展开/折叠)</th>
-                            <th class="sortable" data-sort="fitness">Fitness</th>
+                            <th>Expression</th> <th class="sortable" data-sort="fitness">Fitness</th>
                             <th class="sortable" data-sort="sharpe">Sharpe</th>
                             <th class="sortable" data-sort="returns">Returns</th>
                             <th class="sortable" data-sort="turnover">Turnover</th>
@@ -245,7 +200,8 @@
 <div id="score-modal" class="modal"> <div class="modal-content"> <span class="close-button" onclick="closeModal('score-modal')">&times;</span> <h3 id="modal-title">...</h3> <div id="modal-body">...</div> </div> </div>
 
 <div id="failure-reason-modal" class="failure-modal-overlay" onclick="closeFailureModal(event)">
-    <div class="failure-modal-content" onclick="event.stopPropagation()"> <h3>标记提交失败</h3>
+    <div class="failure-modal-content" onclick="event.stopPropagation()">
+        <h3>标记提交失败</h3>
         <p>请选择在 WQ 平台提交失败的主要原因：</p>
         <form id="failure-reason-form">
             <label class="reason-option">
@@ -272,23 +228,23 @@
     let globalAlphaData = [];
     let currentSort = { key: 'dashboard_score', direction: 'desc' };
     const themeToggle = document.getElementById('theme-toggle');
-    const currentTheme = localStorage.getItem('theme') || 'dark'; // Keep dark default?
+    const currentTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', currentTheme);
     themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌓';
     themeToggle.addEventListener('click', () => { let targetTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', targetTheme); localStorage.setItem('theme', targetTheme); themeToggle.textContent = targetTheme === 'dark' ? '☀️' : '🌓'; });
 
-    // v11.0.3: Store context for failure modal
     let failureModalContext = { checkbox: null, expression: null };
 
-    function updateStatusDot(element, statusText) { /* Unchanged from v8.4.9 */ }
-    function formatLogs(logText) { /* Unchanged from v8.4.9 */ }
-    function formatExpression(expr) { /* Unchanged from v8.4.9 */ }
-    function toggleExpressionView(event) { /* Unchanged from v8.4.9 */ }
-    function formatChecks(checkText) { /* Unchanged from v8.4.9 */ }
+    // --- Helper Functions (保持 v8.4.9) ---
+    function updateStatusDot(element, statusText) { element.className = 'status-dot'; if (statusText === 'RUNNING') element.classList.add('running'); else if (statusText === 'STALLED') element.classList.add('stalled'); else if (statusText === 'ERROR' || statusText === 'NOT FOUND') element.classList.add('error'); }
+    function formatLogs(logText) { return logText.replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    // function formatExpression(expr) { const escapedExpr = expr.replace(/</g, "&lt;").replace(/>/g, "&gt;"); const short = escapedExpr.length > 70 ? escapedExpr.substring(0, 70) + '...' : escapedExpr; const full = escapedExpr; return `<span class="alpha-short">${short}</span><span class="alpha-full">${full}</span>`; } // Removed for simplicity
+    // function toggleExpressionView(event) { const container = event.currentTarget; if (container) { container.classList.toggle('expanded'); } } // Removed for simplicity
+    function formatChecks(checkText) { if (!checkText || typeof checkText !== 'string') return ''; const passMatch = checkText.match(/(\d+)\s+PASS/); const failMatch = checkText.match(/(\d+)\s+FAIL/); const pendingMatch = checkText.match(/(\d+)\s+PENDING/); let html = '<div class="check-badges">'; if (passMatch && parseInt(passMatch[1], 10) >= 0) html += `<span class="badge-pass" title="${passMatch[1]} Passed">✓ ${passMatch[1]}</span>`; if (failMatch && parseInt(failMatch[1], 10) > 0) html += `<span class="badge-fail" title="${failMatch[1]} Failed">✗ ${failMatch[1]}</span>`; if (pendingMatch && parseInt(pendingMatch[1], 10) > 0) html += `<span class="badge-pending" title="${pendingMatch[1]} Pending">⏳ ${pendingMatch[1]}</span>`; html += '</div>'; return html !== '<div class="check-badges"></div>' ? html : checkText; }
 
-    // v11.0.3: Modified copyValue for Returns/Turnover format
+    // --- v11.0.4: FIX Copy Value Format ---
     function copyValue(element) {
-        let valueToCopy = element.dataset.copyValue || element.textContent || element.innerText; // Get value from data attribute first
+        let valueToCopy = element.dataset.copyValue; // Always use data-copy-value
         if (valueToCopy && valueToCopy !== 'N/A') {
             navigator.clipboard.writeText(valueToCopy).then(() => {
                 element.classList.add('copy-feedback');
@@ -296,12 +252,15 @@
             }, (err) => {
                 console.error('Copy value failed: ', err); alert('复制失败: ' + err);
             });
+        } else {
+             console.warn('No value to copy or value is N/A');
         }
     }
+    // --- End FIX ---
 
-    function copyToClipboard(text, buttonElement) { /* Unchanged from v8.4.9 */ }
+    function copyToClipboard(text, buttonElement) { navigator.clipboard.writeText(text).then(() => { const originalText = buttonElement.textContent; buttonElement.textContent = '已复制!'; buttonElement.disabled = true; setTimeout(() => { buttonElement.textContent = originalText; buttonElement.disabled = false; }, 1500); }, (err) => { alert('复制失败: ' + err); }); }
 
-    // v11.0.3: Modified sendAlphaActions to include reason
+    // --- v11.0.4: sendAlphaActions adapted for reason ---
     async function sendAlphaActions(actions, expression, checkboxElements, reason = null) {
         checkboxElements.forEach(cb => cb.disabled = true);
         let success = true;
@@ -309,34 +268,24 @@
         for (const action of actions) {
             try {
                 let requestBody = { expression: expression };
-                // Add reason only if the action is mark_failed_on_wq
-                if (action === 'mark_failed_on_wq' && reason) {
+                if (action === 'mark_failed_on_wq' && reason) { // Only add reason for mark_failed
                     requestBody.reason = reason;
                 }
-                const response = await fetch(`/api/${action}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
+                const response = await fetch(`/api/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
                 const data = await response.json();
-                if (data.status !== 'success') {
-                    success = false; errorMessage = data.message || `Action ${action} failed.`;
-                    console.error(`API Error (${action}):`, data.message); break;
-                }
-            } catch (err) {
-                success = false; errorMessage = `Network error during ${action}: ${err}`;
-                console.error(`Network Error (${action}):`, err); break;
-            }
+                if (data.status !== 'success') { success = false; errorMessage = data.message || `Action ${action} failed.`; console.error(`API Error (${action}):`, data.message); break; }
+            } catch (err) { success = false; errorMessage = `Network error during ${action}: ${err}`; console.error(`Network Error (${action}):`, err); break; }
         }
-        if (!success) { alert(`操作失败: ${errorMessage}\n页面即将刷新以同步状态.`); }
-        // Fetch data slightly faster on success
-        setTimeout(fetchData, success ? 100 : 800);
+        if (!success) { alert(`操作失败: ${errorMessage}\n将尝试自动刷新...`); }
+        // Fetch data slightly faster on success, slightly slower on error to allow user to read alert
+        setTimeout(fetchData, success ? 300 : 1000);
         return success;
     }
 
-    // v11.0.3: Modified handleCheckboxChange for failure modal
+    // --- v11.0.4: handleCheckboxChange adapted for modal ---
     function handleCheckboxChange(checkbox) {
         const row = checkbox.closest('tr');
+        if (!row) return; // Should not happen
         const submittedCheckbox = row.querySelector('.chk-submitted');
         const failedCheckbox = row.querySelector('.chk-failed');
         const expression = checkbox.dataset.expression;
@@ -345,82 +294,86 @@
         const actionsToCall = [];
         let revertVisualState = null;
 
-        submittedCheckbox.disabled = true; // Disable both initially
-        failedCheckbox.disabled = true;
+        // Disable both checkboxes during processing
+        if (submittedCheckbox) submittedCheckbox.disabled = true;
+        if (failedCheckbox) failedCheckbox.disabled = true;
 
         if (type === 'submitted') {
             if (isChecked) {
                 actionsToCall.push('mark_submitted');
-                // If marking as submitted, unmark failed if it was checked
-                if (failedCheckbox.checked) {
+                if (failedCheckbox && failedCheckbox.checked) { // Only if failed checkbox exists and is checked
                     failedCheckbox.checked = false;
                     actionsToCall.push('unmark_failed_on_wq');
                 }
-                revertVisualState = () => { checkbox.checked = false; if (actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
+                revertVisualState = () => { checkbox.checked = false; if (failedCheckbox && actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
             } else {
                 actionsToCall.push('unmark_submitted');
-                // If unmarking submitted, also unmark failed
-                if (failedCheckbox.checked) {
+                if (failedCheckbox && failedCheckbox.checked) {
                     failedCheckbox.checked = false;
                     actionsToCall.push('unmark_failed_on_wq');
                 }
-                revertVisualState = () => { checkbox.checked = true; if (actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
+                revertVisualState = () => { checkbox.checked = true; if (failedCheckbox && actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
             }
-            // Directly call API for submit actions
+            // Submit actions don't need modal, call API directly
             sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox]).then(success => {
                 if (!success && revertVisualState) revertVisualState();
-                submittedCheckbox.disabled = false;
-                failedCheckbox.disabled = !submittedCheckbox.checked; // Re-enable based on submitted state
+                // Re-enable checkboxes after API call
+                if (submittedCheckbox) submittedCheckbox.disabled = false;
+                if (failedCheckbox) failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked); // Failed depends on submitted
             });
+
         } else if (type === 'failed') {
             if (isChecked) {
-                // --- v11.0.3: Open Modal instead of direct API call ---
+                // Open the modal to get the reason
                 showFailureModal(checkbox, expression);
-                // Keep checkboxes disabled until modal is resolved
-                // The revert logic will be handled inside submitFailureReason or closeFailureModal
+                // Keep checkboxes disabled, modal flow will handle re-enabling or reverting
             } else {
-                // Unmarking failed - simple API call
+                // Unmarking failed
                 actionsToCall.push('unmark_failed_on_wq');
                 revertVisualState = () => { checkbox.checked = true; };
                 sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox]).then(success => {
                     if (!success && revertVisualState) revertVisualState();
-                    submittedCheckbox.disabled = false; // Re-enable both
-                    failedCheckbox.disabled = !submittedCheckbox.checked;
+                    // Re-enable checkboxes after API call
+                    if (submittedCheckbox) submittedCheckbox.disabled = false;
+                    if (failedCheckbox) failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked);
                 });
             }
         }
     }
+    // --- v11.0.4: End handleCheckboxChange ---
 
-    // v11.0.3: Failure Modal Functions
+    // --- v11.0.4: Failure Modal Functions ---
     const failureModal = document.getElementById('failure-reason-modal');
 
     function showFailureModal(checkbox, expression) {
-        failureModalContext.checkbox = checkbox; // Store the checkbox that triggered the modal
+        failureModalContext.checkbox = checkbox;
         failureModalContext.expression = expression;
         // Reset radio button to default
         document.querySelector("#failure-reason-form input[name='failure_reason'][value='HIGH_SELF_CORRELATION']").checked = true;
-        failureModal.style.display = 'flex'; // Use flex to center
+        failureModal.style.display = 'flex';
     }
 
     function closeFailureModal(event) {
-        // Only close if clicking overlay or cancel button
         if (event && event.target.id !== 'failure-reason-modal' && !event.target.classList.contains('failure-modal-cancel-btn')) {
-            return;
+            return; // Don't close if clicking inside content unless it's cancel button
         }
         failureModal.style.display = 'none';
-        // Re-enable checkboxes if the action was cancelled
+        // If closed via overlay or cancel, revert the checkbox state and re-enable
         if (failureModalContext.checkbox) {
-            const row = failureModalContext.checkbox.closest('tr');
-            if (row) {
-                const submittedCheckbox = row.querySelector('.chk-submitted');
-                const failedCheckbox = row.querySelector('.chk-failed');
-                submittedCheckbox.disabled = false;
-                failedCheckbox.disabled = !submittedCheckbox.checked; // Enable based on submitted status
-                // If we were trying to check 'failed', revert it visually
-                if (failureModalContext.checkbox.checked) {
-                     failureModalContext.checkbox.checked = false;
-                }
-            }
+             const row = failureModalContext.checkbox.closest('tr');
+             if (row) {
+                 const submittedCheckbox = row.querySelector('.chk-submitted');
+                 const failedCheckbox = failureModalContext.checkbox; // It is the failed checkbox
+
+                 // Revert the check state only if it was checked before opening modal
+                 if (failedCheckbox.checked) {
+                     failedCheckbox.checked = false;
+                 }
+
+                 // Re-enable checkboxes
+                 if (submittedCheckbox) submittedCheckbox.disabled = false;
+                 failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked);
+             }
         }
         failureModalContext = { checkbox: null, expression: null }; // Clear context
     }
@@ -430,52 +383,62 @@
         if (!reason || !failureModalContext.checkbox || !failureModalContext.expression) {
             console.error("Failure modal context missing!");
             alert("发生错误，无法提交失败原因。");
-            closeFailureModal(null);
+            closeFailureModal(null); // Close modal even on error
             return;
         }
 
         const checkbox = failureModalContext.checkbox;
         const expression = failureModalContext.expression;
         const row = checkbox.closest('tr');
+        if (!row) return; // Should not happen
         const submittedCheckbox = row.querySelector('.chk-submitted');
-        const failedCheckbox = checkbox; // It's the failed checkbox itself
+        const failedCheckbox = checkbox;
         const actionsToCall = [];
-        let revertVisualState = () => { checkbox.checked = false; if (submittedCheckbox.checked && actionsToCall.includes('mark_submitted')) submittedCheckbox.checked = false;};
+        let revertVisualState = () => { // Define revert state *before* potentially changing checkboxes
+             failedCheckbox.checked = false;
+             if (submittedCheckbox && actionsToCall.includes('mark_submitted')) submittedCheckbox.checked = false;
+         };
 
-        // If marking failed, ensure submitted is also marked
-        if (!submittedCheckbox.checked) {
-            submittedCheckbox.checked = true;
+        // Ensure submitted is marked if we mark as failed
+        if (submittedCheckbox && !submittedCheckbox.checked) {
+            submittedCheckbox.checked = true; // Visually check it
             actionsToCall.push('mark_submitted');
         }
         actionsToCall.push('mark_failed_on_wq');
 
-        // Close modal BEFORE sending request
+        // Close modal BEFORE sending API request
         failureModal.style.display = 'none';
         failureModalContext = { checkbox: null, expression: null }; // Clear context
 
-        sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox], reason).then(success => {
-             if (!success && revertVisualState) {
-                  revertVisualState(); // Revert checkboxes on failure
-             }
-             // Re-enable checkboxes regardless of success/failure, AFTER fetch completes
-             submittedCheckbox.disabled = false;
-             failedCheckbox.disabled = !submittedCheckbox.checked; // Enable based on submitted status
-         });
-    }
-    // v11.0.3: End Failure Modal Functions
+        // Disable checkboxes again before async call
+        if (submittedCheckbox) submittedCheckbox.disabled = true;
+        failedCheckbox.disabled = true;
 
-    // --- Score Modal Functions (Unchanged from v8.4.9) ---
+        sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox], reason).then(success => {
+            if (!success && revertVisualState) {
+                revertVisualState(); // Revert checkboxes on API failure
+            }
+            // Re-enable checkboxes after API call completion (success or fail)
+            if (submittedCheckbox) submittedCheckbox.disabled = false;
+            // Failed checkbox enabled status depends on submitted checkbox status AFTER potential changes
+            failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked);
+        });
+    }
+    // --- v11.0.4: End Failure Modal Functions ---
+
+    // --- Score Modal Functions (保持 v8.4.9) ---
     const scoreModal = document.getElementById('score-modal');
     const scoreModalTitle = document.getElementById('modal-title');
     const scoreModalBody = document.getElementById('modal-body');
-    function showScoreExplanation() { /* Unchanged */ }
-    function showScoreCalculation(alphaData) { /* Unchanged */ }
+    function showScoreExplanation() { scoreModalTitle.textContent = "综合分计算公式 (v7.9+)"; scoreModalBody.innerHTML = `<p>综合分用于精英池排序和种子选择，旨在平衡多个性能指标：</p><code>Score = Fitness + (Passed Checks * 0.2) + (abs(Sharpe) * 0.3) - (Turnover * 0.1) - SelfCorrelation Penalty</code><ul><li><strong>Fitness:</strong> 主要性能指标。</li><li><strong>Passed Checks:</strong> Checks 通过数量，每项加 0.2 分。</li><li><strong>Sharpe:</strong> 夏普比率绝对值，乘以 0.3。</li><li><strong>Turnover:</strong> 换手率，乘以 0.1 作为惩罚项。</li><li><strong>SelfCorrelation Penalty:</strong><ul><li>当 Self-Correlation > 0.7 时计算。</li><li>Penalty = (Self-Correlation - 0.7) * 5.0</li><li>(例如: Self-Corr=0.8, Penalty= (0.8-0.7)*5 = 0.5 分)</li></ul></li></ul><p><small>注意：仪表盘显示的综合分可能基于旧版逻辑（无Self-Corr惩罚），仅供参考。Generator 内部使用此 v7.9+ 逻辑进行筛选和排序。</small></p>`; scoreModal.style.display = "block"; }
+    function showScoreCalculation(alphaData) { const perf = alphaData.performance || {}; const getFloat = (val, defaultVal = 0) => { if (typeof val === 'number') return val; if (typeof val === 'string') { const num = parseFloat(val); return isNaN(num) ? defaultVal : num; } return defaultVal; }; const fitness = getFloat(perf.fitness, 0); const sharpe = getFloat(perf.sharpe, 0); const turnover = getFloat(perf.turnover, 1.0); let passed_count = 0; const summary = alphaData.checks_summary || ''; const passMatch = summary.match(/(\d+)\s+PASS/); if (passMatch) passed_count = parseInt(passMatch[1], 10) || 0; let self_corr_value = 0.0; const checks_list = perf.checks || []; if (Array.isArray(checks_list)) { const selfCorrCheck = checks_list.find(c => c && c.name === 'Self-correlation'); if (selfCorrCheck && typeof selfCorrCheck.value !== 'undefined') { self_corr_value = getFloat(selfCorrCheck.value, 0.0); } } let self_corr_penalty = 0.0; let penaltyCalculation = "无 (< 0.7)"; if (self_corr_value > 0.7) { self_corr_penalty = (self_corr_value - 0.7) * 5.0; penaltyCalculation = `(${self_corr_value.toFixed(4)} - 0.7) * 5.0 = ${self_corr_penalty.toFixed(4)}`; } const fitnessTerm = fitness; const checksTerm = passed_count * 0.2; const sharpeTerm = Math.abs(sharpe) * 0.3; const turnoverTerm = turnover * 0.1; const score = fitnessTerm + checksTerm + sharpeTerm - turnoverTerm - self_corr_penalty; scoreModalTitle.textContent = "Alpha 综合分计算明细"; scoreModalBody.innerHTML = `<p><strong>Expression:</strong> <code style="word-break: break-all;">${alphaData.expression.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></p><ul><li><strong>Fitness:</strong> ${fitness.toFixed(4)}</li><li><strong>Passed Checks Bonus:</strong> ${passed_count} * 0.2 = ${checksTerm.toFixed(4)}</li><li><strong>Sharpe Bonus:</strong> abs(${sharpe.toFixed(4)}) * 0.3 = ${sharpeTerm.toFixed(4)}</li><li><strong>Turnover Penalty:</strong> ${turnover.toFixed(4)} * 0.1 = ${turnoverTerm.toFixed(4)}</li><li><strong>Self-Corr Penalty:</strong> ${penaltyCalculation}</li></ul><p><strong>最终综合分 =</strong> ${fitnessTerm.toFixed(4)} + ${checksTerm.toFixed(4)} + ${sharpeTerm.toFixed(4)} - ${turnoverTerm.toFixed(4)} - ${self_corr_penalty.toFixed(4)} = <strong>${score.toFixed(4)}</strong></p>`; scoreModal.style.display = "block"; }
     function closeModal(modalId) { document.getElementById(modalId).style.display = "none"; }
-    window.onclick = function(event) { if (event.target == scoreModal) { closeModal('score-modal'); } else if (event.target == failureModal) { closeFailureModal(event); } } // Modified to handle both modals
+    window.onclick = function(event) { if (event.target == scoreModal) { closeModal('score-modal'); } else if (event.target == failureModal) { closeFailureModal(event); } }
     // --- End Score Modal ---
 
     function sortAlphas(key, direction) { /* Unchanged from v8.4.9 */ }
 
+    // --- v11.0.4: Render Table with Copy Format Fix ---
     function renderAlphaTable() {
         const tbody = document.getElementById('alphas-tbody');
         tbody.innerHTML = '';
@@ -485,6 +448,7 @@
         globalAlphaData.forEach((alpha, index) => {
             const row = document.createElement('tr');
             let rowClass = '';
+            // Determine row class based on status (same as before)
             if (alpha.is_successfully_submitted) rowClass = 'alpha-status-success';
             else if (alpha.is_failed_on_wq) rowClass = 'alpha-status-failed';
             else if (alpha.is_submittable && !alpha.is_submitted) rowClass = 'alpha-status-submittable';
@@ -493,13 +457,13 @@
 
             const sanitizedExpression = alpha.expression.replace(/'/g, "\\'").replace(/"/g, '\\"');
             const uniqueIdPrefix = `alpha-${index}`;
-            // v11.0.3: Simplified Actions HTML slightly, logic moved to handleCheckboxChange
-            let actionsHTML = `<label for="${uniqueIdPrefix}-submitted" title="标记为已提交到WQ Brain"><input type="checkbox" id="${uniqueIdPrefix}-submitted" class="chk-submitted" data-expression="${sanitizedExpression}" data-type="submitted" onchange="handleCheckboxChange(this)" ${alpha.is_submitted ? 'checked' : ''}><span>提交</span></label><label for="${uniqueIdPrefix}-failed" title="标记为提交后在WQ Brain验证失败"><input type="checkbox" id="${uniqueIdPrefix}-failed" class="chk-failed" data-expression="${sanitizedExpression}" data-type="failed" onchange="handleCheckboxChange(this)" ${alpha.is_failed_on_wq ? 'checked' : ''} ${!alpha.is_submitted ? 'disabled' : ''}><span>失败</span></label>`;
+            // Actions HTML remains the same, logic is in handleCheckboxChange
+            let actionsHTML = `<label for="${uniqueIdPrefix}-submitted" title="标记为已提交"><input type="checkbox" id="${uniqueIdPrefix}-submitted" class="chk-submitted" data-expression="${sanitizedExpression}" data-type="submitted" onchange="handleCheckboxChange(this)" ${alpha.is_submitted ? 'checked' : ''}><span>提交</span></label><label for="${uniqueIdPrefix}-failed" title="标记为提交失败"><input type="checkbox" id="${uniqueIdPrefix}-failed" class="chk-failed" data-expression="${sanitizedExpression}" data-type="failed" onchange="handleCheckboxChange(this)" ${alpha.is_failed_on_wq ? 'checked' : ''} ${!alpha.is_submitted ? 'disabled' : ''}><span>失败</span></label>`;
             let copyHTML = `<button class="copy-btn" onclick="copyToClipboard('${sanitizedExpression}', this)">复制</button>`;
 
-            const formatNum = (num, digits = 4) => (typeof num === 'number' ? num.toFixed(digits) : (num || 'N/A'));
-            const formatPercent = (num, digits = 2) => (typeof num === 'number' ? (num * 100).toFixed(digits) : (num || 'N/A'));
-            const formatPercentForCopy = (num, digits = 2) => (typeof num === 'number' ? (num * 100).toFixed(digits) : 'N/A'); // v11.0.3
+            const formatNum = (num, digits = 4) => (typeof num === 'number' && !isNaN(num) ? num.toFixed(digits) : 'N/A');
+            const formatPercent = (num, digits = 2) => (typeof num === 'number' && !isNaN(num) ? (num * 100).toFixed(digits) : 'N/A');
+            const formatPercentForCopy = (num, digits = 2) => (typeof num === 'number' && !isNaN(num) ? (num * 100).toFixed(digits) : 'N/A'); // For data-copy-value
 
             const score = alpha.dashboard_score;
             const fitness = alpha.performance?.fitness;
@@ -508,12 +472,14 @@
             const turnover = alpha.performance?.turnover;
 
             row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${formatNum(score)}</span>`;
-            row.insertCell().innerHTML = `<div class="alpha-expression-container" onclick="toggleExpressionView(event)">${formatExpression(alpha.expression)}</div>`;
+            // v11.0.4: Simplified expression cell, removed toggle
+            row.insertCell().innerHTML = `<div class="alpha-expression-container">${alpha.expression.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
             row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${formatNum(fitness)}`;
-            // v11.0.3: Update copyable value for Returns/Turnover
+            // --- v11.0.4: Corrected data-copy-value ---
             row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatNum(sharpe, 2)}" onclick="copyValue(this)">${formatNum(sharpe, 2)}</span>`;
-            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(returns)}" onclick="copyValue(this)">${formatPercent(returns)}%</span>`; // Add % sign
-            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(turnover)}" onclick="copyValue(this)">${formatPercent(turnover)}%</span>`; // Add % sign
+            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(returns)}" onclick="copyValue(this)">${formatPercent(returns)}%</span>`; // Added %
+            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(turnover)}" onclick="copyValue(this)">${formatPercent(turnover)}%</span>`; // Added %
+            // --- End Correction ---
             row.insertCell().innerHTML = formatChecks(alpha.checks_summary);
             row.insertCell().textContent = alpha.timestamp || 'N/A';
             row.insertCell().innerHTML = actionsHTML; row.cells[8].className = 'alpha-actions';
@@ -522,28 +488,38 @@
             tbody.appendChild(row);
         });
     }
+    // --- End v11.0.4 Render Table ---
+
 
     function fetchData() {
         fetch('/status')
             .then(response => { if (!response.ok) { throw new Error(`HTTP ${response.status}: ${response.statusText}`); } return response.json(); })
             .then(data => {
+                // Check for backend error response first
+                if (data.error) { throw new Error(data.error); }
+
                 ['miner', 'evolver'].forEach(service => {
-                    document.getElementById(`${service}-status-text`).textContent = data[service].status;
-                    document.getElementById(`${service}-last-seen`).textContent = data[service].last_seen;
-                    document.getElementById(`${service}-logs`).innerHTML = formatLogs(data[service].logs);
-                    const statusDotElement = document.getElementById(`${service}-status`);
-                    if(statusDotElement) { updateStatusDot(statusDotElement, data[service].status); }
-                    else { console.warn(`Status dot element not found for ${service}`); }
+                    const serviceData = data[service] || { status: 'ERROR', logs: 'No data received', last_seen: 'N/A' }; // Default on missing data
+                    const statusTextEl = document.getElementById(`${service}-status-text`);
+                    const lastSeenEl = document.getElementById(`${service}-last-seen`);
+                    const logsEl = document.getElementById(`${service}-logs`);
+                    const statusDotEl = document.getElementById(`${service}-status`);
+
+                    if(statusTextEl) statusTextEl.textContent = serviceData.status || 'UNKNOWN';
+                    if(lastSeenEl) lastSeenEl.textContent = serviceData.last_seen || 'N/A';
+                    if(logsEl) logsEl.innerHTML = formatLogs(serviceData.logs || 'No logs.');
+                    if(statusDotEl) updateStatusDot(statusDotEl, serviceData.status || 'UNKNOWN');
                 });
-                const alphas = data.hopeful_alphas;
-                document.getElementById('alphas-count').textContent = alphas.count;
-                document.getElementById('alphas-pending-submission').textContent = alphas.submittable_pending_count;
+
+                const alphas = data.hopeful_alphas || { count: 0, all_alphas: [] }; // Default on missing data
+                document.getElementById('alphas-count').textContent = alphas.count || 0;
+                document.getElementById('alphas-pending-submission').textContent = alphas.submittable_pending_count || 0;
                 document.getElementById('alphas-max-fitness').textContent = (typeof alphas.max_fitness === 'number' ? alphas.max_fitness.toFixed(4) : 'N/A');
                 document.getElementById('alphas-avg-fitness').textContent = (typeof alphas.avg_fitness === 'number' ? alphas.avg_fitness.toFixed(4) : 'N/A');
                 document.getElementById('alphas-submission-stats').textContent = `${alphas.successfully_submitted_count || 0} / ${alphas.total_submitted_count || 0}`;
 
                 globalAlphaData = alphas.all_alphas || [];
-                sortAlphas(currentSort.key, currentSort.direction);
+                sortAlphas(currentSort.key, currentSort.direction); // Sort before rendering
                 renderAlphaTable();
             })
             .catch(error => {
@@ -555,8 +531,9 @@
             });
     }
 
-    function fetchVersionInfo() { /* Unchanged from v8.4.9 */ }
-    document.addEventListener('DOMContentLoaded', () => { fetchData(); fetchVersionInfo(); setInterval(fetchData, 10000); document.querySelectorAll('#alphas-table th.sortable').forEach(header => { header.addEventListener('click', (event) => { if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) { return; } const sortKey = header.dataset.sort; if (!sortKey) return; if (currentSort.key === sortKey) { currentSort.direction = (currentSort.direction === 'asc' ? 'desc' : 'asc'); } else { currentSort.key = sortKey; currentSort.direction = (sortKey === 'timestamp' ? 'asc' : 'desc'); /* Default sort dir adjustment might be needed */ } sortAlphas(currentSort.key, currentSort.direction); renderAlphaTable(); }); }); });
+    function fetchVersionInfo() { fetch('/api/version_info').then(r=>r.json()).then(d=>{document.getElementById('dashboard-version').textContent=d.dashboard_version||'unknown';document.getElementById('generator-version').textContent=d.generator_version||'unknown';}).catch(e=>{console.error('Version fetch error:',e); /* Minor error, don't block UI */ }); }
+
+    document.addEventListener('DOMContentLoaded', () => { fetchData(); fetchVersionInfo(); setInterval(fetchData, 10000); document.querySelectorAll('#alphas-table th.sortable').forEach(header => { header.addEventListener('click', (event) => { if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) { return; } const sortKey = header.dataset.sort; if (!sortKey) return; if (currentSort.key === sortKey) { currentSort.direction = (currentSort.direction === 'asc' ? 'desc' : 'asc'); } else { currentSort.key = sortKey; currentSort.direction = (sortKey === 'timestamp' ? 'desc' : 'desc'); /* Default desc for timestamp too now */ } sortAlphas(currentSort.key, currentSort.direction); renderAlphaTable(); }); }); });
 </script>
 
 </body>

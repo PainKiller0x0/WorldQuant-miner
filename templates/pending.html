@@ -87,7 +87,7 @@
         }
         .alpha-expression:hover { border-color: #888; }
         
-        /* [需求 3] Checks Summary 标签 */
+        /* Checks Summary 标签 */
         .checks-cell { min-width: 140px; }
         .check-tag {
             display: inline-block;
@@ -103,7 +103,7 @@
         .check-tag.pending { background-color: #ffc107; color: #333; }
         .check-tag.unknown { background-color: #6c757d; }
 
-        /* [需求 2] 可复制的性能指标 */
+        /* 可复制的性能指标 */
         .perf-cell { font-size: 0.9em; line-height: 1.6; min-width: 180px; }
         .perf-item {
             display: flex;
@@ -123,7 +123,7 @@
         }
         .perf-value-copy:hover { background-color: #007bff; color: #fff; }
         
-        /* [需求 1] 操作按钮 */
+        /* 操作按钮 */
         .actions-cell { min-width: 130px; }
         .btn-action {
             display: block;
@@ -228,16 +228,19 @@
                     throw new Error(data.error);
                 }
                 
-                // [需求 3] 解析检查摘要，用于排序
                 allAlphas = data.map(alpha => {
                     const { pass, fail, pending } = parseChecksSummary(alpha.checks_summary);
                     alpha.checks_summary_pass = pass;
                     alpha.checks_summary_fail = fail;
                     alpha.checks_summary_pending = pending;
                     
-                    // [需求 2] 解析性能，用于排序
+                    // --- [CRASH FIX v4] ---
+                    // 确保所有用于计算的性能值都是数字
                     alpha.fitness = parseFloat(alpha.fitness) || -999;
                     alpha.sharpe = parseFloat(alpha.sharpe) || -999;
+                    alpha.returns = parseFloat(alpha.returns) || 0;
+                    alpha.turnover = parseFloat(alpha.turnover) || 0;
+                    // --- 修复结束 ---
                     
                     return alpha;
                 });
@@ -249,7 +252,9 @@
             })
             .catch(error => {
                 console.error('Error fetching pending alphas:', error);
-                loadingDiv.textContent = `加载失败: ${error.message}。请检查后端服务是否运行。`;
+                loadingDiv.textContent = `加载失败: ${error.message}。请检查后端服务是否运行，并查看控制台(F12)获取详细错误。`;
+                // 确保错误时表格也是隐藏的
+                table.style.display = 'none';
             });
     }
     
@@ -263,7 +268,7 @@
                 const sortKey = th.getAttribute('data-sort-key');
                 let sortDir = 'desc';
                 if (currentSortKey === sortKey) {
-                    sortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+                    sortDir = currentSortSorg === 'desc' ? 'asc' : 'desc';
                 }
                 currentSortKey = sortKey;
                 currentSortDir = sortDir;
@@ -288,9 +293,6 @@
         }
     }
     
-    /**
-     * [需求 3] 辅助函数：解析 X PASS Y FAIL Z PENDING
-     */
     function parseChecksSummary(summaryStr) {
         if (typeof summaryStr !== 'string') return { pass: 0, fail: 0, pending: 0 };
         const pass = parseInt((summaryStr.match(/(\d+)\s+PASS/i) || [])[1] || 0, 10);
@@ -299,16 +301,19 @@
         return { pass, fail, pending };
     }
     
-    /**
-     * [需求 3] 辅助函数：格式化检查摘要为 HTML 标签
-     */
     function formatChecksSummary(alpha) {
-        const { pass, fail, pending } = alpha;
+        const pass = alpha.checks_summary_pass;
+        const fail = alpha.checks_summary_fail;
+        const pending = alpha.checks_summary_pending;
+
         let html = '';
         if (pass > 0) html += `<span class="check-tag pass">${pass} PASS</span>`;
         if (fail > 0) html += `<span class="check-tag fail">${fail} FAIL</span>`;
         if (pending > 0) html += `<span class="check-tag pending">${pending} PENDING</span>`;
-        if (html === '') html = `<span class="check-tag unknown">N/A</span>`;
+        
+        if (html === '') {
+            html = `<span class="check-tag unknown">N/A</span>`;
+        }
         return html;
     }
 
@@ -344,15 +349,26 @@
             const row = document.createElement('tr');
             row.setAttribute('data-expression', alpha.expression); // 方便JS定位
             
-            // [需求 2] 格式化性能指标
-            const fitness = alpha.fitness.toFixed(4);
-            const sharpe = alpha.sharpe.toFixed(4);
-            const returnsRaw = parseFloat(alpha.returns) || 0;
-            const turnoverRaw = parseFloat(alpha.turnover) || 0;
-            const returnsDisplay = (returnsRaw * 100).toFixed(2) + '%';
-            const turnoverDisplay = (turnoverRaw * 100).toFixed(2) + '%';
+            // --- [CRASH FIX & COPY FIX] 格式化性能指标 ---
+            // (alpha.fitness 等已在 fetchPendingAlphas 中被确保为数字)
             
-            // [需求 4] 格式化时间戳
+            // 1. 定义显示值 (Display Values)
+            const fitness_display = alpha.fitness.toFixed(4);
+            const sharpe_display = alpha.sharpe.toFixed(4);
+            
+            // 2. 定义复制值 (Copy Values) - 统一为2位小数
+            const fitness_copy = alpha.fitness.toFixed(2);
+            const sharpe_copy = alpha.sharpe.toFixed(2);
+            // Returns/Turnover 复制百分比数值 (e.g., "7.34")
+            const returns_copy = (alpha.returns * 100).toFixed(2);
+            const turnover_copy = (alpha.turnover * 100).toFixed(2);
+
+            // 3. 定义 Returns/Turnover 的显示值 (e.g., "7.34%")
+            const returns_display = returns_copy + '%';
+            const turnover_display = turnover_copy + '%';
+            // --- 修复结束 ---
+            
+            // 格式化时间戳
             let timestampDisplay = 'N/A';
             if (alpha.timestamp) {
                 try {
@@ -378,19 +394,19 @@
                 <td class="perf-cell">
                     <div class="perf-item">
                         <strong>Fitness:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${fitness}" data-copy-value="${fitness}">${fitness}</span>
+                        <span class="perf-value-copy" title="点击复制 ${fitness_copy}" data-copy-value="${fitness_copy}">${fitness_display}</span>
                     </div>
                     <div class="perf-item">
                         <strong>Sharpe:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${sharpe}" data-copy-value="${sharpe}">${sharpe}</span>
+                        <span class="perf-value-copy" title="点击复制 ${sharpe_copy}" data-copy-value="${sharpe_copy}">${sharpe_display}</span>
                     </div>
                     <div class="perf-item">
                         <strong>Returns:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${returnsRaw}" data-copy-value="${returnsRaw}">${returnsDisplay}</span>
+                        <span class="perf-value-copy" title="点击复制 ${returns_copy}" data-copy-value="${returns_copy}">${returns_display}</span>
                     </div>
                     <div class="perf-item">
                         <strong>Turnover:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${turnoverRaw}" data-copy-value="${turnoverRaw}">${turnoverDisplay}</span>
+                        <span class="perf-value-copy" title="点击复制 ${turnover_copy}" data-copy-value="${turnover_copy}">${turnover_display}</span>
                     </div>
                 </td>
                 

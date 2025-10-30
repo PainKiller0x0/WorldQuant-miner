@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v11.0.5 (Stable Base v6.1.5 + Minimal Failure Reason) ---
+# --- Web仪表盘.py v11.0.10 (修复“僵尸”Alpha 的合并迁移逻辑) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -11,9 +11,9 @@ import logging
 import pandas as pd
 import numpy as np
 
-# --- v11.0.5: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v11.0.5"
-# --- v11.0.5: 结束 ---
+# --- v11.0.10: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v11.0.10"
+# --- v11.0.10: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -72,85 +72,11 @@ def save_submitted_alphas(submitted_set):
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
 
-# --- v11.0.5: 新增/修改失败日志处理 ---
-def load_submission_failures():
-    """ (v11.0.5) 加载新的 submission_failure_log.json (返回字典列表)，含迁移逻辑 """
-    with failure_log_lock:
-        filepath = SUBMISSION_FAILURE_LOG_FILE
-        # 1. 检查新文件是否存在
-        if not os.path.exists(filepath):
-            # logger.info(f"[Failure Log Load] File not found: {filepath}. Checking for old file.")
-            old_set = load_failed_submissions_old_format() # 尝试加载旧格式
-
-            # 2. 如果旧文件存在且有内容，则迁移
-            if old_set:
-                logger.warning(f"Found {len(old_set)} entries in old 'failed_submissions.json'. Migrating...")
-                new_list = [{"expression": expr, "reason": "MIGRATED_UNKNOWN", "timestamp": datetime.now(timezone.utc).isoformat()} for expr in old_set]
-                # 内联保存逻辑
-                try:
-                    with open(filepath, 'w', encoding='utf-8') as f:
-                        json.dump(new_list, f, indent=4)
-                    logger.info(f"Successfully migrated {len(new_list)} entries to new log.")
-                    # 尝试备份旧文件（失败也继续）
-                    try:
-                        os.rename(FAILED_SUBMISSIONS_FILE_OLD, FAILED_SUBMISSIONS_FILE_OLD + ".bak")
-                        logger.info(f"Old failure log backed up.")
-                    except Exception as rename_e:
-                        logger.error(f"Failed to rename old failure log: {rename_e}")
-                    return new_list # 返回迁移后的数据
-                except Exception as save_e:
-                    logger.error(f"Failed to save migrated failure log (inline): {save_e}. Returning empty list.")
-                    return [] # 保存失败，返回空列表
-# --- BEGIN FIX v11.0.6 ---
-            # 修复：如果新旧文件都不存在 (全新安装)，则主动创建空的新日志文件
-            # 原始代码 (return []) 依赖于 save_submission_failures() 创建文件，这可能失败。
-            logger.warning(f"[Failure Log Load] Neither new log ({filepath}) nor old log ({FAILED_SUBMISSIONS_FILE_OLD}) found. Creating new empty log file.")
-            try:
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump([], f) # 写入一个空的 JSON 列表
-                logger.info(f"Successfully created new empty log file: {filepath}")
-                return [] # 返回空列表
-            except Exception as create_e:
-                logger.error(f"Failed to create new empty log file! {create_e}", exc_info=True)
-                return [] # 失败了，还是返回空列表
-            # --- END FIX v11.0.6 ---
-
-        # 3. 如果新文件存在，则加载它
-        try:
-            # 检查文件是否有效
-            if not os.path.isfile(filepath) or os.path.getsize(filepath) < 2:
-                 # logger.info(f"[Failure Log Load] File exists but empty/invalid: {filepath}")
-                 return []
-            with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-            # 确保加载的是列表
-            if isinstance(data, list):
-                # logger.info(f"[Failure Log Load] Loaded {len(data)} entries.")
-                return data
-            else:
-                logger.warning(f"[Failure Log Load] File {filepath} exists but not a list ({type(data)}). Returning empty list.")
-                return [] # 格式不对，返回空
-        except json.JSONDecodeError as json_e:
-            logger.error(f"[Failure Log Load] Error decoding JSON from {filepath}: {json_e}. Returning empty list.")
-            return [] # JSON 解析失败，返回空
-        except Exception as e:
-            logger.error(f"[Failure Log Load] Unexpected error loading {filepath}: {e}", exc_info=False)
-            return [] # 其他异常，返回空
-
-def save_submission_failures(failures_list):
-    """ (v11.0.5) 保存新的 submission_failure_log.json """
-    with failure_log_lock:
-        filepath = SUBMISSION_FAILURE_LOG_FILE
-        try:
-            if not isinstance(failures_list, list):
-                 logger.error(f"[Failure Log Save] Invalid data type: {type(failures_list)}."); return False
-            with open(filepath, 'w', encoding='utf-8') as f: json.dump(failures_list, f, indent=4)
-            return True
-        except Exception as e: logger.error(f"[Failure Log Save] Error saving {filepath}: {e}", exc_info=False); return False
-
+# --- v11.0.10: 修复的失败日志加载器 ---
 def load_failed_submissions_old_format():
-    """ (v11.0.5) 辅助函数，只在迁移时由 load_submission_failures 调用 """
+    """ (v11.0.10) 辅助函数，只在迁移时由 load_submission_failures 调用 """
     filepath = FAILED_SUBMISSIONS_FILE_OLD
-    if not os.path.exists(filepath): return set()
+    if not (os.path.exists(filepath) and os.path.isfile(filepath)): return set() # 强化检查
     try:
         # 简化检查
         if os.path.getsize(filepath) < 2: return set()
@@ -164,6 +90,93 @@ def load_failed_submissions_old_format():
         logger.error(f"[Old Failed Load] Error loading {filepath}: {e}")
     return set()
 
+def load_submission_failures():
+    """ (v11.0.10) 重写加载逻辑，修复“僵尸”Alpha (迁移) Bug """
+    with failure_log_lock:
+        new_filepath = SUBMISSION_FAILURE_LOG_FILE
+        old_filepath = FAILED_SUBMISSIONS_FILE_OLD
+        
+        current_failures_list = []
+        new_file_exists = os.path.exists(new_filepath)
+        new_file_has_content = new_file_exists and os.path.isfile(new_filepath) and os.path.getsize(new_filepath) > 2
+        old_file_exists_and_not_backed_up = os.path.exists(old_filepath) and not os.path.exists(old_filepath + ".bak")
+
+        # --- Path 1: 尝试加载新日志文件 (你手动的5条) ---
+        if new_file_has_content:
+            try:
+                with open(new_filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    current_failures_list = data
+                    # logger.info(f"[Failure Log Load] Loaded {len(current_failures_list)} entries from {new_filepath}")
+                else:
+                    logger.error(f"[Failure Log Load] {new_filepath} is not a list. Re-initializing.")
+            except Exception as e:
+                logger.error(f"[Failure Log Load] Error loading {new_filepath}: {e}. Attempting recovery.")
+
+        # --- Path 2: 检查是否需要从旧日志迁移 (你的30+条) ---
+        if old_file_exists_and_not_backed_up:
+            logger.warning(f"[Failure Log Load] Old log '{old_filepath}' still exists. Checking for merge/migration...")
+            old_set = load_failed_submissions_old_format()
+            
+            if old_set:
+                # 找出新日志中已有的表达式
+                current_expressions = {item['expression'] for item in current_failures_list if isinstance(item, dict)}
+                
+                # 找出旧日志中需要合并的新条目
+                items_to_migrate = []
+                for expr in old_set:
+                    if expr not in current_expressions:
+                        items_to_migrate.append({"expression": expr, "reason": "MIGRATED_UNKNOWN", "timestamp": datetime.now(timezone.utc).isoformat()})
+                
+                if items_to_migrate:
+                    logger.warning(f"Found {len(items_to_migrate)} new entries in old log. Merging...")
+                    current_failures_list.extend(items_to_migrate)
+                    
+                    # 立即保存合并后的列表
+                    try:
+                        with open(new_filepath, 'w', encoding='utf-8') as f:
+                            json.dump(current_failures_list, f, indent=4)
+                        logger.info(f"Successfully merged and saved {len(current_failures_list)} total entries to {new_filepath}.")
+                    except Exception as save_e:
+                        logger.error(f"Failed to save merged failure log (inline): {save_e}.")
+                
+                # 无论是否合并了新条目，只要旧文件存在，就备份它
+                try:
+                    os.rename(old_filepath, old_filepath + ".bak")
+                    logger.info(f"Old failure log backed up to {old_filepath}.bak.")
+                except Exception as rename_e:
+                    logger.error(f"Failed to rename old failure log: {rename_e}")
+            else:
+                logger.warning(f"[Failure Log Load] Old log '{old_filepath}' was loaded but was empty. Backing it up.")
+                try:
+                    os.rename(old_filepath, old_filepath + ".bak")
+                except Exception as rename_e:
+                    logger.error(f"Failed to rename old failure log: {rename_e}")
+
+        # --- Path 3: 如果新文件仍然不存在 (全新安装) ---
+        elif not new_file_exists:
+             logger.warning(f"[Failure Log Load] No valid failure logs found. Creating new empty log file at {new_filepath}.")
+             try:
+                with open(new_filepath, 'w', encoding='utf-8') as f:
+                    json.dump([], f) # 写入一个空的 JSON 列表
+                logger.info(f"Successfully created new empty log file: {new_filepath}")
+             except Exception as create_e:
+                logger.error(f"Failed to create new empty log file! {create_e}", exc_info=True)
+
+        return current_failures_list
+
+def save_submission_failures(failures_list):
+    """ (v11.0.5) 保存新的 submission_failure_log.json """
+    with failure_log_lock:
+        filepath = SUBMISSION_FAILURE_LOG_FILE
+        try:
+            if not isinstance(failures_list, list):
+                 logger.error(f"[Failure Log Save] Invalid data type: {type(failures_list)}."); return False
+            with open(filepath, 'w', encoding='utf-8') as f: json.dump(failures_list, f, indent=4)
+            return True
+        except Exception as e: logger.error(f"[Failure Log Save] Error saving {filepath}: {e}", exc_info=False); return False
+
 def load_failed_submissions():
     """
     (v11.0.5) 兼容 v6.1.5 get_hopeful_alphas_stats。
@@ -174,9 +187,7 @@ def load_failed_submissions():
     failed_expressions_set = set(item['expression'] for item in failures_list if isinstance(item, dict) and 'expression' in item)
     # logger.info(f"[Failed Set Load] Extracted {len(failed_expressions_set)} unique expressions.")
     return failed_expressions_set
-
-# (v11.0.5) 移除旧的 save_failed_submissions(failed_set) 函数
-# --- v11.0.5: 结束 ---
+# --- v11.0.10: 结束 ---
 
 def get_service_status(log_file):
     # 保持 v6.1.5 逻辑
@@ -207,7 +218,7 @@ def get_hopeful_alphas_stats():
               "total_submitted_count": 0, "all_alphas": [] }
     try: # v11.0.5: 保持整体异常捕获
         submitted_set = load_submitted_alphas()
-        failed_set = load_failed_submissions() # <-- 使用新的、安全的实现
+        failed_set = load_failed_submissions() # <-- v11.0.10: 使用新的、健壮的实现
         # logger.info(f"[Stats] Using submitted ({len(submitted_set)}) and failed ({len(failed_set)}) sets.")
 
         pass_pattern = re.compile(r'(\d+)\s+PASS')
@@ -280,7 +291,7 @@ def get_hopeful_alphas_stats():
                     passed_count = int(pass_match.group(1)) if pass_match else 0
                     is_submittable = passed_count >= 7 and not has_fail
                     is_submitted = expression in submitted_set
-                    is_failed_on_wq = expression in failed_set # 使用新的 failed_set
+                    is_failed_on_wq = expression in failed_set # <-- v11.0.10: 现在会包含正确的迁移数据
                     is_successfully_submitted = is_submittable and is_submitted and not is_failed_on_wq
 
                     if is_submittable and not is_submitted and not is_failed_on_wq: stats['submittable_pending_count'] += 1
@@ -530,7 +541,7 @@ def mark_alpha_failed():
     if not reason: reason = "UNKNOWN_REASON" # 默认原因
     logger.info(f"[API /{operation.lower()}] Expr: {expression[:50]}... Reason: {reason}")
     try:
-        failures_list = load_submission_failures() # 读取新日志
+        failures_list = load_submission_failures() # v11.0.10: 使用新的、健壮的实现
         found = False
         for item in failures_list:
             if isinstance(item, dict) and item.get('expression') == expression:
@@ -540,10 +551,23 @@ def mark_alpha_failed():
         if not found:
             failures_list.append({ "expression": expression, "reason": reason, "timestamp": datetime.now(timezone.utc).isoformat() })
         
-        # --- [BUG 修复 v11.0.5] ---
-        # 修复：将保存逻辑移到 "if not found" 外部 (减少一级缩进)
-        # 无论 'found' 是 Ture 还是 False，这个保存操作都必须执行
+        # 无论 'found' 是 True 还是 False，这个保存操作都必须执行
         if save_submission_failures(failures_list): # 保存新日志
+            
+            # --- BEGIN v11.0.7 二次检查 (自动取消提交) ---
+            try:
+                logger.info(f"[API /{operation.lower()}] 正在执行二次检查... 从 'submitted_alphas.json' 中移除...")
+                submitted_set = load_submitted_alphas()
+                if expression in submitted_set:
+                    submitted_set.discard(expression)
+                    if not save_submitted_alphas(submitted_set):
+                         logger.error(f"[API /{operation.lower()}] 二次检查：保存 submitted_alphas 失败。")
+                    else:
+                         logger.info(f"[API /{operation.lower()}] 二次检查：成功从 submitted_alphas 中移除。")
+            except Exception as e_secondary:
+                logger.error(f"[API /{operation.lower()}] 二次检查时发生意外错误: {e_secondary}")
+            # --- END v11.0.7 ---
+            
             return jsonify(status='success', message=f'已标记失败 (原因: {reason})')
         else: 
             logger.error(f"[API /{operation.lower()}] Save failed."); 

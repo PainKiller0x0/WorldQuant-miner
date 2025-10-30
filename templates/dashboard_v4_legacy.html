@@ -3,549 +3,953 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 监控仪表盘 (v11.0.5)</title> <style>
-        /* v8.4.8 Styles + v8.4.9 Fixes + v11.0.5 Additions */
-        :root {
-            --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333; --muted-text-color: #7f8c8d; --header-bg-color: #3498db; --header-text-color: white; --link-color: #2980b9; --border-color: #ddd; --table-header-bg: #ecf0f1; --log-bg-color: #2c3e50; --log-text-color: #ecf0f1; --dot-default-bg: #95a5a6; --dot-running-bg: #2ecc71; --dot-stalled-bg: #e67e22; --dot-error-bg: #e74c3c; --status-pass-color: #28a745; --status-fail-color: #dc3545; --status-pending-color: #fd7e14; --alpha-submitted-bg: #e2e3e5; --alpha-failed-bg: #f8d7da; --alpha-failed-text: #721c24; --alpha-success-bg: #d4edda; --alpha-success-text: #155724;
-            --alpha-submittable-bg: #cfe2ff; --alpha-submittable-text: #052c65;
-            --button-primary-bg: #007bff; --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d; --button-secondary-hover-bg: #5a6268; --button-text-color: white; --badge-pass-bg: #28a745; --badge-fail-bg: #dc3545; --badge-pending-bg: #fd7e14; --badge-text-color: white; --modal-bg: rgba(0, 0, 0, 0.5); --modal-content-bg: #fff;
-            --sticky-header-bg: var(--table-header-bg);
-            --button-red-bg: #dc3545;
-            --button-red-hover-bg: #c82333;
+    <title>WorldQuant Miner 仪表盘 v11.0.12</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
         }
-        [data-theme="dark"] {
-             --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0; --muted-text-color: #999; --header-bg-color: #0056b3; --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444; --table-header-bg: #3a3a3a; --log-bg-color: #1c1c1c; --log-text-color: #ccc; --alpha-submitted-bg: #3a3a3a; --alpha-failed-bg: #5a2d2d; --alpha-failed-text: #f5c6cb; --alpha-success-bg: #2d5a2d; --alpha-success-text: #c3e6cb;
-             --alpha-submittable-bg: #03285a; --alpha-submittable-text: #a6c8ff;
-             --button-primary-bg: #0056b3; --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268; --button-secondary-hover-bg: #495057; --badge-pass-bg: #218838; --badge-fail-bg: #c82333; --badge-pending-bg: #e0710a; --badge-text-color: #f0f0f0; --modal-bg: rgba(0, 0, 0, 0.7); --modal-content-bg: #3a3a3a;
-             --sticky-header-bg: var(--table-header-bg);
-             --button-red-bg: #c82333;
-             --button-red-hover-bg: #a31c28;
+        .container {
+            max-width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
-        body { font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; transition: background-color 0.3s, color 0.3s; }
-        .container { max-width: 1600px; margin: 0 auto; }
-        h1, h2 { font-weight: 600; }
-        h1 { color: var(--link-color); border-bottom: 2px solid var(--header-bg-color); padding-bottom: 10px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 1.8rem; }
-        .header-links { display: flex; align-items: center; margin-top: 5px; }
-        .header-links a { margin-left: 10px; font-size: 0.9rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
-        .card { background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; transition: background-color 0.3s; }
-        .card-header { background: var(--header-bg-color); color: var(--header-text-color); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
-        .card-header h2 { margin: 0; font-size: 1.1rem; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dot-default-bg); border: 1px solid white; }
-        .status-dot.running { background: var(--dot-running-bg); }
-        .status-dot.stalled { background: var(--dot-stalled-bg); }
-        .status-dot.error, .status-dot.not-found { background: var(--dot-error-bg); }
-        .card-content { padding: 15px; }
-        .logs { background: var(--log-bg-color); color: var(--log-text-color); padding: 10px; border-radius: 4px; font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow: auto; margin-top: 10px; border: 1px solid var(--border-color); transition: background-color 0.3s, color 0.3s; }
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-        .info-item { background: var(--table-header-bg); padding: 8px; border-radius: 4px; transition: background-color 0.3s; }
-        .info-item strong { display: block; color: var(--link-color); font-size: 1em; transition: color 0.3s; margin-bottom: 3px;}
-        .info-item span { font-size: 0.95em; }
-        .download-btn { display: inline-block; background-color: var(--button-secondary-bg); color: var(--button-text-color); padding: 5px 8px; margin: 3px 3px 3px 0; border-radius: 4px; font-size: 11px; text-decoration: none; border: none; cursor: pointer; transition: background-color 0.3s; }
-        .download-btn:hover { background-color: var(--button-secondary-hover-bg); color: var(--button-text-color); }
-
-        .table-responsive { width: 100%; overflow: auto; max-height: 75vh; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 15px; position: relative; }
-        #alphas-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 900px; border: none; }
-        #alphas-table th, #alphas-table td { border: none; border-bottom: 1px solid var(--border-color); padding: 6px; text-align: left; transition: border-color 0.3s; word-wrap: break-word; overflow-wrap: break-word; white-space: nowrap; vertical-align: top; }
-        #alphas-table tr:last-child td { border-bottom: none; }
-        #alphas-table th { transition: background-color 0.3s; font-weight: 600; font-size: 12px; border-bottom-width: 2px; }
-        #alphas-table td { font-size: 11px; }
-        #alphas-table td:nth-child(2) { font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; white-space: normal !important; word-break: break-all; } /* Allow expression wrap */
-        .alpha-actions label span { font-family: inherit !important; font-size: 11px; white-space: nowrap; }
-        #alphas-table th.sortable { cursor: pointer; position: relative; }
-        #alphas-table th.sortable::after { content: ''; position: absolute; right: 5px; top: 50%; margin-top: -5px; border-left: 4px solid transparent; border-right: 4px solid transparent; opacity: 0.3; }
-        #alphas-table th.sortable.sort-asc::after { border-bottom: 5px solid var(--text-color); opacity: 1; }
-        #alphas-table th.sortable.sort-desc::after { border-top: 5px solid var(--text-color); opacity: 1; }
-        #alphas-table th.sortable span.header-text { cursor: help; text-decoration: underline dotted; }
-        #alphas-table th.sortable span.header-text:hover { color: var(--link-color); }
-
-        /* v11.0.5: Restored Sticky Header from v8.4.9 */
-        #alphas-table thead th { position: -webkit-sticky; position: sticky; top: 0; background-color: var(--sticky-header-bg); z-index: 10; border-bottom: 2px solid var(--border-color) !important; }
-
-        /* Column widths (保持 v8.4.9) */
-        #alphas-table th:nth-child(1), #alphas-table td:nth-child(1) { width: 80px; }
-        #alphas-table th:nth-child(2), #alphas-table td:nth-child(2) { width: 250px; }
-        #alphas-table th:nth-child(3), #alphas-table td:nth-child(3) { width: 70px; }
-        #alphas-table th:nth-child(4), #alphas-table td:nth-child(4) { width: 70px; }
-        #alphas-table th:nth-child(5), #alphas-table td:nth-child(5) { width: 70px; }
-        #alphas-table th:nth-child(6), #alphas-table td:nth-child(6) { width: 70px; }
-        #alphas-table th:nth-child(7), #alphas-table td:nth-child(7) { width: 100px; }
-        #alphas-table th:nth-child(8), #alphas-table td:nth-child(8) { width: 90px; }
-        #alphas-table th:nth-child(9), #alphas-table td:nth-child(9) { width: 90px; text-align: center;}
-        #alphas-table th:nth-child(10), #alphas-table td:nth-child(10) { width: 50px; text-align: center;}
-
-        .score-value { cursor: pointer; text-decoration: underline dotted; }
-        .score-value:hover { color: var(--link-color); }
-        .copyable-value { cursor: copy; text-decoration: underline dotted; position: relative; }
-        .copyable-value:hover { color: var(--link-color); }
-        .copyable-value.copy-feedback::after { content: '已复制!'; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background-color: var(--log-bg-color); color: var(--log-text-color); padding: 2px 5px; border-radius: 3px; font-size: 9px; white-space: nowrap; z-index: 20; }
-        /* .alpha-expression-container related styles removed for simplicity */
-        .alpha-actions { white-space: nowrap; text-align: center;}
-        .alpha-actions label { margin-right: 3px; display: inline-block; cursor: pointer; }
-        .alpha-actions input[type="checkbox"] { margin-right: 2px; vertical-align: middle; cursor: pointer; }
-        .alpha-actions input:disabled + span { opacity: 0.5; cursor: not-allowed; }
-        .copy-action button.copy-btn { padding: 4px 6px; border-radius: 4px; font-size: 11px; cursor: pointer; border: 1px solid transparent; color: var(--button-text-color); display: inline-block; vertical-align: middle; background-color: var(--button-primary-bg); border-color: var(--button-primary-bg); }
-        .copy-action button.copy-btn:hover { background-color: var(--button-primary-hover-bg); }
-        .alpha-status-submitted { background-color: var(--alpha-submitted-bg); }
-        .alpha-status-failed { background-color: var(--alpha-failed-bg); color: var(--alpha-failed-text); }
-        .alpha-status-failed .alpha-expression-container span, /* Apply line-through directly to text */
-        .alpha-status-failed td:nth-child(2) { text-decoration: line-through; }
-        .alpha-status-success { background-color: var(--alpha-success-bg); color: var(--alpha-success-text); font-weight: bold; }
-        .alpha-status-submittable { background-color: var(--alpha-submittable-bg); color: var(--alpha-submittable-text); }
-        .submittable-marker { display: inline-block; background-color: var(--status-pass-color); color: white; padding: 1px 4px; font-size: 9px; border-radius: 3px; margin-right: 3px; font-weight: bold; vertical-align: middle; }
-        .check-badges span { display: inline-block; padding: 2px 5px; font-size: 10px; font-weight: bold; border-radius: 4px; margin-right: 3px; color: var(--badge-text-color); line-height: 1; margin-bottom: 2px; }
-        .check-badges .badge-pass { background-color: var(--badge-pass-bg); }
-        .check-badges .badge-fail { background-color: var(--badge-fail-bg); }
-        .check-badges .badge-pending { background-color: var(--badge-pending-bg); }
-        .version-info { font-size: 11px; color: var(--muted-text-color); text-align: right; padding: 8px 0; transition: color 0.3s; }
-        .settings-link { font-size: 0.9rem; font-weight: 600; background: var(--button-secondary-bg); color: var(--button-text-color); padding: 6px 10px; border-radius: 5px; text-decoration: none; transition: background-color 0.3s, color 0.3s; margin-left: 8px; }
-        .settings-link:hover { background-color: var(--button-secondary-hover-bg); color: var(--button-text-color); }
-        #theme-toggle { cursor: pointer; font-size: 18px; background: none; border: none; color: var(--header-text-color); margin-left: 10px; }
-
-        /* Modal Styles (Score Explanation - v8.4.9) */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-bg); }
-        .modal-content { background-color: var(--modal-content-bg); margin: 15% auto; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); position: relative; color: var(--text-color); }
-        .close-button { color: var(--muted-text-color); position: absolute; top: 8px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer; }
-        .close-button:hover, .close-button:focus { color: var(--text-color); text-decoration: none; }
-        .modal h3 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; font-size: 1.1rem; }
-        .modal code { background-color: var(--log-bg-color); color: var(--log-text-color); padding: 2px 5px; border-radius: 3px; font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9em; }
-        .modal ul { list-style: none; padding-left: 0; }
-        .modal li { margin-bottom: 6px; font-size: 0.95em; }
-        .modal strong { color: var(--link-color); }
-
-        /* v11.0.5: Failure Reason Modal Styles */
-        .failure-modal-overlay { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-bg); justify-content: center; align-items: center; }
-        .failure-modal-content { background-color: var(--modal-content-bg); margin: auto; padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); color: var(--text-color); }
-        .failure-modal-content h3 { margin-top: 0; color: var(--link-color); border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .failure-modal-content .reason-option { display: block; margin: 12px 0; font-size: 1em; cursor: pointer; }
-        .failure-modal-content .reason-option input { margin-right: 8px; vertical-align: middle; }
-        .failure-modal-buttons { margin-top: 25px; text-align: right; }
-        .failure-modal-buttons button { padding: 8px 16px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.95em; margin-left: 10px; color: var(--button-text-color); }
-        .failure-modal-confirm-btn { background-color: var(--button-red-bg); }
-        .failure-modal-confirm-btn:hover { background-color: var(--button-red-hover-bg); }
-        .failure-modal-cancel-btn { background-color: var(--button-secondary-bg); }
-        .failure-modal-cancel-btn:hover { background-color: var(--button-secondary-hover-bg); }
-        /* v11.0.5: End Failure Reason Modal Styles */
-
-        /* Media Queries (保持 v8.4.9) */
-        @media (max-width: 768px) {
-             body { padding: 5px; } h1 { font-size: 1.5rem; } .header-links a { font-size: 0.8rem; padding: 4px 6px; margin-left: 5px; } #theme-toggle { font-size: 16px; margin-left: 5px; } .grid { grid-template-columns: 1fr; gap: 10px; } .card-header h2 { font-size: 1rem; } .card-content { padding: 10px; } .info-grid { grid-template-columns: 1fr; } .logs { font-size: 11px; max-height: 100px; white-space: pre-wrap; word-wrap: break-word; overflow: auto; } #alphas-table th, #alphas-table td { padding: 4px; font-size: 10px; white-space: normal !important; word-break: break-all; } /* Allow wrap */ #alphas-table td:nth-child(2) { font-size: 10px !important; } .alpha-actions label span { font-size: 10px; } .copy-action button.copy-btn { font-size: 10px; padding: 3px 5px; } .check-badges span { font-size: 9px; padding: 2px 4px; margin-right: 2px;} .submittable-marker { font-size: 8px; padding: 1px 3px; } small { font-size: 10px; } .modal-content { width: 95%; margin: 10% auto; padding: 10px; } .modal h3 { font-size: 1rem; } .modal li { font-size: 0.9em; } .close-button { top: 5px; right: 10px; font-size: 20px; } #alphas-table thead th { top: -1px; } .table-responsive { max-height: 65vh; }
-             .failure-modal-content { width: 95%; margin: 10% auto; padding: 15px; }
+        h1, h2 {
+            color: #ffffff;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header-links {
+            margin-top: 10px;
+        }
+        .header-links a {
+            color: #4dabf7;
+            text-decoration: none;
+            margin-left: 15px;
+            font-size: 0.9em;
+            background-color: #333;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .header-links a:hover {
+            background-color: #007bff;
+            color: #fff;
         }
 
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .status-card, .summary-card {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        .status-card h3 {
+            margin-top: 0;
+            color: #fff;
+        }
+        .status-indicator {
+            font-weight: bold;
+        }
+        .status-RUNNING { color: #28a745; }
+        .status-STALLED { color: #dc3545; }
+        .status-NOT-FOUND, .status-ERROR, .status-UNKNOWN { color: #ffc107; }
+        .log-container {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            background-color: #1a1a1a;
+            color: #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.8em;
+            white-space: pre-wrap;
+            margin-top: 10px;
+            border: 1px solid #444;
+        }
+        .log-container a {
+             color: #4dabf7;
+             text-decoration: none;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .summary-item {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .summary-item strong {
+            display: block;
+            font-size: 1.5em;
+            color: #fff;
+        }
+        .summary-item span {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+        .summary-item strong.pending-count {
+            color: #f0ad4e;
+        }
+         .summary-item strong.success-count {
+            color: #28a745;
+        }
+
+        #filter-controls {
+            margin-top: 20px;
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        #filter-controls input, #filter-controls select {
+            background-color: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        #filter-controls label {
+            font-size: 0.9em;
+            margin-right: 5px;
+        }
+        
+        #alphaTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        #alphaTable th, #alphaTable td {
+            border: 1px solid #333;
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+            white-space: normal;
+        }
+        #alphaTable th {
+            background-color: #2a2a2a;
+            color: #f1f1f1;
+            cursor: pointer;
+            position: relative;
+        }
+        #alphaTable th:hover .sort-icon { opacity: 0.7; }
+        .sort-icon {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            margin-left: 8px;
+            opacity: 0.3;
+            vertical-align: middle;
+        }
+        .sort-icon.asc { border-bottom: 5px solid #fff; }
+        .sort-icon.desc { border-top: 5px solid #fff; }
+        
+        /* v11.0.9: 需求 1 - 行底色 */
+        #alphaTable tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        .row-status-submittable, .row-status-submitted-pending {
+            background-color: rgba(0, 123, 255, 0.1); /* 浅蓝色 */
+        }
+        .row-status-submitted-ok {
+            background-color: rgba(40, 167, 69, 0.1); /* 浅绿色 */
+        }
+        .row-status-submitted-fail {
+            background-color: rgba(220, 53, 69, 0.1); /* 浅红色 */
+        }
+
+        .alpha-expression {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 1em;
+            color: #7ec699;
+            max-width: 350px;
+            overflow-x: auto;
+            background-color: #272822;
+            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #444;
+        }
+        .alpha-expression:hover { border-color: #888; }
+        
+        .perf-cell { font-size: 0.95em; line-height: 1.7; min-width: 180px; }
+        .perf-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .perf-item strong { color: #f1f1f1; min-width: 70px; display: inline-block;}
+        .perf-item span { color: #b0b0b0; }
+        
+        .perf-value {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #333;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            border: 1px solid #555;
+            transition: background-color 0.2s;
+        }
+        .perf-value:hover { 
+            background-color: #007bff; 
+            color: #fff; 
+        }
+
+        .status-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+        }
+        .status-tag.submittable { background-color: #f0ad4e; color: #111; } /* v11.0.9: 改回黄色 */
+        .status-tag.submitted-ok { background-color: #28a745; }
+        .status-tag.submitted-fail { background-color: #dc3545; }
+        .status-tag.submitted-pending { background-color: #007bff; }
+        .status-tag.not-submittable { background-color: #6c757d; }
+        
+        .checks-cell { min-width: 140px; }
+        .check-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin: 2px;
+            color: #fff;
+        }
+        .check-tag.pass { background-color: #28a745; }
+        .check-tag.fail { background-color: #dc3545; }
+        .check-tag.pending { background-color: #ffc107; color: #333; }
+        .check-tag.unknown { background-color: #6c757d; }
+        
+        .actions-cell { min-width: 110px; }
+        .btn-action {
+            display: block;
+            width: 100%;
+            background-color: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 5px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            opacity: 0.85;
+            transition: opacity 0.2s, background-color 0.2s;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .btn-action:hover { opacity: 1; }
+        .btn-action.submit { background-color: #007bff; }
+        .btn-action.submit:hover { background-color: #0056b3; }
+        .btn-action.fail { background-color: #dc3545; }
+        .btn-action.fail:hover { background-color: #a71d2a; }
+        
+        #loading { font-size: 1.2em; color: #f0ad4e; text-align: center; padding: 40px; }
+        #toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s, top 0.5s;
+            font-size: 1.1em;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #toast.show { opacity: 1; top: 30px; }
+        #toast.error { background-color: #dc3545; }
+        
+        #version-info {
+            text-align: right;
+            font-size: 0.8em;
+            color: #777;
+            margin-top: 10px;
+        }
+        
+        /* --- v11.0.10: 滚动按钮 (从 pending.html 引入) --- */
+        .scroll-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+        }
+        .scroll-btn {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            padding: 10px 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 1.2em; /* 增大字体使其更像图标 */
+            margin-top: 5px;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        .scroll-btn:hover {
+            background-color: #007bff;
+            opacity: 1;
+        }
+        /* --- v11.0.10: 结束 --- */
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>
-        <span>WQ Alpha 监控仪表盘</span>
-        <div class="header-links">
-             <a href="/chart" class="settings-link">统计图表 &rarr;</a>
-             <a href="/settings" class="settings-link">控制面板 &rarr;</a>
-             <a href="/pending" class="settings-link">待提交alphas列表 &rarr;</a>
-             <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
+    <div class="container">
+        <div class="header-controls">
+            <h1>WorldQuant Miner 仪表盘</h1>
+            <div class="header-links">
+                <a href="/pending" target="_blank">打开待提交面板</a>
+                {% if settings_page %}
+                    <a href="/settings" target="_blank">设置</a>
+                {% endif %}
+                {% if chart_page %}
+                    <a href="/chart" target="_blank">图表</a>
+                {% endif %}
+            </div>
         </div>
-    </h1>
 
-    <div class="version-info">
-        Dashboard: <span id="dashboard-version">loading...</span> | Generator: <span id="generator-version">loading...</span>
-    </div>
-
-    <h2>服务状态</h2>
-    <div class="grid">
-        <div class="card"> <div class="card-header"> <h2>Miner (Discover)</h2> <div class="status-dot" id="miner-status"></div> </div> <div class="card-content"> <strong>状态: <span id="miner-status-text">...</span></strong><br> 最后心跳: <span id="miner-last-seen">...</span><br> <a href="/download_logs/miner.log" download class="download-btn">miner.log</a> <a href="/download_logs/miner_issues.log" download class="download-btn">miner_issues.log</a> <div class="logs" id="miner-logs">加载中...</div> </div> </div>
-         <div class="card"> <div class="card-header"> <h2>Evolver (Evolve)</h2> <div class="status-dot" id="evolver-status"></div> </div> <div class="card-content"> <strong>状态: <span id="evolver-status-text">...</span></strong><br> 最后心跳: <span id="evolver-last-seen">...</span><br> <a href="/download_logs/evolver.log" download class="download-btn">evolver.log</a> <a href="/download_logs/evolver_issues.log" download class="download-btn">evolver_issues.log</a> <div class="logs" id="evolver-logs">加载中...</div> </div> </div>
-    </div>
-
-    <h2>精英池 (Hopeful Alphas)</h2>
-    <div class="card">
-        <div class="card-header"> <h2>统计</h2> </div>
-        <div class="card-content">
-            <div class="info-grid">
-                <div class="info-item"> <strong>总数</strong> <span id="alphas-count">...</span> </div>
-                <div class="info-item"> <strong>待提交</strong> <span id="alphas-pending-submission">...</span> </div>
-                <div class="info-item"> <strong>提交统计 (成功/总计)</strong> <span id="alphas-submission-stats">... / ...</span> </div>
-                <div class="info-item"> <strong>最高 Fitness</strong> <span id="alphas-max-fitness">...</span> </div>
-                <div class="info-item"> <strong>平均 Fitness</strong> <span id="alphas-avg-fitness">...</span> </div>
+        <div class="status-grid">
+            <div class="status-card">
+                <h3>Miner (alpha_generator_ollama.py)</h3>
+                <p>状态: <span id="minerStatus" class="status-indicator status-UNKNOWN">UNKNOWN</span></p>
+                <p>最后心跳: <span id="minerLastSeen">Never</span></p>
+                <div id="minerLogs" class="log-container">Loading...</div>
             </div>
-            <div class="table-responsive">
-                <table id="alphas-table">
-                    <thead>
-                        <tr>
-                            <th id="score-header" title="点击文字查看计算公式, 点击单元格排序" class="sortable" data-sort="dashboard_score">
-                                <span class="header-text" onclick="showScoreExplanation(); event.stopPropagation();">综合分 (*)</span>
-                            </th>
-                            <th>Expression</th>
-                            <th class="sortable" data-sort="fitness">Fitness</th>
-                            <th class="sortable" data-sort="sharpe">Sharpe</th>
-                            <th class="sortable" data-sort="returns">Returns</th>
-                            <th class="sortable" data-sort="turnover">Turnover</th>
-                            <th class="sortable" data-sort="checks">Checks</th>
-                            <th class="sortable" data-sort="timestamp">创建时间</th>
-                            <th>操作</th>
-                            <th>复制</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alphas-tbody"></tbody>
-                </table>
+            <div class="status-card">
+                <h3>Evolver (alpha_generator_ollama.py)</h3>
+                <p>状态: <span id="evolverStatus" class="status-indicator status-UNKNOWN">UNKNOWN</span></p>
+                <p>最后心跳: <span id="evolverLastSeen">Never</span></p>
+                <div id="evolverLogs" class="log-container">Loading...</div>
             </div>
-            <small>(*) 综合分是根据 Fitness, Checks通过数, Sharpe, Turnover 和 Self-Correlation 计算得出的排序依据。点击表头文字查看公式，点击具体分数查看该 Alpha 的计算过程。</small>
+        </div>
+
+        <div class="summary-card" style="margin-top: 20px;">
+            <h2>Alpha 统计</h2>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <strong id="totalAlphas">0</strong>
+                    <span>总计 (Hopeful Pool)</span>
+                </div>
+                <div class="summary-item">
+                    <strong id="maxFitness">0.0</strong>
+                    <span>最高 Fitness</span>
+                </div>
+                <div class="summary-item">
+                    <strong id="avgFitness">0.0</strong>
+                    <span>平均 Fitness</span>
+                </div>
+                 <div class="summary-item">
+                    <strong id="maxSharpe">0.0</strong>
+                    <span>最高 Sharpe</span>
+                </div>
+                <div class="summary-item">
+                    <strong id="pendingCount" class="pending-count">0</strong>
+                    <span>待提交 (Pending)</span>
+                </div>
+                 <div class="summary-item">
+                    <strong id="submittedCount" class="success-count">0 / 0</strong>
+                    <span>已提交 (成功/总数)</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="filter-controls">
+            <label for="statusFilter">状态:</label>
+            <select id="statusFilter">
+                <option value="all">所有状态</option>
+                <option value="submittable">待提交 (Pending)</option>
+                <option value="submitted-ok">已提交 (成功)</option>
+                <option value="submitted-fail">已提交 (WQ 失败)</option>
+                <option value="submitted-pending">已提交 (待确认)</option>
+                <option value="not-submittable">不可提交</option>
+            </select>
+            <label for="expressionFilter">表达式:</label>
+            <input type="text" id="expressionFilter" placeholder="过滤表达式...">
+        </div>
+
+        <table id="alphaTable">
+            <thead>
+                <tr>
+                    <th data-sort-key="dashboard_score">综合评分</th>
+                    <th data-sort-key="expression">Alpha 表达式 (点击复制)</th>
+                    <th data-sort-key="fitness">性能指标 (点击复制)</th>
+                    <th data-sort-key="checks_summary">检查摘要</th>
+                    <th data-sort-key="status">状态</th>
+                    <th data-sort-key="timestamp">时间戳</th>
+                    <th data-sort-key="actions">操作</th>
+                </tr>
+            </thead>
+            <tbody id="alphaTableBody">
+            </tbody>
+        </table>
+        <div id="loading">正在加载数据...</div>
+        <div id="version-info">
+            Dashboard: <span id="dashboardVersion">...</span> | Generator: <span id="generatorVersion">...</span>
         </div>
     </div>
-</div>
+    
+    <div id="toast"></div>
 
-<div id="score-modal" class="modal"> <div class="modal-content"> <span class="close-button" onclick="closeModal('score-modal')">&times;</span> <h3 id="modal-title">...</h3> <div id="modal-body">...</div> </div> </div>
-
-<div id="failure-reason-modal" class="failure-modal-overlay" onclick="closeFailureModal(event)">
-    <div class="failure-modal-content" onclick="event.stopPropagation()">
-        <h3>标记提交失败</h3>
-        <p>请选择在 WQ 平台提交失败的主要原因：</p>
-        <form id="failure-reason-form">
-            <label class="reason-option">
-                <input type="radio" name="failure_reason" value="HIGH_SELF_CORRELATION" checked>
-                高 Self-Correlation (相似度过高)
-            </label>
-            <label class="reason-option">
-                <input type="radio" name="failure_reason" value="LOW_FITNESS_OR_SHARPE">
-                低 Fitness / Sharpe (性能不佳)
-            </label>
-            <label class="reason-option">
-                <input type="radio" name="failure_reason" value="OTHER">
-                其他原因 (例如：P/L 曲线不佳等)
-            </label>
-            <div class="failure-modal-buttons">
-                <button type="button" class="failure-modal-cancel-btn" onclick="closeFailureModal(event)">取消</button>
-                <button type="button" class="failure-modal-confirm-btn" onclick="submitFailureReason()">确认失败</button>
-            </div>
-        </form>
+    <div class="scroll-buttons">
+        <button id="scrollToTopBtn" class="scroll-btn" title="滚动到顶部">▲</button>
+        <button id="scrollToBottomBtn" class="scroll-btn" title="滚动到底部">▼</button>
     </div>
-</div>
-<script>
-    let globalAlphaData = [];
-    let currentSort = { key: 'dashboard_score', direction: 'desc' };
-    const themeToggle = document.getElementById('theme-toggle');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌓';
-    themeToggle.addEventListener('click', () => { let targetTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', targetTheme); localStorage.setItem('theme', targetTheme); themeToggle.textContent = targetTheme === 'dark' ? '☀️' : '🌓'; });
+    <script>
+        let allAlphas = [];
+        let currentSortKey = 'dashboard_score';
+        let currentSortDir = 'desc';
 
-    let failureModalContext = { checkbox: null, expression: null };
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchStatus();
+            fetchVersionInfo();
+            setInterval(fetchStatus, 30000); // 每 30 秒自动刷新
+            
+            // v11.0.10: 绑定滚动按钮
+            setupScrollButtons();
 
-    // --- Helper Functions (保持 v8.4.9，增加 copyValue 修复) ---
-    function updateStatusDot(element, statusText) { element.className = 'status-dot'; if (statusText === 'RUNNING') element.classList.add('running'); else if (statusText === 'STALLED') element.classList.add('stalled'); else if (statusText === 'ERROR' || statusText === 'NOT FOUND') element.classList.add('error'); }
-    function formatLogs(logText) { return logText.replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-    function formatChecks(checkText) { if (!checkText || typeof checkText !== 'string') return ''; const passMatch = checkText.match(/(\d+)\s+PASS/); const failMatch = checkText.match(/(\d+)\s+FAIL/); const pendingMatch = checkText.match(/(\d+)\s+PENDING/); let html = '<div class="check-badges">'; if (passMatch && parseInt(passMatch[1], 10) >= 0) html += `<span class="badge-pass" title="${passMatch[1]} Passed">✓ ${passMatch[1]}</span>`; if (failMatch && parseInt(failMatch[1], 10) > 0) html += `<span class="badge-fail" title="${failMatch[1]} Failed">✗ ${failMatch[1]}</span>`; if (pendingMatch && parseInt(pendingMatch[1], 10) > 0) html += `<span class="badge-pending" title="${pendingMatch[1]} Pending">⏳ ${pendingMatch[1]}</span>`; html += '</div>'; return html !== '<div class="check-badges"></div>' ? html : checkText; }
-
-    // --- v11.0.5: FIX Copy Value Format ---
-    function copyValue(element) {
-        let valueToCopy = element.dataset.copyValue; // Always get from data attribute
-        if (valueToCopy && valueToCopy !== 'N/A') {
-            navigator.clipboard.writeText(valueToCopy).then(() => {
-                element.classList.add('copy-feedback');
-                setTimeout(() => { element.classList.remove('copy-feedback'); }, 1500);
-            }, (err) => {
-                console.error('Copy value failed: ', err); alert('复制失败: ' + err);
-            });
-        } else {
-             console.warn('No value to copy or value is N/A');
-             alert('无法复制 N/A 值'); // User feedback
-        }
-    }
-    // --- End FIX ---
-
-    function copyToClipboard(text, buttonElement) { navigator.clipboard.writeText(text).then(() => { const originalText = buttonElement.textContent; buttonElement.textContent = '已复制!'; buttonElement.disabled = true; setTimeout(() => { buttonElement.textContent = originalText; buttonElement.disabled = false; }, 1500); }, (err) => { alert('复制失败: ' + err); }); }
-
-    // --- v11.0.5: sendAlphaActions adapted for reason ---
-    async function sendAlphaActions(actions, expression, checkboxElements, reason = null) {
-        checkboxElements.forEach(cb => { if(cb) cb.disabled = true; }); // Add null check
-        let success = true;
-        let errorMessage = '';
-        for (const action of actions) {
-            try {
-                let requestBody = { expression: expression };
-                if (action === 'mark_failed_on_wq' && reason) {
-                    requestBody.reason = reason;
-                }
-                const response = await fetch(`/api/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
-                // Check if response is ok (status code 2xx)
-                if (!response.ok) {
-                     let errorText = await response.text(); // Try to get error text
-                     throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
-                 }
-                const data = await response.json();
-                if (data.status !== 'success') {
-                    success = false; errorMessage = data.message || `Action ${action} failed.`;
-                    console.error(`API Error (${action}):`, data.message); break;
-                }
-            } catch (err) {
-                success = false; errorMessage = `请求失败 (${action}): ${err.message || err}`; // More informative error
-                console.error(`Network/Fetch Error (${action}):`, err); break;
-            }
-        }
-        if (!success) { alert(`操作失败: ${errorMessage}\n将尝试自动刷新...`); }
-        // Fetch data slightly faster on success, slightly slower on error
-        setTimeout(fetchData, success ? 300 : 1000);
-        return success; // Return success status
-    }
-    // --- v11.0.5: End sendAlphaActions ---
-
-
-    // --- v11.0.5: handleCheckboxChange adapted for modal ---
-    function handleCheckboxChange(checkbox) {
-        const row = checkbox.closest('tr');
-        if (!row) return;
-        const submittedCheckbox = row.querySelector('.chk-submitted');
-        const failedCheckbox = row.querySelector('.chk-failed');
-        const expression = checkbox.dataset.expression;
-        const type = checkbox.dataset.type;
-        const isChecked = checkbox.checked;
-        const actionsToCall = [];
-        let revertVisualState = null;
-
-        if (!submittedCheckbox || !failedCheckbox) {
-             console.error("Could not find checkboxes in row for", expression);
-             return;
-         }
-
-        submittedCheckbox.disabled = true;
-        failedCheckbox.disabled = true;
-
-        if (type === 'submitted') {
-            if (isChecked) {
-                actionsToCall.push('mark_submitted');
-                if (failedCheckbox.checked) {
-                    failedCheckbox.checked = false; actionsToCall.push('unmark_failed_on_wq');
-                }
-                revertVisualState = () => { checkbox.checked = false; if (actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
-            } else {
-                actionsToCall.push('unmark_submitted');
-                if (failedCheckbox.checked) {
-                    failedCheckbox.checked = false; actionsToCall.push('unmark_failed_on_wq');
-                }
-                revertVisualState = () => { checkbox.checked = true; if (actionsToCall.includes('unmark_failed_on_wq')) failedCheckbox.checked = true; };
-            }
-            sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox]).then(success => {
-                if (!success && revertVisualState) revertVisualState();
-                submittedCheckbox.disabled = false;
-                failedCheckbox.disabled = !submittedCheckbox.checked;
-            });
-        } else if (type === 'failed') {
-            if (isChecked) {
-                showFailureModal(checkbox, expression);
-                // Keep checkboxes disabled; modal flow handles re-enabling/reverting
-            } else {
-                actionsToCall.push('unmark_failed_on_wq');
-                revertVisualState = () => { checkbox.checked = true; };
-                sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox]).then(success => {
-                    if (!success && revertVisualState) revertVisualState();
-                    submittedCheckbox.disabled = false;
-                    failedCheckbox.disabled = !submittedCheckbox.checked;
+            document.getElementById('statusFilter').addEventListener('change', renderTable);
+            document.getElementById('expressionFilter').addEventListener('input', renderTable);
+            
+            document.querySelectorAll('#alphaTable th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const sortKey = th.getAttribute('data-sort-key');
+                    if (sortKey === 'actions') return; // 操作列不支持排序
+                    
+                    if (currentSortKey === sortKey) {
+                        currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+                    } else {
+                        currentSortKey = sortKey;
+                        currentSortDir = 'desc';
+                    }
+                    updateSortIcons();
+                    renderTable();
                 });
-            }
-        }
-    }
-    // --- v11.0.5: End handleCheckboxChange ---
-
-    // --- v11.0.5: Failure Modal Functions ---
-    const failureModal = document.getElementById('failure-reason-modal');
-
-    function showFailureModal(checkbox, expression) {
-        failureModalContext.checkbox = checkbox;
-        failureModalContext.expression = expression;
-        document.querySelector("#failure-reason-form input[name='failure_reason'][value='HIGH_SELF_CORRELATION']").checked = true;
-        failureModal.style.display = 'flex';
-    }
-
-    function closeFailureModal(event) {
-        // Only close if clicking overlay or cancel button
-        if (event && event.target.id !== 'failure-reason-modal' && !event.target.classList.contains('failure-modal-cancel-btn')) {
-            return;
-        }
-        failureModal.style.display = 'none';
-        // Revert and re-enable if action was cancelled
-        if (failureModalContext.checkbox) {
-             const row = failureModalContext.checkbox.closest('tr');
-             if (row) {
-                 const submittedCheckbox = row.querySelector('.chk-submitted');
-                 const failedCheckbox = failureModalContext.checkbox; // It is the failed checkbox
-
-                 // Revert the check state only if it was checked before opening modal
-                 if (failedCheckbox.checked) {
-                     failedCheckbox.checked = false;
-                 }
-                 // Re-enable checkboxes
-                 if (submittedCheckbox) submittedCheckbox.disabled = false;
-                 // Failed enabled state depends on submitted state
-                 failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked);
-             }
-        }
-        failureModalContext = { checkbox: null, expression: null }; // Clear context
-    }
-
-    function submitFailureReason() {
-        const reason = document.querySelector("#failure-reason-form input[name='failure_reason']:checked").value;
-        if (!reason || !failureModalContext.checkbox || !failureModalContext.expression) {
-            console.error("Failure modal context missing!"); alert("发生错误，无法提交失败原因。");
-            closeFailureModal(null); return;
-        }
-
-        const checkbox = failureModalContext.checkbox;
-        const expression = failureModalContext.expression;
-        const row = checkbox.closest('tr');
-        if (!row) { closeFailureModal(null); return; } // Should not happen
-        const submittedCheckbox = row.querySelector('.chk-submitted');
-        const failedCheckbox = checkbox;
-        const actionsToCall = [];
-        // Define revert state *before* potentially changing checkboxes
-        let revertVisualState = () => {
-             failedCheckbox.checked = false;
-             if (submittedCheckbox && actionsToCall.includes('mark_submitted')) submittedCheckbox.checked = false;
-         };
-
-        // Ensure submitted is marked if we mark as failed
-        if (submittedCheckbox && !submittedCheckbox.checked) {
-            submittedCheckbox.checked = true; // Visually check it
-            actionsToCall.push('mark_submitted');
-        }
-        actionsToCall.push('mark_failed_on_wq');
-
-        // Close modal BEFORE sending API request
-        failureModal.style.display = 'none';
-        failureModalContext = { checkbox: null, expression: null }; // Clear context
-
-        // Disable checkboxes again before async call
-        if (submittedCheckbox) submittedCheckbox.disabled = true;
-        failedCheckbox.disabled = true;
-
-        sendAlphaActions(actionsToCall, expression, [submittedCheckbox, failedCheckbox], reason).then(success => {
-            if (!success && revertVisualState) {
-                revertVisualState(); // Revert checkboxes on API failure
-            }
-            // Re-enable checkboxes after API call completion
-            if (submittedCheckbox) submittedCheckbox.disabled = false;
-            // Failed checkbox enabled status depends on submitted checkbox status AFTER potential changes
-            failedCheckbox.disabled = !(submittedCheckbox && submittedCheckbox.checked);
+            });
         });
-    }
-    // --- v11.0.5: End Failure Modal Functions ---
 
-    // --- Score Modal Functions (保持 v8.4.9) ---
-    const scoreModal = document.getElementById('score-modal');
-    const scoreModalTitle = document.getElementById('modal-title');
-    const scoreModalBody = document.getElementById('modal-body');
-    function showScoreExplanation() { scoreModalTitle.textContent = "综合分计算公式 (v7.9+)"; scoreModalBody.innerHTML = `<p>综合分计算方式如下:</p><code>Score = Fitness + (Passed Checks * 0.2) + (abs(Sharpe) * 0.3) - (Turnover * 0.1) - SelfCorrelation Penalty</code><ul><li><strong>Fitness:</strong> 主要性能指标。</li><li><strong>Passed Checks Bonus:</strong> 通过的检查数 * 0.2。</li><li><strong>Sharpe Bonus:</strong> Sharpe 绝对值 * 0.3。</li><li><strong>Turnover Penalty:</strong> Turnover * 0.1。</li><li><strong>SelfCorrelation Penalty:</strong> (SelfCorr > 0.7 时) = (SelfCorr - 0.7) * 5.0</li></ul><p><small>注意：此为内部计算逻辑，仅供参考。</small></p>`; scoreModal.style.display = "block"; }
-    function showScoreCalculation(alphaData) { const perf = alphaData.performance || {}; const getFloat = (val, defaultVal = 0) => { try { const num = parseFloat(val); return isNaN(num) ? defaultVal : num; } catch { return defaultVal; } }; const fitness = getFloat(perf.fitness); const sharpe = getFloat(perf.sharpe); const turnover = getFloat(perf.turnover, 1.0); let passed_count = 0; const summary = alphaData.checks_summary || ''; const passMatch = summary.match(/(\d+)\s+PASS/); if (passMatch) passed_count = parseInt(passMatch[1], 10) || 0; let self_corr_value = 0.0; const checks_list = perf.checks || []; if (Array.isArray(checks_list)) { const selfCorrCheck = checks_list.find(c => c && c.name === 'Self-correlation'); if (selfCorrCheck && typeof selfCorrCheck.value !== 'undefined') { self_corr_value = getFloat(selfCorrCheck.value, 0.0); } } let self_corr_penalty = 0.0; let penaltyCalculation = "无 (< 0.7)"; if (self_corr_value > 0.7) { self_corr_penalty = (self_corr_value - 0.7) * 5.0; penaltyCalculation = `(${self_corr_value.toFixed(4)} - 0.7) * 5.0 = ${self_corr_penalty.toFixed(4)}`; } const fitnessTerm = fitness; const checksTerm = passed_count * 0.2; const sharpeTerm = Math.abs(sharpe) * 0.3; const turnoverTerm = turnover * 0.1; const score = fitnessTerm + checksTerm + sharpeTerm - turnoverTerm - self_corr_penalty; scoreModalTitle.textContent = "综合分计算明细"; scoreModalBody.innerHTML = `<p><strong>表达式:</strong> <code style="word-break: break-all;">${alphaData.expression.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></p><ul><li>Fitness: ${fitness.toFixed(4)}</li><li>Checks Bonus: ${passed_count} * 0.2 = ${checksTerm.toFixed(4)}</li><li>Sharpe Bonus: abs(${sharpe.toFixed(4)}) * 0.3 = ${sharpeTerm.toFixed(4)}</li><li>Turnover Penalty: ${turnover.toFixed(4)} * 0.1 = ${turnoverTerm.toFixed(4)}</li><li>Self-Corr Penalty: ${penaltyCalculation}</li></ul><p><strong>最终综合分 = ${score.toFixed(4)}</strong></p>`; scoreModal.style.display = "block"; }
-    function closeModal(modalId) { const m = document.getElementById(modalId); if (m) m.style.display = "none"; }
-    window.onclick = function(event) { if (event.target == scoreModal) { closeModal('score-modal'); } else if (event.target.classList.contains('failure-modal-overlay')) { closeFailureModal(event); } } // Modified
-    // --- End Score Modal ---
-
-    function sortAlphas(key, direction) { /* Unchanged from v8.4.9 */ }
-
-    // --- v11.0.5: Render Table with Copy Format Fix ---
-    function renderAlphaTable() {
-        const tbody = document.getElementById('alphas-tbody');
-        tbody.innerHTML = '';
-        document.querySelectorAll('#alphas-table th.sortable').forEach(th => { th.classList.remove('sort-asc', 'sort-desc'); if (th.dataset.sort === currentSort.key) { th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc'); } });
-        if (!globalAlphaData || globalAlphaData.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="text-align: center;">暂无数据。</td></tr>`; return; }
-
-        globalAlphaData.forEach((alpha, index) => {
-            const row = document.createElement('tr');
-            let rowClass = '';
-            if (alpha.is_successfully_submitted) rowClass = 'alpha-status-success';
-            else if (alpha.is_failed_on_wq) rowClass = 'alpha-status-failed';
-            else if (alpha.is_submittable && !alpha.is_submitted) rowClass = 'alpha-status-submittable';
-            else if (alpha.is_submitted) rowClass = 'alpha-status-submitted';
-            row.className = rowClass;
-
-            // Ensure expression is a string before sanitizing
-            const expressionText = alpha.expression || '';
-            const sanitizedExpression = expressionText.replace(/'/g, "\\'").replace(/"/g, '\\"');
-            const uniqueIdPrefix = `alpha-${index}`;
-            // Actions HTML remains the same
-            let actionsHTML = `<label for="${uniqueIdPrefix}-submitted" title="标记为已提交"><input type="checkbox" id="${uniqueIdPrefix}-submitted" class="chk-submitted" data-expression="${sanitizedExpression}" data-type="submitted" onchange="handleCheckboxChange(this)" ${alpha.is_submitted ? 'checked' : ''}><span>提交</span></label><label for="${uniqueIdPrefix}-failed" title="标记为提交失败"><input type="checkbox" id="${uniqueIdPrefix}-failed" class="chk-failed" data-expression="${sanitizedExpression}" data-type="failed" onchange="handleCheckboxChange(this)" ${alpha.is_failed_on_wq ? 'checked' : ''} ${!alpha.is_submitted ? 'disabled' : ''}><span>失败</span></label>`;
-            let copyHTML = `<button class="copy-btn" onclick="copyToClipboard('${sanitizedExpression}', this)">复制</button>`;
-
-            const formatNum = (num, digits = 4) => (typeof num === 'number' && !isNaN(num) ? num.toFixed(digits) : 'N/A');
-            const formatPercent = (num, digits = 2) => (typeof num === 'number' && !isNaN(num) ? (num * 100).toFixed(digits) : 'N/A');
-            // v11.0.5: Function specifically for copy data attribute
-            const formatPercentForCopy = (num, digits = 2) => (typeof num === 'number' && !isNaN(num) ? (num * 100).toFixed(digits) : 'N/A');
-
-            const score = alpha.dashboard_score;
-            const fitness = alpha.performance?.fitness;
-            const sharpe = alpha.performance?.sharpe;
-            const returns = alpha.performance?.returns;
-            const turnover = alpha.performance?.turnover;
-
-            row.insertCell().innerHTML = `<span class="score-value" onclick='showScoreCalculation(${JSON.stringify(alpha)})'>${formatNum(score)}</span>`;
-            // v11.0.5: Simplified expression display
-            row.insertCell().innerHTML = `<div class="alpha-expression-container">${expressionText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
-            row.insertCell().innerHTML = `${alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq ? '<span class="submittable-marker">[可提交]</span> ' : ''}${formatNum(fitness)}`;
-            // --- v11.0.5: Corrected data-copy-value ---
-            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatNum(sharpe, 2)}" onclick="copyValue(this)">${formatNum(sharpe, 2)}</span>`;
-            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(returns)}" onclick="copyValue(this)">${formatPercent(returns)}%</span>`; // Added %
-            row.insertCell().innerHTML = `<span class="copyable-value" data-copy-value="${formatPercentForCopy(turnover)}" onclick="copyValue(this)">${formatPercent(turnover)}%</span>`; // Added %
-            // --- End Correction ---
-            row.insertCell().innerHTML = formatChecks(alpha.checks_summary);
-            row.insertCell().textContent = alpha.timestamp || 'N/A';
-            row.insertCell().innerHTML = actionsHTML; row.cells[8].className = 'alpha-actions';
-            row.insertCell().innerHTML = copyHTML; row.cells[9].className = 'copy-action';
-
-            tbody.appendChild(row);
-        });
-    }
-    // --- End v11.0.5 Render Table ---
-
-    function fetchData() {
-        fetch('/status')
-            .then(response => { if (!response.ok) { throw new Error(`HTTP ${response.status}: ${response.statusText}`); } return response.json(); })
-            .then(data => {
-                if (data.error) { throw new Error(data.error); } // Handle potential error in response data
-
-                ['miner', 'evolver'].forEach(service => {
-                    const serviceData = data[service] || { status: 'ERROR', logs: '无数据', last_seen: 'N/A' };
-                    const statusTextEl = document.getElementById(`${service}-status-text`);
-                    const lastSeenEl = document.getElementById(`${service}-last-seen`);
-                    const logsEl = document.getElementById(`${service}-logs`);
-                    const statusDotEl = document.getElementById(`${service}-status`);
-
-                    if(statusTextEl) statusTextEl.textContent = serviceData.status || 'UNKNOWN';
-                    if(lastSeenEl) lastSeenEl.textContent = serviceData.last_seen || 'N/A';
-                    if(logsEl) logsEl.innerHTML = formatLogs(serviceData.logs || '无日志。');
-                    if(statusDotEl) updateStatusDot(statusDotEl, serviceData.status || 'UNKNOWN');
+        function fetchVersionInfo() {
+            fetch('/api/version_info')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('dashboardVersion').textContent = data.dashboard_version || 'N/A';
+                    document.getElementById('generatorVersion').textContent = data.generator_version || 'N/A';
+                })
+                .catch(error => {
+                    console.error('Error fetching version info:', error);
+                    document.getElementById('dashboardVersion').textContent = 'Error';
+                    document.getElementById('generatorVersion').textContent = 'Error';
                 });
+        }
+        
+        function fetchStatus() {
+            document.getElementById('loading').style.display = 'block';
+            
+            fetch('/status')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    updateServiceStatus('miner', data.miner);
+                    updateServiceStatus('evolver', data.evolver);
+                    
+                    const stats = data.hopeful_alphas;
+                    if (stats.error) {
+                        throw new Error(`Alpha Stats Error: ${stats.error}`);
+                    }
+                    
+                    document.getElementById('totalAlphas').textContent = stats.count || 0;
+                    document.getElementById('maxFitness').textContent = (stats.max_fitness || 0).toFixed(4);
+                    document.getElementById('avgFitness').textContent = (stats.avg_fitness || 0).toFixed(4);
+                    document.getElementById('maxSharpe').textContent = (stats.max_sharpe || 0).toFixed(4);
+                    document.getElementById('pendingCount').textContent = stats.submittable_pending_count || 0;
+                    document.getElementById('submittedCount').textContent = `${stats.successfully_submitted_count || 0} / ${stats.total_submitted_count || 0}`;
 
-                const alphas = data.hopeful_alphas || { count: 0, all_alphas: [], error: null }; // Default
-                // v11.0.5: Check for error within hopeful_alphas structure
-                if (alphas.error) {
-                     console.error("Error getting hopeful alphas stats:", alphas.error);
-                     document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="10" style="color: orange; text-align: center;">加载 Alpha 统计时出错: ${alphas.error}</td></tr>`;
+                    allAlphas = stats.all_alphas.map(alpha => {
+                        alpha.fitness = parseFloat(alpha.performance?.fitness) || -999;
+                        alpha.sharpe = parseFloat(alpha.performance?.sharpe) || -999;
+                        alpha.turnover = parseFloat(alpha.performance?.turnover) || 999;
+                        alpha.returns = parseFloat(alpha.performance?.returns) || -999;
+                        alpha.status = getAlphaStatus(alpha);
+                        // v11.0.12: 确保时间戳被正确解析
+                        alpha.timestamp = alpha.timestamp || 'N/A';
+                        return alpha;
+                    });
+                    
+                    renderTable();
+                    document.getElementById('loading').style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                    updateServiceStatus('miner', { status: 'ERROR', logs: error.message, last_seen: 'N/A' });
+                    updateServiceStatus('evolver', { status: 'ERROR', logs: error.message, last_seen: 'N/A' });
+                    document.getElementById('loading').textContent = `数据加载失败: ${error.message}`;
+                });
+        }
+
+        function updateServiceStatus(serviceName, data) {
+            const statusEl = document.getElementById(`${serviceName}Status`);
+            const lastSeenEl = document.getElementById(`${serviceName}LastSeen`);
+            const logsEl = document.getElementById(`${serviceName}Logs`);
+
+            statusEl.textContent = data.status || 'UNKNOWN';
+            statusEl.className = `status-indicator status-${data.status || 'UNKNOWN'}`;
+            lastSeenEl.textContent = data.last_seen || 'Error';
+            logsEl.innerHTML = data.logs ? escapeHTMLLogs(data.logs) : 'No logs found.';
+            
+            // v6.1.5: 添加下载链接
+            const allowed_logs = ['miner.log', 'evolver.log', 'archaeologist.log', 'cron.log', 'miner_issues.log', 'evolver_issues.log'];
+            if (data.status !== "NOT FOUND") {
+                 let log_filename = `${serviceName}.log`;
+                 if (allowed_logs.includes(log_filename)) {
+                    logsEl.innerHTML += `\n<a href="/download_logs/${log_filename}" target="_blank">[下载 ${log_filename}]</a>`;
+                 }
+            }
+        }
+        
+        function getAlphaStatus(alpha) {
+            if (alpha.is_submittable) {
+                if (alpha.is_submitted) {
+                    if (alpha.is_failed_on_wq) {
+                        return "submitted-fail";
+                    } else if (alpha.is_successfully_submitted) {
+                        return "submitted-ok";
+                    } else {
+                        // 提交了，但尚未确认成功或失败（例如，还在等待WQ确认）
+                        return "submitted-pending"; 
+                    }
                 } else {
-                     document.getElementById('alphas-count').textContent = alphas.count || 0;
-                     document.getElementById('alphas-pending-submission').textContent = alphas.submittable_pending_count || 0;
-                     document.getElementById('alphas-max-fitness').textContent = (typeof alphas.max_fitness === 'number' ? alphas.max_fitness.toFixed(4) : 'N/A');
-                     document.getElementById('alphas-avg-fitness').textContent = (typeof alphas.avg_fitness === 'number' ? alphas.avg_fitness.toFixed(4) : 'N/A');
-                     document.getElementById('alphas-submission-stats').textContent = `${alphas.successfully_submitted_count || 0} / ${alphas.total_submitted_count || 0}`;
+                    // 可提交，但尚未提交
+                    return "submittable"; 
+                }
+            } else {
+                // 不可提交
+                return "not-submittable";
+            }
+        }
+        
+        // v11.0.8: 颜色需求 2 - 新增检查摘要格式化函数
+        function formatChecksSummaryForDashboard(summaryStr) {
+            if (typeof summaryStr !== 'string' || summaryStr === '') {
+                return `<span class="check-tag unknown">N/A</span>`;
+            }
+            
+            // 使用 regex find and replace 来添加 class
+            let html = escapeHTML(summaryStr); // 先转义
+            html = html.replace(/(\d+\s+PASS)/gi, '<span class="check-tag pass">$1</span>');
+            html = html.replace(/(\d+\s+FAIL)/gi, '<span class="check-tag fail">$1</span>');
+            html = html.replace(/(\d+\s+PENDING)/gi, '<span class="check-tag pending">$1</span>');
+            
+            // 添加换行符
+            html = html.replace(/<\/span>\s*(?=<span)/g, '</span><br>');
+            
+            return html;
+        }
 
-                     globalAlphaData = alphas.all_alphas || [];
-                     sortAlphas(currentSort.key, currentSort.direction);
-                     renderAlphaTable();
+        function renderAlphaRow(alpha) {
+            const status = alpha.status;
+            let statusText = 'N/A';
+            switch(status) {
+                case 'submittable': statusText = '待提交 (Pending)'; break;
+                case 'submitted-ok': statusText = '已提交 (成功)'; break;
+                case 'submitted-fail': statusText = '已提交 (WQ 失败)'; break;
+                case 'submitted-pending': statusText = '已提交 (待确认)'; break;
+                case 'not-submittable': statusText = '不可提交'; break;
+            }
+            
+            // v11.0.7: 修复复制功能 - 确保 copy-value 存在且格式正确
+            const fitness_display = alpha.fitness.toFixed(4);
+            const sharpe_display = alpha.sharpe.toFixed(4);
+            const returns_display = (alpha.returns * 100).toFixed(2) + '%';
+            const turnover_display = (alpha.turnover * 100).toFixed(2) + '%';
+            
+            const fitness_copy = alpha.fitness.toFixed(2);
+            const sharpe_copy = alpha.sharpe.toFixed(2);
+            const returns_copy = (alpha.returns * 100).toFixed(2);
+            const turnover_copy = (alpha.turnover * 100).toFixed(2);
+            
+            // v11.0.12: 恢复时间戳格式化 (逻辑同 pending.html)
+            let timestampDisplay = 'N/A';
+            if (alpha.timestamp && alpha.timestamp !== 'N/A') {
+                try {
+                    timestampDisplay = new Date(alpha.timestamp).toLocaleString();
+                } catch(e) { timestampDisplay = alpha.timestamp; }
+            }
+
+            let actionsHtml = '';
+            if (alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq) {
+                // 状态: 待提交
+                actionsHtml += `<button class="btn-action submit" data-action="mark-submitted" title="标记为已手动提交">标记提交</button>`;
+                actionsHtml += `<button class="btn-action fail" data-action="mark-failed" title="标记为在 WQ 平台提交失败">标记失败</button>`;
+            } else if (alpha.is_submitted && !alpha.is_failed_on_wq) {
+                 // 状态: 已提交 (成功) 或 已提交 (待确认)
+                actionsHtml += `<button class="btn-action" data-action="unmark-submitted" title="撤销‘已提交’状态">取消提交</button>`;
+                actionsHtml += `<button class="btn-action fail" data-action="mark-failed" title="标记为在 WQ 平台提交失败">标记失败</button>`;
+            } else if (alpha.is_failed_on_wq) {
+                // 状态: 已提交 (WQ 失败)
+                actionsHtml += `<button class="btn-action" data-action="unmark-failed" title="撤销‘WQ 失败’状态">取消失败</button>`;
+            } else {
+                 actionsHtml = '<span>N/A</span>';
+            }
+
+            return `
+                <td>${alpha.dashboard_score.toFixed(4)}</td>
+                <td>
+                    <div class="alpha-expression" title="点击复制表达式"
+                         data-copy-value="${escapeHTML(alpha.expression)}">
+                        ${escapeHTML(alpha.expression)}
+                    </div>
+                </td>
+                <td class="perf-cell">
+                    <div class="perf-item">
+                        <strong>Fitness:</strong>
+                        <span class="perf-value" title="点击复制 ${fitness_copy}" data-copy-value="${fitness_copy}">${fitness_display}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Sharpe:</strong>
+                        <span class="perf-value" title="点击复制 ${sharpe_copy}" data-copy-value="${sharpe_copy}">${sharpe_display}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Returns:</strong>
+                        <span class="perf-value" title="点击复制 ${returns_copy}" data-copy-value="${returns_copy}">${returns_display}</span>
+                    </div>
+                    <div class="perf-item">
+                        <strong>Turnover:</strong>
+                        <span class="perf-value" title="点击复制 ${turnover_copy}" data-copy-value="${turnover_copy}">${turnover_display}</span>
+                    </div>
+                </td>
+                <td class="checks-cell">${formatChecksSummaryForDashboard(alpha.checks_summary)}</td>
+                <td><span class="status-tag ${status}">${statusText}</span></td>
+                <td>${timestampDisplay}</td>
+                <td class="actions-cell" data-expression="${escapeHTML(alpha.expression)}">
+                    ${actionsHtml}
+                </td>
+            `;
+        }
+        
+        function renderTable() {
+            const tableBody = document.getElementById('alphaTableBody');
+            tableBody.innerHTML = '';
+            
+            const statusFilter = document.getElementById('statusFilter').value;
+            const expressionFilter = document.getElementById('expressionFilter').value.toLowerCase();
+
+            const filteredAlphas = allAlphas.filter(alpha => {
+                const matchesStatus = (statusFilter === 'all') || (alpha.status === statusFilter);
+                const matchesExpression = (expressionFilter === '') || alpha.expression.toLowerCase().includes(expressionFilter);
+                return matchesStatus && matchesExpression;
+            });
+
+            filteredAlphas.sort((a, b) => {
+                let valA = a[currentSortKey];
+                let valB = b[currentSortKey];
+                
+                // v11.0.12: 确保时间戳排序正确
+                if (currentSortKey === 'timestamp') {
+                    // 'N/A' 或无效日期排在最后
+                    valA = (valA && valA !== 'N/A') ? new Date(valA).getTime() : 0;
+                    valB = (valB && valB !== 'N/A') ? new Date(valB).getTime() : 0;
+                } else if (typeof valA === 'string') {
+                    valA = valA.toLowerCase();
+                }
+                if (typeof valB === 'string') {
+                    valB = valB.toLowerCase();
+                }
+
+                if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            if (filteredAlphas.length === 0) {
+                 // v11.0.12: 修复 colspan
+                 tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">没有找到匹配的 Alphas。</td></tr>';
+                 return;
+            }
+            
+            filteredAlphas.forEach(alpha => {
+                const row = document.createElement('tr');
+                
+                // --- BEGIN v11.0.9 需求 1: 添加行底色 ---
+                const status = alpha.status;
+                if (status === 'submittable') {
+                    row.className = 'row-status-submittable';
+                } else if (status === 'submitted-ok') {
+                    row.className = 'row-status-submitted-ok';
+                } else if (status === 'submitted-fail') {
+                    row.className = 'row-status-submitted-fail';
+                } else if (status === 'submitted-pending') {
+                    // 待确认的也用浅蓝色
+                    row.className = 'row-status-submittable'; // (与 'submittable' 共享样式)
+                }
+                // --- END v11.0.9 ---
+
+                row.innerHTML = renderAlphaRow(alpha);
+                tableBody.appendChild(row);
+            });
+            
+            // (重新)绑定所有事件
+            setupActionHandlers(tableBody);
+        }
+        
+        function updateSortIcons() {
+            document.querySelectorAll('#alphaTable th .sort-icon').forEach(icon => {
+                icon.style.opacity = '0.3';
+                icon.className = 'sort-icon';
+            });
+            
+            const activeTh = document.querySelector(`#alphaTable th[data-sort-key="${currentSortKey}"]`);
+            if (activeTh) {
+                const icon = activeTh.querySelector('.sort-icon');
+                icon.style.opacity = '1';
+                icon.classList.add(currentSortDir);
+            }
+        }
+        
+        function setupActionHandlers(container) {
+             container.addEventListener('click', function(e) {
+                const target = e.target;
+                
+                // --- 按钮操作 ---
+                if (target.classList.contains('btn-action')) {
+                    const action = target.getAttribute('data-action');
+                    const cell = target.closest('td');
+                    const expression = cell.getAttribute('data-expression');
+                    handleApiAction(action, expression);
+                }
+                
+                // --- v11.0.7: 修复复制功能 ---
+                if (target.matches('.alpha-expression') || target.matches('.perf-value')) {
+                    const textToCopy = target.getAttribute('data-copy-value') || target.textContent;
+                    copyToClipboard(textToCopy, target);
+                }
+             });
+        }
+        
+        function handleApiAction(action, expression) {
+            let url = '';
+            let confirmMessage = '';
+            let body = { expression: expression };
+
+            switch(action) {
+                case 'mark-submitted':
+                    url = '/api/mark_submitted';
+                    confirmMessage = '是否确认将此 Alpha 标记为“已提交”？';
+                    break;
+                case 'unmark-submitted':
+                    url = '/api/unmark_submitted';
+                    confirmMessage = '是否确认“取消提交”此 Alpha？';
+                    break;
+                case 'mark-failed':
+                    const reason = prompt(`[v11.0 核心功能]\n请为 Alpha 标记失败原因 (例如: HIGH_SELF_CORR, LOW_PERF, WQ_REJECTED):\n\n${expression}`);
+                    if (!reason || reason.trim() === '') {
+                        showToast('操作取消。未提供失败原因。', 'error');
+                        return;
+                    }
+                    url = '/api/mark_failed_on_wq';
+                    body.reason = reason.trim();
+                    // 标记失败不需要二次确认
+                    break;
+                case 'unmark-failed':
+                    url = '/api/unmark_failed_on_wq';
+                    confirmMessage = '是否确认“取消失败”标记？\n此 Alpha 将可能被重新提交！';
+                    break;
+                default:
+                    return;
+            }
+
+            if (confirmMessage && !confirm(confirmMessage)) {
+                return;
+            }
+            
+            // 发起 API 请求
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || '操作成功！');
+                    fetchStatus(); // 重新加载所有数据
+                } else {
+                    throw new Error(data.message || 'API 请求失败');
                 }
             })
-            .catch(error => {
-                console.error('Error fetching status:', error);
-                const errorMsg = `加载状态失败: ${error}. 请检查服务并刷新。`;
-                document.getElementById('miner-logs').textContent = errorMsg;
-                document.getElementById('evolver-logs').textContent = errorMsg;
-                document.getElementById('alphas-tbody').innerHTML = `<tr><td colspan="10" style="color: red; text-align: center;">${errorMsg}</td></tr>`;
+            .catch(err => {
+                console.error('API Action Error:', err);
+                showToast(`操作失败: ${err.message}`, 'error');
             });
-    }
+        }
+        
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        function escapeHTMLLogs(str) {
+            return escapeHTML(str).replace(/\n/g, '<br>');
+        }
 
-    function fetchVersionInfo() { fetch('/api/version_info').then(r=>r.json()).then(d=>{document.getElementById('dashboard-version').textContent=d.dashboard_version||'unknown';document.getElementById('generator-version').textContent=d.generator_version||'unknown';}).catch(e=>{console.error('Version fetch error:',e); }); }
+        // --- BEGIN v11.0.11: 修复局域网 HTTP 复制功能 ---
+        
+        // 统一的成功提示
+        function showCopySuccess(buttonElement, message) {
+            if (buttonElement) {
+                const originalTitle = buttonElement.title;
+                buttonElement.title = '已复制!';
+                
+                // 悬停提示
+                if (buttonElement.classList.contains('perf-value')) {
+                    buttonElement.setAttribute('data-original-title', originalTitle);
+                }
+                
+                setTimeout(() => {
+                    // 恢复悬停提示
+                    if (buttonElement.classList.contains('perf-value')) {
+                         buttonElement.title = buttonElement.getAttribute('data-original-title') || '点击复制';
+                    } else {
+                         buttonElement.title = originalTitle || '点击复制表达式';
+                    }
+                }, 1500);
+            }
+            // console.log(message); // 用于调试
+            showToast('已复制到剪贴板！');
+        }
+        
+        // 旧的 execCommand 复制方法 (回退)
+        function fallbackCopy(text, buttonElement) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            
+            // 避免在屏幕上闪烁
+            textArea.style.position = 'fixed';
+            textArea.style.top = 0;
+            textArea.style.left = 0;
+            textArea.style.width = '2em';
+            textArea.style.height = '2em';
+            textArea.style.padding = 0;
+            textArea.style.border = 'none';
+            textArea.style.outline = 'none';
+            textArea.style.boxShadow = 'none';
+            textArea.style.background = 'transparent';
 
-    // Keep v8.4.9 DOMContentLoaded
-    document.addEventListener('DOMContentLoaded', () => { fetchData(); fetchVersionInfo(); setInterval(fetchData, 10000); document.querySelectorAll('#alphas-table th.sortable').forEach(header => { header.addEventListener('click', (event) => { if (event.target.tagName === 'SPAN' && event.target.classList.contains('header-text')) { return; } const sortKey = header.dataset.sort; if (!sortKey) return; if (currentSort.key === sortKey) { currentSort.direction = (currentSort.direction === 'asc' ? 'desc' : 'asc'); } else { currentSort.key = sortKey; currentSort.direction = (sortKey === 'timestamp' ? 'desc' : 'desc'); } sortAlphas(currentSort.key, currentSort.direction); renderAlphaTable(); }); }); });
-</script>
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
 
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(buttonElement, '已复制 (Fallback)');
+                } else {
+                    throw new Error('execCommand 失败');
+                }
+            } catch (err) {
+                console.error('Fallback 复制失败: ', err);
+                showToast('复制失败！浏览器拒绝了该操作。', 'error');
+            }
+
+            document.body.removeChild(textArea);
+        }
+
+        // 主复制函数 (v11.0.11)
+        function copyToClipboard(text, buttonElement) {
+            // 1. 尝试现代安全 API (navigator.clipboard) - 仅在 localhost 或 https 上有效
+            // 检查 window.isSecureContext (安全上下文)
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopySuccess(buttonElement, '已复制 (API)');
+                }).catch(err => {
+                    console.error('API 复制失败, 尝试回退: ', err);
+                    // 即使 API 存在但失败 (例如用户拒绝权限)，也尝试回退
+                    fallbackCopy(text, buttonElement);
+                });
+            } else {
+                // 2. 回退到旧的 (不安全的) execCommand - 适用于 http://[LAN_IP]
+                // console.warn("Clipboard API 不可用 (非安全上下文?), 正在回退到 execCommand...");
+                fallbackCopy(text, buttonElement);
+            }
+        }
+        // --- END v11.0.11 ---
+
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = type === 'error' ? 'error' : '';
+            
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // --- v11.0.10: 滚动按钮功能 (从 pending.html 引入) ---
+        function setupScrollButtons() {
+            const toTopBtn = document.getElementById('scrollToTopBtn');
+            const toBottomBtn = document.getElementById('scrollToBottomBtn');
+
+            if (toTopBtn) {
+                toTopBtn.addEventListener('click', () => {
+                    // 使用平滑滚动
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            }
+
+            if (toBottomBtn) {
+                toBottomBtn.addEventListener('click', () => {
+                    // 使用平滑滚动
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                });
+            }
+        }
+        // --- v11.0.10: 结束 ---
+    </script>
 </body>
 </html>

@@ -178,7 +178,11 @@ def get_service_status(log_file):
             else: status = "STALLED"
             with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                 latest_lines = deque(f, maxlen=50)
-            logs = "".join(latest_lines)
+            # --- [BUG 修复] ---
+            # 原代码: logs = "".join(latest_lines) (顺序)
+            # 新代码: 使用 reversed() 来实现倒序
+            logs = "".join(reversed(latest_lines))
+            # --- [修复结束] ---
         except Exception as e: logs = f"Error reading log: {e}"; status = "ERROR"; logger.error(f"Error status for {log_file}: {e}", exc_info=False)
     else: status = "NOT FOUND"
     return {"status": status, "last_seen": last_seen, "logs": logs}

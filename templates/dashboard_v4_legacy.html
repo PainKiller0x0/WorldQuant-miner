@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldQuant Miner 仪表盘 v11.0.12</title>
+    <title>WorldQuant Miner 仪表盘 v11.0.15</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -417,7 +417,7 @@
                 </tr>
             </thead>
             <tbody id="alphaTableBody">
-            </tbody>
+                </tbody>
         </table>
         <div id="loading">正在加载数据...</div>
         <div id="version-info">
@@ -462,6 +462,11 @@
                     renderTable();
                 });
             });
+            
+            // --- BEGIN v11.0.14: 修复事件监听器叠加 Bug ---
+            // 使用事件委托，将 *一个* 监听器绑定到永不刷新的父元素 `alphaTableBody`
+            setupActionHandlers(document.getElementById('alphaTableBody'));
+            // --- END v11.0.14 ---
         });
 
         function fetchVersionInfo() {
@@ -510,7 +515,6 @@
                         alpha.turnover = parseFloat(alpha.performance?.turnover) || 999;
                         alpha.returns = parseFloat(alpha.performance?.returns) || -999;
                         alpha.status = getAlphaStatus(alpha);
-                        // v11.0.12: 确保时间戳被正确解析
                         alpha.timestamp = alpha.timestamp || 'N/A';
                         return alpha;
                     });
@@ -546,26 +550,33 @@
             }
         }
         
+        // --- BEGIN v11.0.15: 修复 getAlphaStatus 逻辑 Bug ---
         function getAlphaStatus(alpha) {
+            // 1. 优先检查失败状态 (Priority check for failure)
+            if (alpha.is_failed_on_wq) {
+                // 无论是否可提交，只要在失败列表里，它就是 "submitted-fail"
+                return "submitted-fail";
+            }
+
+            // 2. 如果没失败，再检查是否可提交
             if (alpha.is_submittable) {
                 if (alpha.is_submitted) {
-                    if (alpha.is_failed_on_wq) {
-                        return "submitted-fail";
-                    } else if (alpha.is_successfully_submitted) {
+                    // (is_failed_on_wq is false here)
+                    if (alpha.is_successfully_submitted) {
                         return "submitted-ok";
                     } else {
-                        // 提交了，但尚未确认成功或失败（例如，还在等待WQ确认）
-                        return "submitted-pending"; 
+                        return "submitted-pending"; // 提交了，但尚未确认成功
                     }
                 } else {
-                    // 可提交，但尚未提交
-                    return "submittable"; 
+                    // (is_failed_on_wq is false here)
+                    return "submittable"; // 待提交
                 }
             } else {
-                // 不可提交
+                // 既没失败，也不可提交
                 return "not-submittable";
             }
         }
+        // --- END v11.0.15 ---
         
         // v11.0.8: 颜色需求 2 - 新增检查摘要格式化函数
         function formatChecksSummaryForDashboard(summaryStr) {
@@ -727,8 +738,9 @@
                 tableBody.appendChild(row);
             });
             
-            // (重新)绑定所有事件
-            setupActionHandlers(tableBody);
+            // --- v11.0.14: 修复事件监听器叠加 Bug ---
+            // (v11.0.14) 不再在这里调用 setupActionHandlers
+            // --- END v11.0.14 ---
         }
         
         function updateSortIcons() {
@@ -745,25 +757,36 @@
             }
         }
         
+        // --- BEGIN v11.0.14: 修复事件监听器叠加 Bug ---
+        // 使用事件委托，监听器绑定在 tableBody (container) 上
         function setupActionHandlers(container) {
              container.addEventListener('click', function(e) {
-                const target = e.target;
                 
                 // --- 按钮操作 ---
-                if (target.classList.contains('btn-action')) {
-                    const action = target.getAttribute('data-action');
-                    const cell = target.closest('td');
-                    const expression = cell.getAttribute('data-expression');
-                    handleApiAction(action, expression);
+                // 检查 e.target (被点击的元素) 是否是 .btn-action，或者在 .btn-action 内部
+                const btn = e.target.closest('.btn-action');
+                if (btn) {
+                    const action = btn.getAttribute('data-action');
+                    // 向上找到 .actions-cell 来获取 expression
+                    const cell = btn.closest('.actions-cell'); 
+                    if (cell) {
+                        const expression = cell.getAttribute('data-expression');
+                        handleApiAction(action, expression);
+                    }
+                    return; // 处理完毕
                 }
                 
-                // --- v11.0.7: 修复复制功能 ---
-                if (target.matches('.alpha-expression') || target.matches('.perf-value')) {
-                    const textToCopy = target.getAttribute('data-copy-value') || target.textContent;
-                    copyToClipboard(textToCopy, target);
+                // --- 复制操作 ---
+                // 检查 e.target 是否是 .alpha-expression 或 .perf-value
+                const copyEl = e.target.closest('.alpha-expression, .perf-value');
+                if (copyEl) {
+                    const textToCopy = copyEl.getAttribute('data-copy-value') || copyEl.textContent;
+                    copyToClipboard(textToCopy, copyEl);
+                    return; // 处理完毕
                 }
              });
         }
+        // --- END v11.0.14 ---
         
         function handleApiAction(action, expression) {
             let url = '';

@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v11.0.10 (修复“僵尸”Alpha 的合并迁移逻辑) ---
+# --- Web仪表盘.py v11.0.12 (修复“干掉 Hopeful Pool”的 Bug) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -11,9 +11,9 @@ import logging
 import pandas as pd
 import numpy as np
 
-# --- v11.0.10: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v11.0.10"
-# --- v11.0.10: 结束 ---
+# --- v11.0.12: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v11.0.12"
+# --- v11.0.12: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -219,12 +219,9 @@ def get_hopeful_alphas_stats():
     try: # v11.0.5: 保持整体异常捕获
         submitted_set = load_submitted_alphas()
         failed_set = load_failed_submissions() # <-- v11.0.10: 使用新的、健壮的实现
-        # logger.info(f"[Stats] Using submitted ({len(submitted_set)}) and failed ({len(failed_set)}) sets.")
-
-        pass_pattern = re.compile(r'(\d+)\s+PASS')
-        fail_pattern = re.compile(r'(\d+)\s+FAIL')
+        
+        # --- v11.0.12: 恢复 v11.0.5 的加载逻辑 (修复“干掉 hopeful 池”Bug) ---
         alphas = []
-
         with hopeful_lock:
             if os.path.exists(HOPEFUL_ALPHAS_FILE):
                 try:
@@ -234,6 +231,7 @@ def get_hopeful_alphas_stats():
                              if isinstance(alphas_data, list): alphas = alphas_data
                              else: logger.warning(f"[Stats] hopeful_alphas.json not a list.")
                 except Exception as e: logger.error(f"[Stats] Error reading {HOPEFUL_ALPHAS_FILE}: {e}", exc_info=False)
+        # --- v11.0.12: 结束 ---
 
         if alphas:
             valid_alphas_list = [a for a in alphas if isinstance(a, dict)]
@@ -262,7 +260,7 @@ def get_hopeful_alphas_stats():
                 fitness = perf.get('fitness', -999); sharpe = perf.get('sharpe', 0.0); turnover = perf.get('turnover', 1.0)
                 checks_summary = report.get('checks_summary', '0 PASS'); passed_count = 0
                 try:
-                    match = pass_pattern.search(checks_summary or '')
+                    match = re.compile(r'(\d+)\s+PASS').search(checks_summary or '')
                     if match: passed_count = int(match.group(1))
                 except (ValueError, TypeError): pass
                 try: fitness_f = float(fitness)
@@ -278,10 +276,19 @@ def get_hopeful_alphas_stats():
             successfully_submitted_count_local = 0
             total_submitted_count_local = 0
 
+            pass_pattern = re.compile(r'(\d+)\s+PASS') # v11.0.11: 移到循环外
+            fail_pattern = re.compile(r'(\d+)\s+FAIL') # v11.0.11: 移到循环外
+
             for alpha_report in valid_alphas_list:
                 try: # 保持对每个 alpha 的处理加 try-except
                     expression = alpha_report.get('expression')
                     if not expression: continue
+                    
+                    # v11.0.12: 恢复 v11.0.10 的逻辑。我们 *必须* 处理所有 Alpha，
+                    # UI/API (如 /api/get_pending_alphas) 会负责过滤
+                    is_failed_on_wq = expression in failed_set 
+                    is_submitted = expression in submitted_set
+
                     perf_data = alpha_report.get('performance', {});
                     if not isinstance(perf_data, dict): perf_data = {}
                     summary_str = alpha_report.get('checks_summary', '') or ''
@@ -290,11 +297,11 @@ def get_hopeful_alphas_stats():
                     pass_match = pass_pattern.search(summary_str);
                     passed_count = int(pass_match.group(1)) if pass_match else 0
                     is_submittable = passed_count >= 7 and not has_fail
-                    is_submitted = expression in submitted_set
-                    is_failed_on_wq = expression in failed_set # <-- v11.0.10: 现在会包含正确的迁移数据
+                    
                     is_successfully_submitted = is_submittable and is_submitted and not is_failed_on_wq
 
-                    if is_submittable and not is_submitted and not is_failed_on_wq: stats['submittable_pending_count'] += 1
+                    if is_submittable and not is_submitted and not is_failed_on_wq: 
+                        stats['submittable_pending_count'] += 1
 
                     if is_submitted:
                          total_submitted_count_local += 1
@@ -567,6 +574,8 @@ def mark_alpha_failed():
             except Exception as e_secondary:
                 logger.error(f"[API /{operation.lower()}] 二次检查时发生意外错误: {e_secondary}")
             # --- END v11.0.7 ---
+
+            # --- v11.0.12: 移除了 v11.0.11 的“三次检查” (干掉 Hopeful Pool 的 Bug) ---
             
             return jsonify(status='success', message=f'已标记失败 (原因: {reason})')
         else: 
@@ -616,10 +625,11 @@ def get_pending_alphas():
         stats = get_hopeful_alphas_stats()
         all_alphas = stats.get('all_alphas', [])
         
-        # 在服务器端进行过滤
+        # v11.0.12: 这里的过滤逻辑现在依赖于 get_hopeful_alphas_stats() 
+        # (该函数现在会正确地*处理*所有 Alpha)
         pending_alphas = []
         for alpha in all_alphas:
-            # 过滤条件
+            # 过滤条件 (与 get_hopeful_alphas_stats 中 'submittable_pending_count' 的逻辑一致)
             if (alpha.get('is_submittable') and 
                 not alpha.get('is_submitted') and 
                 not alpha.get('is_failed_on_wq')):

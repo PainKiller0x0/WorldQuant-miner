@@ -1,0 +1,7 @@
+[
+    {
+        "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 10)), 20)) - rank(ts_std_dev(open, 40)) * rank(ts_delta(close, 2)) + rank(ts_delta(volume, 5)) * rank(ts_mean(close, 7)) + rank(ts_corr(open, close, 15)) + rank(ts_decay_linear(ts_corr(high, low, 25), 15));",
+        "reason": "Self-correlation 0.8926 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-30T12:00:07.980375+00:00"
+    }
+]

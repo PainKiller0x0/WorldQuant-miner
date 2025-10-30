@@ -101,7 +101,19 @@ def load_submission_failures():
                 except Exception as save_e:
                     logger.error(f"Failed to save migrated failure log (inline): {save_e}. Returning empty list.")
                     return [] # 保存失败，返回空列表
-            return [] # 新旧文件都不存在或旧文件为空
+# --- BEGIN FIX v11.0.6 ---
+            # 修复：如果新旧文件都不存在 (全新安装)，则主动创建空的新日志文件
+            # 原始代码 (return []) 依赖于 save_submission_failures() 创建文件，这可能失败。
+            logger.warning(f"[Failure Log Load] Neither new log ({filepath}) nor old log ({FAILED_SUBMISSIONS_FILE_OLD}) found. Creating new empty log file.")
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump([], f) # 写入一个空的 JSON 列表
+                logger.info(f"Successfully created new empty log file: {filepath}")
+                return [] # 返回空列表
+            except Exception as create_e:
+                logger.error(f"Failed to create new empty log file! {create_e}", exc_info=True)
+                return [] # 失败了，还是返回空列表
+            # --- END FIX v11.0.6 ---
 
         # 3. 如果新文件存在，则加载它
         try:
@@ -515,21 +527,32 @@ def mark_alpha_failed():
     expression = data.get('expression')
     reason = data.get('reason')
     if not expression or not isinstance(expression, str): return jsonify(status='error', message='无效的表达式'), 400
-    if not reason: reason = "UNKNOWN_REASON"
+    if not reason: reason = "UNKNOWN_REASON" # 默认原因
     logger.info(f"[API /{operation.lower()}] Expr: {expression[:50]}... Reason: {reason}")
     try:
-        failures_list = load_submission_failures() # 安全读取
+        failures_list = load_submission_failures() # 读取新日志
         found = False
         for item in failures_list:
             if isinstance(item, dict) and item.get('expression') == expression:
                 item['reason'] = reason; item['timestamp'] = datetime.now(timezone.utc).isoformat()
                 found = True; break
+        
         if not found:
             failures_list.append({ "expression": expression, "reason": reason, "timestamp": datetime.now(timezone.utc).isoformat() })
-        if save_submission_failures(failures_list): # 安全保存
+        
+        # --- [BUG 修复 v11.0.5] ---
+        # 修复：将保存逻辑移到 "if not found" 外部 (减少一级缩进)
+        # 无论 'found' 是 Ture 还是 False，这个保存操作都必须执行
+        if save_submission_failures(failures_list): # 保存新日志
             return jsonify(status='success', message=f'已标记失败 (原因: {reason})')
-        else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
-    except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
+        else: 
+            logger.error(f"[API /{operation.lower()}] Save failed."); 
+            return jsonify(status='error', message='保存失败日志失败'), 500
+        # --- [修复结束] ---
+
+    except Exception as e: 
+        logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); 
+        return jsonify(status='error', message='服务器内部错误'), 500
 
 @app.route('/api/unmark_failed_on_wq', methods=['POST'])
 def unmark_alpha_failed():

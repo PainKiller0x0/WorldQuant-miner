@@ -18,6 +18,8 @@ services:
       # --- v5.7 状态持久化修复 (交接任务) ---
       - ./submitted_alphas.json:/app/submitted_alphas.json
       - ./failed_submissions.json:/app/failed_submissions.json
+      # --- v12.0 修复: 必须映射新的日志文件 ---
+      - ./submission_failure_log.json:/app/submission_failure_log.json
       # --- 修复结束 ---
       - ./Web仪表盘.py:/app/Web仪表盘.py # 挂载后台文件
       - ./templates:/app/templates   # 挂载整个templates文件夹

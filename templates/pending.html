@@ -168,6 +168,33 @@
         #toast.error {
             background-color: #dc3545;
         }
+        
+        /* --- [新功能] 滚动按钮 --- */
+        .scroll-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+        }
+        .scroll-btn {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            padding: 10px 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 1.2em; /* 增大字体使其更像图标 */
+            margin-top: 5px;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        .scroll-btn:hover {
+            background-color: #007bff;
+            opacity: 1;
+        }
+        /* --- [新功能] 结束 --- */
     </style>
 </head>
 <body>
@@ -197,7 +224,11 @@
     
     <div id="toast"></div>
 
-<script>
+    <div class="scroll-buttons">
+        <button id="scrollToTopBtn" class="scroll-btn" title="滚动到顶部">▲</button>
+        <button id="scrollToBottomBtn" class="scroll-btn" title="滚动到底部">▼</button>
+    </div>
+    <script>
     let allAlphas = [];
     let currentSortKey = 'dashboard_score';
     let currentSortDir = 'desc';
@@ -205,6 +236,9 @@
     document.addEventListener('DOMContentLoaded', function() {
         fetchPendingAlphas();
         setupSortHeaders();
+        // --- [新功能] 绑定滚动按钮事件 ---
+        setupScrollButtons();
+        // --- [新功能] 结束 ---
     });
 
     function fetchPendingAlphas() {
@@ -268,7 +302,8 @@
                 const sortKey = th.getAttribute('data-sort-key');
                 let sortDir = 'desc';
                 if (currentSortKey === sortKey) {
-                    sortDir = currentSortSorg === 'desc' ? 'asc' : 'desc';
+                    // 修正一个小的拼写错误 (currentSortSorg -> currentSortDir)
+                    sortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
                 }
                 currentSortKey = sortKey;
                 currentSortDir = sortDir;
@@ -561,6 +596,27 @@
             toast.classList.remove('show');
         }, 3000);
     }
+    
+    // --- [新功能] 滚动按钮功能 ---
+    function setupScrollButtons() {
+        const toTopBtn = document.getElementById('scrollToTopBtn');
+        const toBottomBtn = document.getElementById('scrollToBottomBtn');
+
+        if (toTopBtn) {
+            toTopBtn.addEventListener('click', () => {
+                // 使用平滑滚动
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        if (toBottomBtn) {
+            toBottomBtn.addEventListener('click', () => {
+                // 使用平滑滚动
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            });
+        }
+    }
+    // --- [新功能] 结束 ---
 </script>
 
 </body>

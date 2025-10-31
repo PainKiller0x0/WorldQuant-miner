@@ -1,19 +1,20 @@
-# --- Web仪表盘.py v12.0.0 (Manual Timestamps + 修复统计 Bug) ---
+# --- Web仪表盘.py v12.1.4 (修复图表“0 提交” Bug) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
 import re
 import threading
 from datetime import datetime, timedelta, timezone
-from collections import deque
+# v12.1.0: 引入 Counter
+from collections import deque, Counter
 import os.path
 import logging
 import pandas as pd
 import numpy as np
 
-# --- v12.0.0: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v12.0.0"
-# --- v12.0.0: 结束 ---
+# --- v12.1.4: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v12.1.4"
+# --- v12.1.4: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -47,9 +48,15 @@ _timeseries_cache = None
 _timeseries_cache_time = None
 _cache_lock = threading.Lock()
 
-# --- v12.0.0: 升级 Load/Save (任务 1：支持时间戳) ---
+# v12.1.0: 新增每日统计的缓存
+_submission_cache = None
+_submission_cache_time = None
+_submission_cache_lock = threading.Lock()
+# v12.1.0: 结束
+
+# --- v12.1.4: 升级 Load/Save (修复僵尸数据) ---
 def load_submitted_alphas():
-    """ (v12.0.0) 加载 submitted_alphas.json, 返回 dict，包含从旧 list 迁移的逻辑 """
+    """ (v12.1.4) 修复 v12.1.2 中错误的迁移逻辑 """
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
         if not os.path.exists(filepath): return {} # 返回空 dict
@@ -59,31 +66,64 @@ def load_submitted_alphas():
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            # Path 1: 数据已经是 dict (新格式)
-            if isinstance(data, dict):
-                return data
+            final_dict = {}
+            needs_resave = False # 标记是否需要回写
+            migration_timestamp = None # v12.1.4: 用于标记 v11 迁移的时间戳
             
-            # Path 2: 数据是 list (旧格式)，必须迁移
+            # Path 1: 数据是 list (v11.x 旧格式)，必须迁移
             if isinstance(data, (list, set)):
                 logger.warning(f"[Submit Load] Old data format (list) detected in {filepath}. Migrating...")
-                new_dict = {}
-                # 为旧数据设置一个统一的时间戳
-                migration_timestamp = datetime.now(timezone.utc).isoformat()
+                migration_timestamp = datetime.now(timezone.utc).isoformat() # v12.1.4: 记录此次迁移的时间
                 for expr in data:
                     if isinstance(expr, str):
-                        new_dict[expr] = {"manual_timestamp": migration_timestamp}
+                        # v12.1.2: 迁移时添加 "reason" 标记
+                        final_dict[expr] = {
+                            "manual_timestamp": migration_timestamp,
+                            "reason": "MIGRATED_UNKNOWN" 
+                        }
+                needs_resave = True
+            
+            # Path 2: 数据已经是 dict (v12.0.0+ 新格式)
+            elif isinstance(data, dict):
+                final_dict = data
                 
-                # 尝试立即保存迁移后的数据
+                # v12.1.4: 寻找 v12.0.0 迁移时（当时没有 reason 键）的那个时间戳
+                # 找到所有没有 "reason" 标记的时间戳
+                timestamps_no_reason = [
+                    item.get('manual_timestamp') 
+                    for item in final_dict.values() 
+                    if isinstance(item, dict) and "reason" not in item
+                ]
+                
+                if timestamps_no_reason:
+                    # 找到出现次数最多的时间戳，那一定是 v12.0.0 的迁移时间戳
+                    zombie_timestamp = Counter(timestamps_no_reason).most_common(1)[0][0]
+                    logger.warning(f"[Submit Load] Found v12.0.0 migrated data (Timestamp: {zombie_timestamp}). Upgrading to v12.1.4 flags...")
+                    needs_resave = True
+                    
+                    for item in final_dict.values():
+                        if isinstance(item, dict) and "reason" not in item:
+                            if item.get('manual_timestamp') == zombie_timestamp:
+                                item["reason"] = "MIGRATED_UNKNOWN" # 标记为僵尸
+                            else:
+                                # 这是 v12.0.0-v12.1.1 期间的手动提交，标记为真人
+                                item["reason"] = "MANUAL_ADD" 
+                        
+            else:
+                logger.warning(f"[Submit Load] File {filepath} bad format (not dict or list)."); return {}
+
+            # 如果执行了任何迁移，立即回写
+            if needs_resave:
+                logger.info(f"[Submit Load] Resaving {filepath} with new 'reason' flags...")
                 try:
                     with open(filepath, 'w', encoding='utf-8') as f_save:
-                        json.dump(new_dict, f_save, indent=4)
-                    logger.info(f"Successfully migrated {len(new_dict)} entries to new dict format.")
+                        json.dump(final_dict, f_save, indent=4)
+                    logger.info(f"Successfully migrated/updated {len(final_dict)} entries with 'reason' flags.")
                 except Exception as save_e:
                     logger.error(f"Failed to save migrated data for {filepath}! {save_e}")
-                
-                return new_dict
             
-            logger.warning(f"[Submit Load] File {filepath} bad format (not dict or list)."); return {}
+            return final_dict
+            
         except Exception as e:
             logger.error(f"[Submit Load] Error loading {filepath}: {e}", exc_info=False); return {}
 
@@ -97,7 +137,7 @@ def save_submitted_alphas(submitted_dict):
             with open(filepath, 'w', encoding='utf-8') as f: json.dump(submitted_dict, f, indent=4) # 保存 dict
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
-# --- v12.0.0: 结束 ---
+# --- v12.1.4: 结束 ---
 
 # --- v11.0.11: 新增 hopeful_alphas 的读写函数 ---
 def load_hopeful_alphas_list():
@@ -150,30 +190,36 @@ def load_failed_submissions_old_format():
     return set()
 
 def load_submission_failures():
-    """ (v11.0.10) 重写加载逻辑，修复“僵尸”Alpha (迁移) Bug """
+    """ (v12.1.4) 修复“僵尸”Alpha (迁移) Bug, 并为 v12.1.2 添加 "reason" 标记 """
     with failure_log_lock:
         new_filepath = SUBMISSION_FAILURE_LOG_FILE
         old_filepath = FAILED_SUBMISSIONS_FILE_OLD
         
         current_failures_list = []
+        needs_resave = False # v12.1.2: 标记是否需要回写
+        
         new_file_exists = os.path.exists(new_filepath)
         new_file_has_content = new_file_exists and os.path.isfile(new_filepath) and os.path.getsize(new_filepath) > 2
         old_file_exists_and_not_backed_up = os.path.exists(old_filepath) and not os.path.exists(old_filepath + ".bak")
 
-        # --- Path 1: 尝试加载新日志文件 (你手动的5条) ---
+        # --- Path 1: 尝试加载新日志文件 ---
         if new_file_has_content:
             try:
                 with open(new_filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 if isinstance(data, list):
                     current_failures_list = data
-                    # logger.info(f"[Failure Log Load] Loaded {len(current_failures_list)} entries from {new_filepath}")
+                    # v12.1.2: 执行“二次迁移”，为 v11.0.10 迁移的数据打上 "reason" 标记
+                    for item in current_failures_list:
+                         if isinstance(item, dict) and "reason" not in item:
+                            item["reason"] = "MIGRATED_UNKNOWN" # 标记为迁移数据
+                            needs_resave = True
                 else:
                     logger.error(f"[Failure Log Load] {new_filepath} is not a list. Re-initializing.")
             except Exception as e:
                 logger.error(f"[Failure Log Load] Error loading {new_filepath}: {e}. Attempting recovery.")
 
-        # --- Path 2: 检查是否需要从旧日志迁移 (你的30+条) ---
+        # --- Path 2: 检查是否需要从旧日志迁移 ---
         if old_file_exists_and_not_backed_up:
             logger.warning(f"[Failure Log Load] Old log '{old_filepath}' still exists. Checking for merge/migration...")
             old_set = load_failed_submissions_old_format()
@@ -182,23 +228,20 @@ def load_submission_failures():
                 # 找出新日志中已有的表达式
                 current_expressions = {item['expression'] for item in current_failures_list if isinstance(item, dict)}
                 
-                # 找出旧日志中需要合并的新条目
                 items_to_migrate = []
                 for expr in old_set:
                     if expr not in current_expressions:
-                        items_to_migrate.append({"expression": expr, "reason": "MIGRATED_UNKNOWN", "timestamp": datetime.now(timezone.utc).isoformat()})
+                        # v12.1.2: 迁移时添加 "reason" 标记
+                        items_to_migrate.append({
+                            "expression": expr, 
+                            "reason": "MIGRATED_UNKNOWN", 
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        })
                 
                 if items_to_migrate:
                     logger.warning(f"Found {len(items_to_migrate)} new entries in old log. Merging...")
                     current_failures_list.extend(items_to_migrate)
-                    
-                    # 立即保存合并后的列表
-                    try:
-                        with open(new_filepath, 'w', encoding='utf-8') as f:
-                            json.dump(current_failures_list, f, indent=4)
-                        logger.info(f"Successfully merged and saved {len(current_failures_list)} total entries to {new_filepath}.")
-                    except Exception as save_e:
-                        logger.error(f"Failed to save merged failure log (inline): {save_e}.")
+                    needs_resave = True # 标记需要回写
                 
                 # 无论是否合并了新条目，只要旧文件存在，就备份它
                 try:
@@ -223,6 +266,16 @@ def load_submission_failures():
              except Exception as create_e:
                 logger.error(f"Failed to create new empty log file! {create_e}", exc_info=True)
 
+        # --- v12.1.2: 统一回写 ---
+        if needs_resave:
+            logger.info(f"[Failure Log Load] Resaving {new_filepath} with 'reason' flags...")
+            try:
+                with open(new_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(current_failures_list, f, indent=4)
+                logger.info(f"Successfully migrated/updated {len(current_failures_list)} failure entries.")
+            except Exception as save_e:
+                logger.error(f"Failed to save migrated failure log (inline): {save_e}.")
+
         return current_failures_list
 
 def save_submission_failures(failures_list):
@@ -238,20 +291,25 @@ def save_submission_failures(failures_list):
 
 def load_failed_submissions():
     """
-    (v11.0.10) 兼容 v6.1.5 get_hopeful_alphas_stats。
+    (v12.1.2) 兼容 v6.1.5 get_hopeful_alphas_stats。
     返回一个 dict map (v12.0.0 修改) 和 set
     """
     failures_list = load_submission_failures()
     
     # v12.0.0: 创建一个 Map 用于 O(1) 查找时间戳
-    failed_map = {item['expression']: item.get('timestamp', 'N/A') 
-                  for item in failures_list 
-                  if isinstance(item, dict) and 'expression' in item}
+    failed_map = {}
+    for item in failures_list:
+        if isinstance(item, dict) and 'expression' in item:
+            # v12.1.2: 存储 'timestamp' 和 'reason'
+            failed_map[item['expression']] = {
+                "timestamp": item.get('timestamp', 'N/A'),
+                "reason": item.get('reason', 'UNKNOWN')
+            }
                   
     failed_set = set(failed_map.keys())
     
     return failed_map, failed_set
-# --- v12.0.0: 结束 ---
+# --- v12.1.4: 结束 ---
 
 def get_service_status(log_file):
     # 保持 v6.1.5 逻辑
@@ -282,8 +340,8 @@ def get_hopeful_alphas_stats():
               "total_submitted_count": 0, "all_alphas": [] }
     try: 
         # --- BEGIN v12.0.0 (Task 1 & 2) ---
-        submitted_dict = load_submitted_alphas() # v12.0.0: 返回 dict
-        failed_map, failed_set = load_failed_submissions() # v12.0.0: 返回 map 和 set
+        submitted_dict = load_submitted_alphas() # v12.1.4: 包含 'reason'
+        failed_map, failed_set = load_failed_submissions() # v12.1.4: 包含 'reason'
         # --- END v12.0.0 ---
         
         alphas = load_hopeful_alphas_list() # v11.0.11: 使用辅助函数
@@ -369,7 +427,7 @@ def get_hopeful_alphas_stats():
                     if is_submitted:
                         manual_timestamp = submitted_dict.get(expression, {}).get('manual_timestamp', 'N/A')
                     elif is_failed_on_wq:
-                        manual_timestamp = failed_map.get(expression, 'N/A')
+                        manual_timestamp = failed_map.get(expression, {}).get('timestamp', 'N/A') # v12.1.2: 修复
                     # --- END v12.0.0 ---
 
                     processed_alpha_data = {
@@ -570,6 +628,115 @@ def api_stats_timeseries():
                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
                 return jsonify({"error": "内部服务器错误。"}), 500
 
+# --- BEGIN v12.1.3: 修复图表“僵尸”统计 Bug ---
+def get_daily_submission_stats():
+    """ (v12.1.3) 聚合每日数据，修复 v12.1.2 迁移导致的 "0 提交" Bug """
+    
+    daily_submitted_counter = Counter()
+    daily_failed_counter = Counter()
+    
+    # 1. 统计已提交 (过滤僵尸数据)
+    submitted_dict = load_submitted_alphas() # v12.1.4: 这会正确地标记 "reason"
+    for item in submitted_dict.values():
+        reason = item.get("reason")
+        # v12.1.3: *只* 统计 'MANUAL_ADD' (v12.1.2+ 手动添加)
+        # (v12.1.4 迁移逻辑会将 v12.0.0-v12.1.1 的手动添加也标记为 'MANUAL_ADD')
+        if isinstance(item, dict) and 'manual_timestamp' in item and reason == "MANUAL_ADD":
+            try:
+                ts_str = item['manual_timestamp']
+                dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                daily_submitted_counter[dt.date()] += 1
+            except (ValueError, TypeError):
+                pass 
+                
+    # 2. 统计已失败 (过滤僵尸数据)
+    failures_list = load_submission_failures() # v12.1.4: 这会正确地标记 "reason"
+    for item in failures_list:
+        reason = item.get("reason")
+        # v12.1.3: *只* 统计*非* MIGRATED_UNKNOWN 的
+        if isinstance(item, dict) and 'timestamp' in item and reason != "MIGRATED_UNKNOWN":
+            try:
+                ts_str = item['timestamp']
+                dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                daily_failed_counter[dt.date()] += 1
+            except (ValueError, TypeError):
+                pass 
+
+    # Chart B: 每日产出 (Hopeful) - 这个逻辑保持不变
+    daily_hopeful_counter = Counter()
+    hopeful_list = load_hopeful_alphas_list()
+    for item in hopeful_list:
+        if isinstance(item, dict) and 'timestamp' in item:
+            try:
+                dt = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
+                daily_hopeful_counter[dt.date()] += 1
+            except (ValueError, TypeError):
+                pass 
+
+    # 合并所有日期并排序
+    all_dates = sorted(list(
+        set(daily_submitted_counter.keys()) | 
+        set(daily_failed_counter.keys()) | 
+        set(daily_hopeful_counter.keys())
+    ))
+    
+    # 格式化输出
+    output = {
+        "timestamps": [],
+        "submitted_count": [],
+        "failed_count": [],   
+        "hopeful_count": []
+    }
+    
+    if not all_dates:
+        # v12.1.3: 即使没有数据，也返回今天
+        today_str = datetime.now(timezone.utc).date().isoformat()
+        output["timestamps"].append(today_str)
+        output["submitted_count"].append(0)
+        output["failed_count"].append(0)
+        output["hopeful_count"].append(0)
+        return output
+        
+    # 填充日期范围以确保连续性
+    start_date = all_dates[0]
+    end_date = max(all_dates[-1], datetime.now(timezone.utc).date())
+    date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+    
+    for date_obj in date_range:
+        date_key = date_obj.date()
+        output["timestamps"].append(date_key.isoformat())
+        output["submitted_count"].append(daily_submitted_counter.get(date_key, 0))
+        output["failed_count"].append(daily_failed_counter.get(date_key, 0))
+        output["hopeful_count"].append(daily_hopeful_counter.get(date_key, 0))
+
+    return output
+
+
+@app.route('/api/v1/stats/submission_daily')
+def api_stats_submission_daily():
+    """ (v12.1.0) 任务 3 - 新的每日图表 API """
+    global _submission_cache, _submission_cache_time
+    with _submission_cache_lock:
+        now = datetime.now(timezone.utc)
+        # 使用与主 API 相同的缓存时间
+        if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION):
+            return jsonify(_submission_cache)
+        
+        try:
+            # logger.info("[API Daily Stats] Generating daily stats...")
+            stats = get_daily_submission_stats() # v12.1.3: 调用已修复的函数
+            _submission_cache = stats
+            _submission_cache_time = now
+            # logger.info("[API Daily Stats] Daily stats cached.")
+            return jsonify(stats)
+        except Exception as e:
+            logger.error(f"[API Daily Stats] Error: {e}", exc_info=True)
+            with _submission_cache_lock:
+                _submission_cache = None
+                _submission_cache_time = None
+            return jsonify({"error": "内部服务器错误。"}), 500
+# --- END v12.1.3 ---
+
 
 @app.route('/download_logs/<log_filename>')
 def download_logs(log_filename):
@@ -579,7 +746,7 @@ def download_logs(log_filename):
     try: return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
     except Exception as e: logger.error(f"[API /download_logs] Error: {e}"); return "下载文件时出错", 500
 
-# --- v12.0.0: 更新 Mark/Unmark APIs (任务 1) ---
+# --- v12.1.2: 更新 Mark/Unmark APIs (添加 'reason' 标记) ---
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_alpha_submitted():
     operation = "Mark"; # logger.info(f"[API /{operation.lower()}_submitted]")
@@ -587,11 +754,14 @@ def mark_alpha_submitted():
     data = request.json; expression = data.get('expression')
     if not expression or not isinstance(expression, str): return jsonify(status='error', message='无效的表达式'), 400
     try:
-        submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
-        # v12.0.0: 写入 dict 并添加时间戳
-        submitted_dict[expression] = {"manual_timestamp": datetime.now(timezone.utc).isoformat()}
+        submitted_dict = load_submitted_alphas() # v12.1.4: 加载 (并自动迁移)
+        # v12.1.2: 写入 dict, 添加时间戳 和 *新的* "reason" 标记
+        submitted_dict[expression] = {
+            "manual_timestamp": datetime.now(timezone.utc).isoformat(),
+            "reason": "MANUAL_ADD" 
+        }
         
-        if save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
+        if save_submitted_alphas(submitted_dict): 
             return jsonify(status='success', message='标记成功')
         else: 
             logger.error(f"[API /{operation.lower()}_submitted] Save failed."); 
@@ -607,10 +777,10 @@ def unmark_alpha_submitted():
     data = request.json; expression = data.get('expression')
     if not expression or not isinstance(expression, str): return jsonify(status='error', message='无效的表达式'), 400
     try:
-        submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
-        submitted_dict.pop(expression, None) # v12.0.0: 从 dict 移除
+        submitted_dict = load_submitted_alphas() # v12.1.4: 加载 (并自动迁移)
+        submitted_dict.pop(expression, None) 
         
-        if save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
+        if save_submitted_alphas(submitted_dict): 
             return jsonify(status='success', message='取消标记成功')
         else: 
             logger.error(f"[API /{operation.lower()}_submitted] Save failed."); 
@@ -630,7 +800,7 @@ def mark_alpha_failed():
     if not reason: reason = "UNKNOWN_REASON" # 默认原因
     logger.info(f"[API /{operation.lower()}] Expr: {expression[:50]}... Reason: {reason}")
     try:
-        failures_list = load_submission_failures() # v11.0.10: 使用新的、健壮的实现
+        failures_list = load_submission_failures() # v12.1.4: 加载 (并自动迁移)
         found = False
         for item in failures_list:
             if isinstance(item, dict) and item.get('expression') == expression:
@@ -638,18 +808,22 @@ def mark_alpha_failed():
                 found = True; break
         
         if not found:
-            failures_list.append({ "expression": expression, "reason": reason, "timestamp": datetime.now(timezone.utc).isoformat() })
+            # v12.1.2: 写入时添加 'reason' (来自用户)
+            failures_list.append({ 
+                "expression": expression, 
+                "reason": reason, 
+                "timestamp": datetime.now(timezone.utc).isoformat() 
+            })
         
-        # 无论 'found' 是 True 还是 False，这个保存操作都必须执行
         if save_submission_failures(failures_list): # 保存新日志
             
             # --- BEGIN v12.0.0 (Task 1) 二次检查 (使用新数据结构) ---
             try:
                 logger.info(f"[API /{operation.lower()}] 正在执行二次检查... 从 'submitted_alphas.json' 中移除...")
-                submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
+                submitted_dict = load_submitted_alphas() # v12.1.4: 加载 (并自动迁移)
                 if expression in submitted_dict:
-                    submitted_dict.pop(expression, None) # v12.0.0: 从 dict 移除
-                    if not save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
+                    submitted_dict.pop(expression, None) 
+                    if not save_submitted_alphas(submitted_dict): 
                          logger.error(f"[API /{operation.lower()}] 二次检查：保存 submitted_alphas 失败。")
                     else:
                          logger.info(f"[API /{operation.lower()}] 二次检查：成功从 submitted_alphas 中移除。")
@@ -686,7 +860,7 @@ def unmark_alpha_failed():
             return jsonify(status='success', message='已取消标记失败')
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
-# --- v12.0.0: 结束 ---
+# --- v12.1.4: 结束 ---
 # --- BEGIN: 新增代码 (for /pending page) ---
 @app.route('/pending')
 def pending_page():

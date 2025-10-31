@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v11.0.12 (修复“干掉 Hopeful Pool”的 Bug) ---
+# --- Web仪表盘.py v12.0.0 (Manual Timestamps + 修复统计 Bug) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -11,9 +11,9 @@ import logging
 import pandas as pd
 import numpy as np
 
-# --- v11.0.12: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v11.0.12"
-# --- v11.0.12: 结束 ---
+# --- v12.0.0: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v12.0.0"
+# --- v12.0.0: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -47,30 +47,89 @@ _timeseries_cache = None
 _timeseries_cache_time = None
 _cache_lock = threading.Lock()
 
-# --- Load/Save (基本保持 v6.1.5，增加失败日志处理) ---
+# --- v12.0.0: 升级 Load/Save (任务 1：支持时间戳) ---
 def load_submitted_alphas():
-    # 保持 v6.1.5 逻辑
+    """ (v12.0.0) 加载 submitted_alphas.json, 返回 dict，包含从旧 list 迁移的逻辑 """
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
-        if not os.path.exists(filepath): return set()
+        if not os.path.exists(filepath): return {} # 返回空 dict
         try:
-            if not os.path.isfile(filepath) or os.path.getsize(filepath) < 2: return set()
-            with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
+            if not os.path.isfile(filepath) or os.path.getsize(filepath) < 2: return {} # 返回空 dict
+            
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Path 1: 数据已经是 dict (新格式)
+            if isinstance(data, dict):
+                return data
+            
+            # Path 2: 数据是 list (旧格式)，必须迁移
             if isinstance(data, (list, set)):
-                return set(data)
-            else: logger.warning(f"[Submit Load] File {filepath} bad format."); return set()
-        except Exception as e: logger.error(f"[Submit Load] Error loading {filepath}: {e}", exc_info=False); return set()
+                logger.warning(f"[Submit Load] Old data format (list) detected in {filepath}. Migrating...")
+                new_dict = {}
+                # 为旧数据设置一个统一的时间戳
+                migration_timestamp = datetime.now(timezone.utc).isoformat()
+                for expr in data:
+                    if isinstance(expr, str):
+                        new_dict[expr] = {"manual_timestamp": migration_timestamp}
+                
+                # 尝试立即保存迁移后的数据
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f_save:
+                        json.dump(new_dict, f_save, indent=4)
+                    logger.info(f"Successfully migrated {len(new_dict)} entries to new dict format.")
+                except Exception as save_e:
+                    logger.error(f"Failed to save migrated data for {filepath}! {save_e}")
+                
+                return new_dict
+            
+            logger.warning(f"[Submit Load] File {filepath} bad format (not dict or list)."); return {}
+        except Exception as e:
+            logger.error(f"[Submit Load] Error loading {filepath}: {e}", exc_info=False); return {}
 
-def save_submitted_alphas(submitted_set):
-    # 保持 v6.1.5 逻辑
+def save_submitted_alphas(submitted_dict):
+    """ (v12.0.0) 保存 submitted_alphas.json (现在保存 dict) """
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
         try:
-            if not isinstance(submitted_set, set):
-                 logger.error(f"[Submit Save] Invalid data type: {type(submitted_set)}."); return False
-            with open(filepath, 'w', encoding='utf-8') as f: json.dump(list(submitted_set), f, indent=4)
+            if not isinstance(submitted_dict, dict): # 检查 dict
+                 logger.error(f"[Submit Save] Invalid data type: {type(submitted_dict)}."); return False
+            with open(filepath, 'w', encoding='utf-8') as f: json.dump(submitted_dict, f, indent=4) # 保存 dict
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
+# --- v12.0.0: 结束 ---
+
+# --- v11.0.11: 新增 hopeful_alphas 的读写函数 ---
+def load_hopeful_alphas_list():
+    """ (v11.0.11) 辅助函数: 安全地读取 hopeful_alphas.json """
+    with hopeful_lock:
+        filepath = HOPEFUL_ALPHAS_FILE
+        if not (os.path.exists(filepath) and os.path.isfile(filepath) and os.path.getsize(filepath) > 2):
+            return []
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return data
+            else:
+                logger.warning(f"[Hopeful Load] {filepath} is not a list. Returning empty.")
+                return []
+        except Exception as e:
+            logger.error(f"[Hopeful Load] Error loading {filepath}: {e}", exc_info=False)
+            return []
+
+def save_hopeful_alphas_list(alphas_list):
+    """ (v11.0.11) 辅助函数: 安全地写入 hopeful_alphas.json """
+    with hopeful_lock:
+        filepath = HOPEFUL_ALPHAS_FILE
+        try:
+            if not isinstance(alphas_list, list):
+                 logger.error(f"[Hopeful Save] Invalid data type: {type(alphas_list)}."); return False
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(alphas_list, f, indent=4)
+            return True
+        except Exception as e:
+            logger.error(f"[Hopeful Save] Error saving {filepath}: {e}", exc_info=False); return False
 
 # --- v11.0.10: 修复的失败日志加载器 ---
 def load_failed_submissions_old_format():
@@ -179,15 +238,20 @@ def save_submission_failures(failures_list):
 
 def load_failed_submissions():
     """
-    (v11.0.5) 兼容 v6.1.5 get_hopeful_alphas_stats。
-    读取新日志，返回失败表达式的 Set。
+    (v11.0.10) 兼容 v6.1.5 get_hopeful_alphas_stats。
+    返回一个 dict map (v12.0.0 修改) 和 set
     """
-    # 这个调用现在更安全，会处理文件不存在/错误的情况
     failures_list = load_submission_failures()
-    failed_expressions_set = set(item['expression'] for item in failures_list if isinstance(item, dict) and 'expression' in item)
-    # logger.info(f"[Failed Set Load] Extracted {len(failed_expressions_set)} unique expressions.")
-    return failed_expressions_set
-# --- v11.0.10: 结束 ---
+    
+    # v12.0.0: 创建一个 Map 用于 O(1) 查找时间戳
+    failed_map = {item['expression']: item.get('timestamp', 'N/A') 
+                  for item in failures_list 
+                  if isinstance(item, dict) and 'expression' in item}
+                  
+    failed_set = set(failed_map.keys())
+    
+    return failed_map, failed_set
+# --- v12.0.0: 结束 ---
 
 def get_service_status(log_file):
     # 保持 v6.1.5 逻辑
@@ -212,26 +276,17 @@ def get_service_status(log_file):
 
 
 def get_hopeful_alphas_stats():
-    # 保持 v6.1.5 逻辑，仅修改了 load_failed_submissions 调用点
+    # v12.0.0: 修复统计 Bug
     stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
               "submittable_pending_count": 0, "successfully_submitted_count": 0,
               "total_submitted_count": 0, "all_alphas": [] }
-    try: # v11.0.5: 保持整体异常捕获
-        submitted_set = load_submitted_alphas()
-        failed_set = load_failed_submissions() # <-- v11.0.10: 使用新的、健壮的实现
+    try: 
+        # --- BEGIN v12.0.0 (Task 1 & 2) ---
+        submitted_dict = load_submitted_alphas() # v12.0.0: 返回 dict
+        failed_map, failed_set = load_failed_submissions() # v12.0.0: 返回 map 和 set
+        # --- END v12.0.0 ---
         
-        # --- v11.0.12: 恢复 v11.0.5 的加载逻辑 (修复“干掉 hopeful 池”Bug) ---
-        alphas = []
-        with hopeful_lock:
-            if os.path.exists(HOPEFUL_ALPHAS_FILE):
-                try:
-                    if os.path.getsize(HOPEFUL_ALPHAS_FILE) > 1:
-                         with open(HOPEFUL_ALPHAS_FILE, 'r', encoding='utf-8') as f:
-                             alphas_data = json.load(f)
-                             if isinstance(alphas_data, list): alphas = alphas_data
-                             else: logger.warning(f"[Stats] hopeful_alphas.json not a list.")
-                except Exception as e: logger.error(f"[Stats] Error reading {HOPEFUL_ALPHAS_FILE}: {e}", exc_info=False)
-        # --- v11.0.12: 结束 ---
+        alphas = load_hopeful_alphas_list() # v11.0.11: 使用辅助函数
 
         if alphas:
             valid_alphas_list = [a for a in alphas if isinstance(a, dict)]
@@ -253,7 +308,6 @@ def get_hopeful_alphas_stats():
 
             # 保持 v6.1.5 的评分逻辑
             def calculate_dashboard_score(report):
-                # ... (v6.1.5 的 calculate_dashboard_score 函数体保持不变) ...
                 if not isinstance(report, dict): return -float('inf')
                 perf = report.get('performance', {})
                 if not isinstance(perf, dict): return -float('inf')
@@ -276,18 +330,16 @@ def get_hopeful_alphas_stats():
             successfully_submitted_count_local = 0
             total_submitted_count_local = 0
 
-            pass_pattern = re.compile(r'(\d+)\s+PASS') # v11.0.11: 移到循环外
-            fail_pattern = re.compile(r'(\d+)\s+FAIL') # v11.0.11: 移到循环外
+            pass_pattern = re.compile(r'(\d+)\s+PASS') 
+            fail_pattern = re.compile(r'(\d+)\s+FAIL') 
 
             for alpha_report in valid_alphas_list:
-                try: # 保持对每个 alpha 的处理加 try-except
+                try: 
                     expression = alpha_report.get('expression')
                     if not expression: continue
                     
-                    # v11.0.12: 恢复 v11.0.10 的逻辑。我们 *必须* 处理所有 Alpha，
-                    # UI/API (如 /api/get_pending_alphas) 会负责过滤
                     is_failed_on_wq = expression in failed_set 
-                    is_submitted = expression in submitted_set
+                    is_submitted = expression in submitted_dict # v12.0.0: 检查 dict keys
 
                     perf_data = alpha_report.get('performance', {});
                     if not isinstance(perf_data, dict): perf_data = {}
@@ -303,17 +355,33 @@ def get_hopeful_alphas_stats():
                     if is_submittable and not is_submitted and not is_failed_on_wq: 
                         stats['submittable_pending_count'] += 1
 
-                    if is_submitted:
+                    # --- BEGIN v12.0.0 BUG 修复 (Task 2) ---
+                    # “总提交数”现在包括已提交的 和 已失败的
+                    if is_submitted or is_failed_on_wq:
                          total_submitted_count_local += 1
-                         if is_successfully_submitted:
+                         if is_successfully_submitted: # 成功的逻辑不变
                              successfully_submitted_count_local += 1
+                    # --- END v12.0.0 BUG 修复 ---
+
+                    # --- BEGIN v12.0.0 (Task 1) ---
+                    # 获取手动操作的时间戳
+                    manual_timestamp = "N/A"
+                    if is_submitted:
+                        manual_timestamp = submitted_dict.get(expression, {}).get('manual_timestamp', 'N/A')
+                    elif is_failed_on_wq:
+                        manual_timestamp = failed_map.get(expression, 'N/A')
+                    # --- END v12.0.0 ---
 
                     processed_alpha_data = {
-                        "expression": expression, "timestamp": alpha_report.get('timestamp', 'N/A'),
-                        "checks_summary": summary_str, "is_submittable": is_submittable,
-                        "is_submitted": is_submitted, "is_failed_on_wq": is_failed_on_wq,
+                        "expression": expression, 
+                        "timestamp": alpha_report.get('timestamp', 'N/A'), # 这是 Alpha *生成* 时间戳
+                        "manual_timestamp": manual_timestamp, # v12.0.0: 这是 *手动操作* 时间戳
+                        "checks_summary": summary_str, 
+                        "is_submittable": is_submittable,
+                        "is_submitted": is_submitted, 
+                        "is_failed_on_wq": is_failed_on_wq,
                         "is_successfully_submitted": is_successfully_submitted,
-                        "dashboard_score": calculate_dashboard_score(alpha_report), # 保持 v6.1.5 评分
+                        "dashboard_score": calculate_dashboard_score(alpha_report), 
                         "performance": perf_data
                     }
                     processed_alphas_temp.append(processed_alpha_data)
@@ -322,7 +390,6 @@ def get_hopeful_alphas_stats():
             stats['all_alphas'] = processed_alphas_temp
             stats['successfully_submitted_count'] = successfully_submitted_count_local
             stats['total_submitted_count'] = total_submitted_count_local
-            # logger.info(f"[Stats] Finished processing {len(processed_alphas_temp)} alphas.")
 
     except Exception as e:
         logger.error(f"[Stats] CRITICAL Error in get_hopeful_alphas_stats: {e}", exc_info=True)
@@ -512,7 +579,7 @@ def download_logs(log_filename):
     try: return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
     except Exception as e: logger.error(f"[API /download_logs] Error: {e}"); return "下载文件时出错", 500
 
-# --- v11.0.5: 更新 Mark/Unmark APIs ---
+# --- v12.0.0: 更新 Mark/Unmark APIs (任务 1) ---
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_alpha_submitted():
     operation = "Mark"; # logger.info(f"[API /{operation.lower()}_submitted]")
@@ -520,10 +587,18 @@ def mark_alpha_submitted():
     data = request.json; expression = data.get('expression')
     if not expression or not isinstance(expression, str): return jsonify(status='error', message='无效的表达式'), 400
     try:
-        submitted_set = load_submitted_alphas(); submitted_set.add(expression);
-        if save_submitted_alphas(submitted_set): return jsonify(status='success', message='标记成功')
-        else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
-    except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
+        submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
+        # v12.0.0: 写入 dict 并添加时间戳
+        submitted_dict[expression] = {"manual_timestamp": datetime.now(timezone.utc).isoformat()}
+        
+        if save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
+            return jsonify(status='success', message='标记成功')
+        else: 
+            logger.error(f"[API /{operation.lower()}_submitted] Save failed."); 
+            return jsonify(status='error', message='保存状态失败'), 500
+    except Exception as e: 
+        logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); 
+        return jsonify(status='error', message='服务器内部错误'), 500
 
 @app.route('/api/unmark_submitted', methods=['POST'])
 def unmark_alpha_submitted():
@@ -532,10 +607,17 @@ def unmark_alpha_submitted():
     data = request.json; expression = data.get('expression')
     if not expression or not isinstance(expression, str): return jsonify(status='error', message='无效的表达式'), 400
     try:
-        submitted_set = load_submitted_alphas(); submitted_set.discard(expression);
-        if save_submitted_alphas(submitted_set): return jsonify(status='success', message='取消标记成功')
-        else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
-    except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
+        submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
+        submitted_dict.pop(expression, None) # v12.0.0: 从 dict 移除
+        
+        if save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
+            return jsonify(status='success', message='取消标记成功')
+        else: 
+            logger.error(f"[API /{operation.lower()}_submitted] Save failed."); 
+            return jsonify(status='error', message='保存状态失败'), 500
+    except Exception as e: 
+        logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); 
+        return jsonify(status='error', message='服务器内部错误'), 500
 
 @app.route('/api/mark_failed_on_wq', methods=['POST'])
 def mark_alpha_failed():
@@ -561,19 +643,19 @@ def mark_alpha_failed():
         # 无论 'found' 是 True 还是 False，这个保存操作都必须执行
         if save_submission_failures(failures_list): # 保存新日志
             
-            # --- BEGIN v11.0.7 二次检查 (自动取消提交) ---
+            # --- BEGIN v12.0.0 (Task 1) 二次检查 (使用新数据结构) ---
             try:
                 logger.info(f"[API /{operation.lower()}] 正在执行二次检查... 从 'submitted_alphas.json' 中移除...")
-                submitted_set = load_submitted_alphas()
-                if expression in submitted_set:
-                    submitted_set.discard(expression)
-                    if not save_submitted_alphas(submitted_set):
+                submitted_dict = load_submitted_alphas() # v12.0.0: 加载 dict
+                if expression in submitted_dict:
+                    submitted_dict.pop(expression, None) # v12.0.0: 从 dict 移除
+                    if not save_submitted_alphas(submitted_dict): # v12.0.0: 保存 dict
                          logger.error(f"[API /{operation.lower()}] 二次检查：保存 submitted_alphas 失败。")
                     else:
                          logger.info(f"[API /{operation.lower()}] 二次检查：成功从 submitted_alphas 中移除。")
             except Exception as e_secondary:
                 logger.error(f"[API /{operation.lower()}] 二次检查时发生意外错误: {e_secondary}")
-            # --- END v11.0.7 ---
+            # --- END v12.0.0 ---
 
             # --- v11.0.12: 移除了 v11.0.11 的“三次检查” (干掉 Hopeful Pool 的 Bug) ---
             
@@ -604,7 +686,7 @@ def unmark_alpha_failed():
             return jsonify(status='success', message='已取消标记失败')
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
-# --- v11.0.5: 结束 ---
+# --- v12.0.0: 结束 ---
 # --- BEGIN: 新增代码 (for /pending page) ---
 @app.route('/pending')
 def pending_page():
@@ -625,7 +707,7 @@ def get_pending_alphas():
         stats = get_hopeful_alphas_stats()
         all_alphas = stats.get('all_alphas', [])
         
-        # v11.0.12: 这里的过滤逻辑现在依赖于 get_hopeful_alphas_stats() 
+        # v12.0.0: 这里的过滤逻辑现在依赖于 get_hopeful_alphas_stats() 
         # (该函数现在会正确地*处理*所有 Alpha)
         pending_alphas = []
         for alpha in all_alphas:
@@ -647,6 +729,7 @@ def get_pending_alphas():
                     "checks_summary": alpha.get('checks_summary'),
                     "dashboard_score": alpha.get('dashboard_score'),
                     "timestamp": alpha.get('timestamp')
+                    # v12.0.0: manual_timestamp 暂时不在 pending 页面显示
                 })
         
         # logger.info(f"[API /api/get_pending_alphas] Found {len(pending_alphas)} pending alphas.")

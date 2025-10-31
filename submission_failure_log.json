@@ -203,5 +203,30 @@
         "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 6)), 20)) - rank(ts_std_dev(open, 25)) * rank(ts_delta(close, 2)) + rank(ts_delta(volume, 5)) * rank(ts_mean(close, 7)) + rank(ts_corr(open, close, 15)) + rank(ts_decay_linear(ts_corr(high, low, 25), 12));",
         "reason": "Self-correlation 0.8928 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
         "timestamp": "2025-10-30T18:39:14.503201+00:00"
+    },
+    {
+        "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 10)), 20)) + rank(ts_decay_linear(ts_corr(high, low, 25), 15)) - rank(ts_std_dev(open, 30) * ts_mean(returns, 5));",
+        "reason": "Self-correlation 0.7671 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-31T01:35:21.469784+00:00"
+    },
+    {
+        "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 7)), 20)) - rank(ts_std_dev(open, 25)) * rank(ts_delta(close, 2)) + rank(ts_delta(volume, 5)) * rank(ts_mean(close, 10)) + rank(ts_corr(open, close, 15)) + rank(ts_decay_linear(ts_corr(high, low, 25), 15));",
+        "reason": "Self-correlation 0.8837 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-31T01:35:56.052171+00:00"
+    },
+    {
+        "expression": "rank(ts_mean(multiply(ts_corr(vwap, returns, 10), ts_delta(volume, 5)), 15)) - rank(ts_std_dev(open, 30)) * rank(ts_delta(close, 1)) + rank(ts_delta(volume, 3)) * rank(ts_mean(close, 5)) + rank(ts_corr(open, close, 10)) + rank(ts_decay_linear(ts_corr(high, low, 20), 10));",
+        "reason": "Self-correlation 0.8914 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-31T01:36:45.129357+00:00"
+    },
+    {
+        "expression": "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 6)), 12)) - rank(ts_std_dev(open, 25)) * rank(ts_delta(close, 2)) + rank(ts_delta(volume, 4)) * rank(ts_mean(close, 7)) + rank(ts_corr(open, close, 15)) + rank(ts_decay_linear(ts_corr(high, low, 25), 12)) + rank(ts_corr(returns, volume, 10)) * rank(ts_delta(vwap, 3));",
+        "reason": "Self-correlation 0.7706 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-31T01:54:54.219178+00:00"
+    },
+    {
+        "expression": "rank(multiply(ts_corr(vwap, volume, 15), ts_mean(returns, 10))) - rank(ts_delta(close, 5)) * rank(ts_std_dev(adv20, 20)) + rank(ts_decay_linear(ts_corr(high, low, 10), 5));",
+        "reason": "Self-correlation 0.7114 is above cutoff of 0.7 and Sharpe not better by 10.0% or more.",
+        "timestamp": "2025-10-31T02:00:22.371270+00:00"
     }
 ]

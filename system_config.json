@@ -1,12 +1,25 @@
 {
-  "comment": "WQminer  \u5168\u5c40\u914d\u7f6e\u6587\u4ef6",
-  "wq_api_cooldown": 45,
-  "llm_api_cooldown": 3600,
+  "comment": "WQminer v13.1 (Dual Watchdog) 全局配置文件",
   "miner_concurrency": 3,
-  "miner_sleep": 90,
   "evolver_concurrency": 2,
-  "evolver_sleep": 60,
   "producer_queue_full_sleep": 5,
+  "hopeful_pool_max_size": 200,
+  "llm_budget": {
+    "comment": "看门狗 A: LLM API (Gemini) 每日预算",
+    "daily_budget_limit": 2000,
+    "budget_used_today": 79,
+    "budget_last_used_date_utc": "2025-11-03"
+  },
+  "wq_api_limiter": {
+    "comment": "看门狗 B: WQ API 动态令牌桶 (TPM)",
+    "current_tpm_limit": 200,
+    "min_tpm_limit": 15,
+    "max_tpm_limit": 200,
+    "tpm_increment_on_success": 1,
+    "tpm_decrement_factor_on_429": 0.75,
+    "wq_429_cooldown_seconds": 60,
+    "last_failure_timestamp": 1762174326.303695
+  },
   "evolver_search_space": {
     "universe": [
       "TOPSP500",

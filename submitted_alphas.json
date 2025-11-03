@@ -214,5 +214,17 @@
     "rank(ts_corr(close, vwap, 10)) * rank(ts_mean(high, 5)) - rank(ts_std_dev(volume, 15) * ts_delta(close, 3) * rank(ts_mean(open, 7)) * rank(ts_delta(vwap, 2)) * rank(ts_mean(close, 10))) * rank(ts_mean(high, 3)) * rank(ts_decay_linear(returns, 5));": {
         "manual_timestamp": "2025-10-31T03:14:59.353523+00:00",
         "reason": "MANUAL_ADD"
+    },
+    "rank(ts_mean(multiply(ts_corr(close, volume, 15), ts_delta(vwap, 7)), 20)) - rank(ts_std_dev(open, 35)) * rank(ts_delta(close, 2)) + rank(ts_delta(volume, 5)) * rank(ts_mean(close, 8)) + rank(ts_corr(open, close, 12)) + rank(ts_decay_linear(ts_corr(high, low, 25), 15)) + rank(ts_corr(close, returns, 10)) * rank(ts_delta(volume, 3)) + rank(ts_decay_linear(ts_corr(vwap, returns, 5), 10)) - rank(ts_std_dev(vwap, 30));": {
+        "manual_timestamp": "2025-11-03T00:54:43.250349+00:00",
+        "reason": "MANUAL_ADD"
+    },
+    "rank(ts_decay_linear(ts_corr(high, low, 15), 10)) * rank(ts_mean(volume, 20) / ts_mean(volume, 50)) - rank(ts_std_dev(returns, 10)) * rank(ts_delta(vwap, 3)) * rank(ts_mean(close, 10));": {
+        "manual_timestamp": "2025-11-03T00:56:21.827404+00:00",
+        "reason": "MANUAL_ADD"
+    },
+    "rank(ts_mean(multiply(ts_decay_linear(ts_corr(vwap, volume, 15), 10), ts_mean(returns, 5)), 20)) + rank(ts_delta(volume, 10)) * rank(ts_mean(vwap, 10)) - rank(ts_std_dev(high, 25)) * rank(ts_delta(close, 5)) + rank(ts_corr(open, close, 15)) + rank(ts_decay_linear(ts_corr(high, low, 30), 15)) + rank(ts_std_dev(volume, 10)) + rank(ts_decay_linear(ts_corr(returns, volume, 10), 5)) - rank(ts_std_dev(returns, 20));": {
+        "manual_timestamp": "2025-11-03T01:02:11.857049+00:00",
+        "reason": "MANUAL_ADD"
     }
 }

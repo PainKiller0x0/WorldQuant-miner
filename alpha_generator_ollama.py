@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v12.0.0 (Feedback Loop) ---
+# --- alpha_generator_ollama.py v13.0 (Dual Watchdog) ---
 import argparse
 import logging
 import json
@@ -6,7 +6,7 @@ import os
 import time
 import requests # 保留，用于 __main__ 中的 WQ 客户端初始化异常捕获
 import random
-from datetime import datetime, timezone # v12.0: 增加 timezone
+from datetime import datetime, timezone 
 import threading
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,9 +19,9 @@ from wq_client import WorldQuant
 from llm_provider import LLMProvider
 # --- v9.0 结束 ---
 
-# --- v12.0: 版本号 ---
-CURRENT_GENERATOR_VERSION = "v12.0.0 (Feedback Loop)"
-# --- v12.0: 结束 ---
+# --- v13.0: 版本号 ---
+CURRENT_GENERATOR_VERSION = "v13.0.0 (Dual Watchdog)"
+# --- v13.0: 结束 ---
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class AlphaGenerator:
         self.load_submission_failures() # 初始化时加载一次
         # --- v12.0: 结束 ---
 
-        self._rate_limit_until = 0
+        # v13.0: 移除 self._rate_limit_until，由看门狗动态处理
 
         self.invalid_functions_file = INVALID_FUNCTIONS_FILE
         self.blacklist_counts = self.load_blacklist_counts()
@@ -99,20 +99,9 @@ class AlphaGenerator:
         self.strategy_queue = queue.Queue(maxsize=self.queue_max_size)
         self.consumer_threads = []
 
-    def _enter_cooldown(self, reason="Rate Limit"):
-        config = load_system_config() # v9.0: 使用导入的函数
-        duration_seconds = 3600 # 默认回退
-        
-        if reason == "WorldQuant 429 Rate Limit":
-            duration_seconds = config.get("wq_api_cooldown", 30)
-        elif reason in ["LLM Gateway 500 Error", "LLM 429 Rate Limit"]:
-            duration_seconds = config.get("llm_api_cooldown", 3600)
-        else:
-            duration_seconds = config.get("wq_api_cooldown", 60)
-
-        self._rate_limit_until = time.time() + duration_seconds
-        duration_minutes = duration_seconds / 60
-        logger.warning(f"检测到 {reason}。脚本将进入冷却期 {duration_minutes:.0f} 分钟 ({duration_seconds} 秒)，直到 {datetime.fromtimestamp(self._rate_limit_until).strftime('%Y-%m-%d %H:%M:%S')}")
+    # --- v13.0: 移除 _enter_cooldown 函数 ---
+    # (此功能现已由 wq_client 中的看门狗 B 动态处理)
+    # --- v13.0 结束 ---
 
     def _mutate_settings(self, settings_dict: dict) -> dict:
         try:
@@ -171,10 +160,6 @@ class AlphaGenerator:
     def load_submission_failures(self):
         """
         (v12.0) 从 submission_failure_log.json 加载“地面真相”失败数据。
-        这会填充三个缓存：
-        - self.submission_failures_cache (原始列表)
-        - self.submission_failures_set (用于快速 O(1) 查找)
-        - self.submission_failures_map (用于查找失败原因)
         """
         filepath = self.submission_failure_log_file
         with self.failure_log_lock:
@@ -500,24 +485,28 @@ class AlphaGenerator:
     # --- v12.0: 签名变更, 增加 failed_examples ---
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
         """
-        v12.0: 委托 LLMProvider 生成 (Prompt 已更新，包含失败案例)。
+        v13.0: 委托 LLMProvider 生成, 增加 BUDGET_EXHAUSTED 信号处理
         """
         # --- v12.0: 传递 failed_examples ---
         result = self.llm.generate_alpha_idea(fields, operators, guidance, failed_examples)
         
+        # --- v13.0: 增加 BUDGET_EXHAUSTED 信号处理 ---
+        if result == "BUDGET_EXHAUSTED":
+            logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 BUDGET_EXHAUSTED (Discover)。")
+            return "BUDGET_EXHAUSTED"
+        # --- v13.0 结束 ---
+        
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Discover)。")
-            self._enter_cooldown(reason="LLM 429 Rate Limit")
-            return None
+            # v13.0: 不再调用 _enter_cooldown
+            return "RATE_LIMIT"
         
         return result
 
     # --- v12.0: 重构, 加入“地面真相”失败检查 ---
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
         """
-        v12.0: 委托 LLM 进化 Expression，并在 Python 中强制突变 Settings。
-               如果父本在“地面真相”失败日志中，则添加强制突变指导。
-               如果不在，但模拟 Self-Corr 高 (v9.4 逻辑)，则添加次要指导。
+        v13.0: 委托 LLM 进化，增加 BUDGET_EXHAUSTED 信号处理
         """
         # 1. 确定父本设置 (用于继承和突变)
         if 'performance' not in base_alpha_obj or not base_alpha_obj['performance']:
@@ -558,10 +547,16 @@ class AlphaGenerator:
         # 清理掉特殊指导键，以防意外保存
         base_alpha_obj.pop('_special_guidance_high_corr', None)
 
+        # --- v13.0: 增加 BUDGET_EXHAUSTED 信号处理 ---
+        if result == "BUDGET_EXHAUSTED":
+            logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 BUDGET_EXHAUSTED (Evolve)。")
+            return "BUDGET_EXHAUSTED"
+        # --- v13.0 结束 ---
+
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Evolve)。")
-            self._enter_cooldown(reason="LLM 429 Rate Limit")
-            return None
+            # v13.0: 不再调用 _enter_cooldown
+            return "RATE_LIMIT"
         
         if not isinstance(result, dict) or not result.get('expression'):
             logger.warning("[AlphaGenerator] LLM 未能返回有效的进化 Expression 字典。")
@@ -745,28 +740,27 @@ class AlphaGenerator:
                 logger.info(f"取得策略: {idea_expr[:60]}... (队列剩余: {self.strategy_queue.qsize()})")
                 log_report = {"expression": idea_expr, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-                # 2. 执行 WQ 测试 (v9.0: self.wq 是已初始化的客户端)
+                # 2. 执行 WQ 测试 (v13.0: test_alpha 内部处理看门狗 B)
                 result = self.wq.test_alpha(idea_expr, strategy['settings'])
 
-                # 3. 处理 WQ 429 Rate Limit
+                # --- v13.0: 重构 WQ 429 Rate Limit 处理 ---
                 if result == "RATE_LIMIT":
                     logger.warning(f"遭遇 WQ 429 (针对: {idea_expr})。")
                     
-                    config = load_system_config() # v9.0: 使用导入的函数
-                    current_wq_cooldown = config.get("wq_api_cooldown", 30)
-                    logger.info(f"触发 {current_wq_cooldown}s 冷却... 策略将放回队列重试。")
-                    self._enter_cooldown(reason="WorldQuant 429 Rate Limit")
-                    time.sleep(current_wq_cooldown)
+                    # (v13.0: 看门狗 B (wq_client) 已自动处理冷却和 TPM 降低)
+                    logger.info(f"[Worker] 看门狗 B 已激活。策略将放回队列重试。")
+                    # v13.0: 移除 _enter_cooldown 和 time.sleep
 
                     try:
                         self.strategy_queue.put(strategy)
                         logger.info(f"策略 {idea_expr[:60]}... 已放回队列。")
                     except queue.Full:
                          logger.error(f"尝试放回策略 {idea_expr[:60]}... 时队列已满！该策略将被丢弃。")
-                         self.strategy_queue.task_done() # v7.8.3 修复
-                         continue
                     
-                    continue # v7.8.3 修复
+                    # v13.0: 必须在 task_done() 之前 continue
+                    self.strategy_queue.task_done()
+                    continue 
+                # --- v13.0 结束 ---
 
                 # 4. 处理 ERROR (黑名单逻辑)
                 if isinstance(result, dict) and result.get("status") == "ERROR":
@@ -800,6 +794,7 @@ class AlphaGenerator:
                     else:
                         logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...")
                     
+                    self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
                     continue 
 
                 # 5. 处理 TIMEOUT
@@ -807,6 +802,7 @@ class AlphaGenerator:
                     log_report["status"] = result
                     self.log_tested_alphas([log_report])
                     logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
+                    self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
                     continue 
 
                 # 6. 处理 COMPLETE
@@ -815,6 +811,7 @@ class AlphaGenerator:
                     alpha_id = result.get("id")
                     if not isinstance(is_stats, dict) or not alpha_id:
                         logger.warning(f"模拟返回不完整 (缺少 'is' 或 'id')，已丢弃: {idea_expr}")
+                        self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
                         continue 
 
                     checks = is_stats.get("checks", [])
@@ -895,7 +892,8 @@ class AlphaGenerator:
                 self.strategy_queue.task_done()
 
 
-    def run(self, mode='discover', sleep_time=10):
+    # --- v13.0: 重构 run 循环, 移除 sleep_time ---
+    def run(self, mode='discover'):
 
         logger.info(f"Alpha 生成器启动 | 版本: {CURRENT_GENERATOR_VERSION} | 模式: {mode.upper()} | 并发 Workers: {self.concurrency_level} | 队列大小: {self.queue_max_size}")
 
@@ -903,13 +901,14 @@ class AlphaGenerator:
         self.operators = self.wq.get_operators()
 
         if self.operators == "RATE_LIMIT":
-            logger.critical("获取操作符时遭遇 WorldQuant 429，触发冷却。")
-            self._enter_cooldown(reason="WorldQuant 429 Rate Limit")
+            logger.critical("获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
+            # v13.0: 移除 _enter_cooldown
 
         if not self.fields or not self.operators or self.operators == "RATE_LIMIT":
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
             if self.operators != "RATE_LIMIT":
                 time.sleep(60)
+            # (如果 operators 是 RATE_LIMIT, wq_client 内部已设置冷却, 此处无需 sleep)
 
         logger.info(f"正在启动 {self.concurrency_level} 个消费者 (worker) 线程...")
         for i in range(self.concurrency_level):
@@ -926,20 +925,17 @@ class AlphaGenerator:
 
         while True:
             try:
-                # 1. 检查 LLM 冷却状态
-                if time.time() < self._rate_limit_until:
-                    remaining = self._rate_limit_until - time.time()
-                    logger.info(f"[生产者] 当前处于冷却期。将在 {remaining/60:.1f} 分钟后恢复...")
-                    time.sleep(min(remaining, 300))
-                    continue
+                # 1. (v13.0) 移除旧的冷却检查 (if time.time() < self._rate_limit_until)
 
                 # 2. 检查 WQ 字段/操作符
-                self.fields = self.wq.get_data_fields()
-                self.operators = self.wq.get_operators()
+                self.fields = self.wq.get_data_fields() # (本地, 无 API 调用)
+                self.operators = self.wq.get_operators() # (有 API 调用, 受看门狗 B 保护)
+                
                 if self.operators == "RATE_LIMIT":
-                     logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429，触发冷却。")
-                     self._enter_cooldown(reason="WorldQuant 429 Rate Limit")
-                     continue
+                     logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
+                     # v13.0: 移除 _enter_cooldown
+                     # (看门狗 B 已设置冷却，让循环继续，将在队列检查处休眠或在下次 API 调用时休眠)
+                     
                 if not self.fields or not self.operators:
                      logger.error("[生产者] 无法获取字段或操作符，将在60秒后重试。")
                      time.sleep(60)
@@ -983,7 +979,7 @@ class AlphaGenerator:
 
                 logger.info(f"[生产者] [{mode.upper()}] 开始生成 1 个新 Alpha... (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")
 
-                # 5. 生成新策略
+                # 5. 生成新策略 (v13.0: 受看门狗 A 保护)
                 idea = None
                 if mode == 'discover':
                     # --- v12.0: 注入失败案例 ---
@@ -996,11 +992,23 @@ class AlphaGenerator:
                 elif mode == 'evolve':
                     if not evolution_seeds:
                          logger.warning("[生产者] 进化模式种子列表为空，跳过本轮生成。")
-                         time.sleep(sleep_time)
+                         time.sleep(1) # v13.0: 短暂休眠以防空转
                          continue
                     base_alpha_obj = random.choice(evolution_seeds)
                     # --- v12.0: generate_evolved_alpha_idea 内部已更新 ---
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) 
+
+                # --- v13.0: 处理看门狗信号 ---
+                if idea == "BUDGET_EXHAUSTED":
+                    logger.critical(f"[生产者] 看门狗 A: LLM 预算已用尽。生产者线程将休眠 15 分钟...")
+                    time.sleep(900) # 休眠15分钟
+                    continue # 返回循环顶部
+                
+                if idea == "RATE_LIMIT":
+                    logger.warning(f"[生产者] LLM API 速率限制 (非预算问题)。生产者线程将休眠 5 分钟...")
+                    time.sleep(300) # 休眠5分钟
+                    continue # 返回循环顶部
+                # --- v13.0 结束 ---
 
                 # 6. 预检
                 if isinstance(idea, dict) and idea.get("expression"):
@@ -1031,10 +1039,11 @@ class AlphaGenerator:
                          logger.error("[生产者] 尝试放入策略时队列已满！")
 
                 elif idea is None:
-                     logger.warning("[生产者] LLM未能生成有效的 Alpha 策略 (或已进入冷却)。")
+                     logger.warning("[生产者] LLM未能生成有效的 Alpha 策略。")
                 
-                logger.info(f"[生产者] 本轮生成结束。等待{sleep_time}秒开始下一轮...")
-                time.sleep(sleep_time)
+                # --- v13.0: 移除末尾的 time.sleep(sleep_time) ---
+                # 循环将立即继续，由队列或看门狗B进行限速
+                # --- v13.0 结束 ---
 
             except Exception as e:
                 logger.critical(f"[生产者] 循环发生致命错误: {e}", exc_info=True)
@@ -1042,7 +1051,7 @@ class AlphaGenerator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v12.0 (Feedback Loop)') # v12.0
+    parser = argparse.ArgumentParser(description='Alpha Generator v13.0 (Dual Watchdog)') # v13.0
     parser.add_argument('--user-id', type=str, required=True, help="WorldQuant User ID (email)")
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")
@@ -1057,18 +1066,18 @@ if __name__ == "__main__":
     logger.info(f"正在加载 {args.api_config_path} (用于 LLM) 和 system_config.json (用于服务)...")
     config = load_system_config()
     
+    # --- v13.0: 移除 sleep_time ---
     if args.mode == 'discover':
         concurrency = config.get("miner_concurrency", 1)
-        sleep_time = config.get("miner_sleep", 120)
-        logger.info(f"[v8.0 Config] 启动 Miner (discover) 模式: Concurrency={concurrency}, Sleep={sleep_time}s")
+        logger.info(f"[v13.0 Config] 启动 Miner (discover) 模式: Concurrency={concurrency}")
     elif args.mode == 'evolve':
         concurrency = config.get("evolver_concurrency", 1)
-        sleep_time = config.get("evolver_sleep", 120)
-        logger.info(f"[v8.0 Config] 启动 Evolver (evolve) 模式: Concurrency={concurrency}, Sleep={sleep_time}s")
+        logger.info(f"[v13.0 Config] 启动 Evolver (evolve) 模式: Concurrency={concurrency}")
     else:
-        logger.error(f"未知的模式: {args.mode}。使用默认值 1/120。")
+        logger.error(f"未知的模式: {args.mode}。使用默认值 1。")
         concurrency = 1
-        sleep_time = 120
+    # --- v13.0 结束 ---
+
 
     MAX_INIT_RETRIES = 5
     SHORT_SLEEP = 30
@@ -1083,14 +1092,17 @@ if __name__ == "__main__":
             logger.info("WorldQuant 客户端初始化成功。")
             retry_count = 0
         except requests.exceptions.RequestException as e:
+            # v13.0: 初始化失败时，看门狗 B 已自动处理冷却，我们只需等待
             if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
                 logger.critical(f"初始化 WorldQuant 客户端时检测到 429 Rate Limit: {e}。")
-                
+                logger.warning(f"[Watchdog B] 看门狗 B 已激活。将在下次重试时自动处理冷却...")
+                # (不需要 sleep，wq_client 内部已记录
+                # v13.0: 但如果认证失败，我们需要 sleep。
                 config_init = load_system_config()
-                wq_cooldown_init = config_init.get("wq_api_cooldown", 30)
+                wq_cooldown_init = config_init.get("wq_api_limiter", {}).get("seconds_to_wait_after_429", 60)
                 logger.warning(f"将进入 {wq_cooldown_init} 秒冷却期...")
                 time.sleep(wq_cooldown_init)
-
+                
                 retry_count = 0
                 continue
 
@@ -1110,7 +1122,8 @@ if __name__ == "__main__":
                                  batch_size=args.batch_size,
                                  concurrency_level=concurrency)
 
-        generator.run(mode=args.mode, sleep_time=sleep_time)
+        # v13.0: 移除 sleep_time
+        generator.run(mode=args.mode)
 
     except Exception as e:
         logger.critical(f"生成器运行时发生致命错误: {e}", exc_info=True)

@@ -10,6 +10,7 @@ api_config.json
 results/
 logs/
 *.log
+hopeful_alphas.json
 
 # Python
 __pycache__/

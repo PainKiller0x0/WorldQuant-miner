@@ -20,7 +20,7 @@ services:
       - ./alpha_generator_ollama.py:/app/alpha_generator_ollama.py:ro
       - ./invalid_functions.json:/app/invalid_functions.json
       - ./system_config.json:/app/system_config.json
-      # --- v9.0 模块化修复 (新增以下 3 行) ---
+      # --- v9.0 模块化修复 (已存在, v13.0 依赖此配置) ---
       - ./utils.py:/app/utils.py:ro
       - ./wq_client.py:/app/wq_client.py:ro
       - ./llm_provider.py:/app/llm_provider.py:ro

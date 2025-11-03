@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldQuant Miner 仪表盘 v11.0.15</title>
+    <title>WorldQuant Miner 仪表盘 v13.1.0 (Watchdog UI)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -70,6 +70,34 @@
         .status-RUNNING { color: #28a745; }
         .status-STALLED { color: #dc3545; }
         .status-NOT-FOUND, .status-ERROR, .status-UNKNOWN { color: #ffc107; }
+        
+        /* v13.1: 看门狗状态样式 */
+        .watchdog-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.95em;
+        }
+        .watchdog-item {
+             margin-top: 10px;
+        }
+        .watchdog-item strong {
+            color: #f1f1f1;
+            display: inline-block;
+            min-width: 110px;
+        }
+        .watchdog-item span {
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-weight: bold;
+            color: #4dabf7; /* 蓝色 */
+        }
+        .watchdog-item span.status-ok {
+            color: #28a745; /* 绿色 */
+        }
+        .watchdog-item span.status-cooldown {
+            color: #dc3545; /* 红色 */
+        }
+        
         .log-container {
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
             background-color: #1a1a1a;
@@ -173,7 +201,6 @@
         .sort-icon.asc { border-bottom: 5px solid #fff; }
         .sort-icon.desc { border-top: 5px solid #fff; }
         
-        /* v11.0.9: 需求 1 - 行底色 */
         #alphaTable tbody tr:hover {
             background-color: rgba(255, 255, 255, 0.1) !important;
         }
@@ -233,7 +260,7 @@
             color: #fff;
             text-align: center;
         }
-        .status-tag.submittable { background-color: #f0ad4e; color: #111; } /* v11.0.9: 改回黄色 */
+        .status-tag.submittable { background-color: #f0ad4e; color: #111; } 
         .status-tag.submitted-ok { background-color: #28a745; }
         .status-tag.submitted-fail { background-color: #dc3545; }
         .status-tag.submitted-pending { background-color: #007bff; }
@@ -301,7 +328,6 @@
             margin-top: 10px;
         }
         
-        /* --- v11.0.10: 滚动按钮 (从 pending.html 引入) --- */
         .scroll-buttons {
             position: fixed;
             bottom: 20px;
@@ -326,7 +352,6 @@
             background-color: #007bff;
             opacity: 1;
         }
-        /* --- v11.0.10: 结束 --- */
     </style>
 </head>
 <body>
@@ -358,7 +383,34 @@
                 <p>最后心跳: <span id="evolverLastSeen">Never</span></p>
                 <div id="evolverLogs" class="log-container">Loading...</div>
             </div>
-        </div>
+            
+            <div class="status-card">
+                <h3>Watchdog 动态状态</h3>
+                <div class="watchdog-grid">
+                    <div class="watchdog-item">
+                        <strong>LLM 预算:</strong>
+                        <span id="llmBudgetUsed">...</span>
+                    </div>
+                     <div class="watchdog-item">
+                        <strong>LLM 预算日期:</strong>
+                        <span id="llmBudgetDate">...</span>
+                    </div>
+                    <div class="watchdog-item">
+                        <strong>WQ TPM:</strong>
+                        <span id="wqTpmLimit">...</span>
+                    </div>
+                    <div class="watchdog-item">
+                        <strong>WQ 冷却:</strong>
+                        <span id="wqCooldownStatus" class="status-ok">...</span>
+                    </div>
+                </div>
+                 <div id="watchdogLogs" class="log-container" style="height: 110px; margin-top: 15px;">
+                    - LLM 预算: Gemini API (UTC) 每日调用。<br>
+                    - WQ TPM: 动态调整的每分钟请求上限。<br>
+                    - WQ 冷却: 遭遇 429 后的强制冷却状态。
+                 </div>
+            </div>
+            </div>
 
         <div class="summary-card" style="margin-top: 20px;">
             <h2>Alpha 统计</h2>
@@ -439,9 +491,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             fetchStatus();
             fetchVersionInfo();
-            setInterval(fetchStatus, 30000); // 每 30 秒自动刷新
+            setInterval(fetchStatus, 30000); 
             
-            // v11.0.10: 绑定滚动按钮
             setupScrollButtons();
 
             document.getElementById('statusFilter').addEventListener('change', renderTable);
@@ -450,7 +501,7 @@
             document.querySelectorAll('#alphaTable th[data-sort-key]').forEach(th => {
                 th.addEventListener('click', () => {
                     const sortKey = th.getAttribute('data-sort-key');
-                    if (sortKey === 'actions') return; // 操作列不支持排序
+                    if (sortKey === 'actions') return; 
                     
                     if (currentSortKey === sortKey) {
                         currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
@@ -463,10 +514,7 @@
                 });
             });
             
-            // --- BEGIN v11.0.14: 修复事件监听器叠加 Bug ---
-            // 使用事件委托，将 *一个* 监听器绑定到永不刷新的父元素 `alphaTableBody`
             setupActionHandlers(document.getElementById('alphaTableBody'));
-            // --- END v11.0.14 ---
         });
 
         function fetchVersionInfo() {
@@ -494,8 +542,14 @@
                     return response.json();
                 })
                 .then(data => {
+                    // v13.1: 更新服务状态
                     updateServiceStatus('miner', data.miner);
                     updateServiceStatus('evolver', data.evolver);
+                    
+                    // v13.1: 更新看门狗状态
+                    if (data.watchdog_status) {
+                        updateWatchdogStatus(data.watchdog_status);
+                    }
                     
                     const stats = data.hopeful_alphas;
                     if (stats.error) {
@@ -526,6 +580,7 @@
                     console.error('Error fetching status:', error);
                     updateServiceStatus('miner', { status: 'ERROR', logs: error.message, last_seen: 'N/A' });
                     updateServiceStatus('evolver', { status: 'ERROR', logs: error.message, last_seen: 'N/A' });
+                    updateWatchdogStatus({ error: error.message }); // v13.1
                     document.getElementById('loading').textContent = `数据加载失败: ${error.message}`;
                 });
         }
@@ -540,7 +595,6 @@
             lastSeenEl.textContent = data.last_seen || 'Error';
             logsEl.innerHTML = data.logs ? escapeHTMLLogs(data.logs) : 'No logs found.';
             
-            // v6.1.5: 添加下载链接
             const allowed_logs = ['miner.log', 'evolver.log', 'archaeologist.log', 'cron.log', 'miner_issues.log', 'evolver_issues.log'];
             if (data.status !== "NOT FOUND") {
                  let log_filename = `${serviceName}.log`;
@@ -550,49 +604,54 @@
             }
         }
         
-        // --- BEGIN v11.0.15: 修复 getAlphaStatus 逻辑 Bug ---
-        function getAlphaStatus(alpha) {
-            // 1. 优先检查失败状态 (Priority check for failure)
-            if (alpha.is_failed_on_wq) {
-                // 无论是否可提交，只要在失败列表里，它就是 "submitted-fail"
-                return "submitted-fail";
+        // --- v13.1: 新增看门狗状态更新函数 ---
+        function updateWatchdogStatus(data) {
+            const llmBudgetEl = document.getElementById('llmBudgetUsed');
+            const llmDateEl = document.getElementById('llmBudgetDate');
+            const wqTpmEl = document.getElementById('wqTpmLimit');
+            const wqCooldownEl = document.getElementById('wqCooldownStatus');
+            
+            if (data.error) {
+                llmBudgetEl.textContent = "Error";
+                llmDateEl.textContent = "Error";
+                wqTpmEl.textContent = "Error";
+                wqCooldownEl.textContent = "Error";
+                wqCooldownEl.className = "status-cooldown"; // Red
+                return;
             }
 
-            // 2. 如果没失败，再检查是否可提交
-            if (alpha.is_submittable) {
-                if (alpha.is_submitted) {
-                    // (is_failed_on_wq is false here)
-                    if (alpha.is_successfully_submitted) {
-                        return "submitted-ok";
-                    } else {
-                        return "submitted-pending"; // 提交了，但尚未确认成功
-                    }
-                } else {
-                    // (is_failed_on_wq is false here)
-                    return "submittable"; // 待提交
-                }
+            llmBudgetEl.textContent = `${data.llm_budget_used} / ${data.llm_budget_limit}`;
+            llmDateEl.textContent = data.llm_budget_date_utc;
+            wqTpmEl.textContent = `${data.wq_current_tpm_limit} TPM`;
+            
+            if (data.wq_cooldown_status === 'OK') {
+                wqCooldownEl.textContent = "OK";
+                wqCooldownEl.className = "status-ok"; // Green
             } else {
-                // 既没失败，也不可提交
-                return "not-submittable";
+                wqCooldownEl.textContent = `冷却中 (${data.wq_cooldown_remaining_sec}s)`;
+                wqCooldownEl.className = "status-cooldown"; // Red
             }
         }
-        // --- END v11.0.15 ---
+        // --- v13.1: 结束 ---
         
-        // v11.0.8: 颜色需求 2 - 新增检查摘要格式化函数
+        // (v13.1: getAlphaStatus 保持 v11.0.15 不变)
+        function getAlphaStatus(alpha) {
+            if (alpha.is_failed_on_wq) { return "submitted-fail"; }
+            if (alpha.is_submittable) {
+                if (alpha.is_submitted) {
+                    if (alpha.is_successfully_submitted) { return "submitted-ok"; } 
+                    else { return "submitted-pending"; }
+                } else { return "submittable"; }
+            } else { return "not-submittable"; }
+        }
+        
         function formatChecksSummaryForDashboard(summaryStr) {
-            if (typeof summaryStr !== 'string' || summaryStr === '') {
-                return `<span class="check-tag unknown">N/A</span>`;
-            }
-            
-            // 使用 regex find and replace 来添加 class
-            let html = escapeHTML(summaryStr); // 先转义
+            if (typeof summaryStr !== 'string' || summaryStr === '') { return `<span class="check-tag unknown">N/A</span>`; }
+            let html = escapeHTML(summaryStr); 
             html = html.replace(/(\d+\s+PASS)/gi, '<span class="check-tag pass">$1</span>');
             html = html.replace(/(\d+\s+FAIL)/gi, '<span class="check-tag fail">$1</span>');
             html = html.replace(/(\d+\s+PENDING)/gi, '<span class="check-tag pending">$1</span>');
-            
-            // 添加换行符
             html = html.replace(/<\/span>\s*(?=<span)/g, '</span><br>');
-            
             return html;
         }
 
@@ -607,7 +666,6 @@
                 case 'not-submittable': statusText = '不可提交'; break;
             }
             
-            // v11.0.7: 修复复制功能 - 确保 copy-value 存在且格式正确
             const fitness_display = alpha.fitness.toFixed(4);
             const sharpe_display = alpha.sharpe.toFixed(4);
             const returns_display = (alpha.returns * 100).toFixed(2) + '%';
@@ -618,25 +676,19 @@
             const returns_copy = (alpha.returns * 100).toFixed(2);
             const turnover_copy = (alpha.turnover * 100).toFixed(2);
             
-            // v11.0.12: 恢复时间戳格式化 (逻辑同 pending.html)
             let timestampDisplay = 'N/A';
             if (alpha.timestamp && alpha.timestamp !== 'N/A') {
-                try {
-                    timestampDisplay = new Date(alpha.timestamp).toLocaleString();
-                } catch(e) { timestampDisplay = alpha.timestamp; }
+                try { timestampDisplay = new Date(alpha.timestamp).toLocaleString(); } catch(e) { timestampDisplay = alpha.timestamp; }
             }
 
             let actionsHtml = '';
             if (alpha.is_submittable && !alpha.is_submitted && !alpha.is_failed_on_wq) {
-                // 状态: 待提交
                 actionsHtml += `<button class="btn-action submit" data-action="mark-submitted" title="标记为已手动提交">标记提交</button>`;
                 actionsHtml += `<button class="btn-action fail" data-action="mark-failed" title="标记为在 WQ 平台提交失败">标记失败</button>`;
             } else if (alpha.is_submitted && !alpha.is_failed_on_wq) {
-                 // 状态: 已提交 (成功) 或 已提交 (待确认)
                 actionsHtml += `<button class="btn-action" data-action="unmark-submitted" title="撤销‘已提交’状态">取消提交</button>`;
                 actionsHtml += `<button class="btn-action fail" data-action="mark-failed" title="标记为在 WQ 平台提交失败">标记失败</button>`;
             } else if (alpha.is_failed_on_wq) {
-                // 状态: 已提交 (WQ 失败)
                 actionsHtml += `<button class="btn-action" data-action="unmark-failed" title="撤销‘WQ 失败’状态">取消失败</button>`;
             } else {
                  actionsHtml = '<span>N/A</span>';
@@ -691,56 +743,32 @@
             });
 
             filteredAlphas.sort((a, b) => {
-                let valA = a[currentSortKey];
-                let valB = b[currentSortKey];
-                
-                // v11.0.12: 确保时间戳排序正确
+                let valA = a[currentSortKey]; let valB = b[currentSortKey];
                 if (currentSortKey === 'timestamp') {
-                    // 'N/A' 或无效日期排在最后
                     valA = (valA && valA !== 'N/A') ? new Date(valA).getTime() : 0;
                     valB = (valB && valB !== 'N/A') ? new Date(valB).getTime() : 0;
-                } else if (typeof valA === 'string') {
-                    valA = valA.toLowerCase();
-                }
-                if (typeof valB === 'string') {
-                    valB = valB.toLowerCase();
-                }
-
+                } else if (typeof valA === 'string') { valA = valA.toLowerCase(); }
+                if (typeof valB === 'string') { valB = valB.toLowerCase(); }
                 if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
                 if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
                 return 0;
             });
 
             if (filteredAlphas.length === 0) {
-                 // v11.0.12: 修复 colspan
                  tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px;">没有找到匹配的 Alphas。</td></tr>';
                  return;
             }
             
             filteredAlphas.forEach(alpha => {
                 const row = document.createElement('tr');
-                
-                // --- BEGIN v11.0.9 需求 1: 添加行底色 ---
                 const status = alpha.status;
-                if (status === 'submittable') {
-                    row.className = 'row-status-submittable';
-                } else if (status === 'submitted-ok') {
-                    row.className = 'row-status-submitted-ok';
-                } else if (status === 'submitted-fail') {
-                    row.className = 'row-status-submitted-fail';
-                } else if (status === 'submitted-pending') {
-                    // 待确认的也用浅蓝色
-                    row.className = 'row-status-submittable'; // (与 'submittable' 共享样式)
-                }
-                // --- END v11.0.9 ---
-
+                if (status === 'submittable') { row.className = 'row-status-submittable'; } 
+                else if (status === 'submitted-ok') { row.className = 'row-status-submitted-ok'; } 
+                else if (status === 'submitted-fail') { row.className = 'row-status-submitted-fail'; } 
+                else if (status === 'submitted-pending') { row.className = 'row-status-submittable'; }
                 row.innerHTML = renderAlphaRow(alpha);
                 tableBody.appendChild(row);
             });
-            
-            // --- v11.0.14: 修复事件监听器叠加 Bug ---
-            // (v11.0.14) 不再在这里调用 setupActionHandlers
-            // --- END v11.0.14 ---
         }
         
         function updateSortIcons() {
@@ -748,7 +776,6 @@
                 icon.style.opacity = '0.3';
                 icon.className = 'sort-icon';
             });
-            
             const activeTh = document.querySelector(`#alphaTable th[data-sort-key="${currentSortKey}"]`);
             if (activeTh) {
                 const icon = activeTh.querySelector('.sort-icon');
@@ -757,40 +784,30 @@
             }
         }
         
-        // --- BEGIN v11.0.14: 修复事件监听器叠加 Bug ---
-        // 使用事件委托，监听器绑定在 tableBody (container) 上
         function setupActionHandlers(container) {
              container.addEventListener('click', function(e) {
-                
-                // --- 按钮操作 ---
-                // 检查 e.target (被点击的元素) 是否是 .btn-action，或者在 .btn-action 内部
                 const btn = e.target.closest('.btn-action');
                 if (btn) {
                     const action = btn.getAttribute('data-action');
-                    // 向上找到 .actions-cell 来获取 expression
                     const cell = btn.closest('.actions-cell'); 
                     if (cell) {
                         const expression = cell.getAttribute('data-expression');
                         handleApiAction(action, expression);
                     }
-                    return; // 处理完毕
+                    return; 
                 }
                 
-                // --- 复制操作 ---
-                // 检查 e.target 是否是 .alpha-expression 或 .perf-value
                 const copyEl = e.target.closest('.alpha-expression, .perf-value');
                 if (copyEl) {
                     const textToCopy = copyEl.getAttribute('data-copy-value') || copyEl.textContent;
                     copyToClipboard(textToCopy, copyEl);
-                    return; // 处理完毕
+                    return; 
                 }
              });
         }
-        // --- END v11.0.14 ---
         
         function handleApiAction(action, expression) {
-            let url = '';
-            let confirmMessage = '';
+            let url = ''; let confirmMessage = '';
             let body = { expression: expression };
 
             switch(action) {
@@ -810,21 +827,15 @@
                     }
                     url = '/api/mark_failed_on_wq';
                     body.reason = reason.trim();
-                    // 标记失败不需要二次确认
                     break;
                 case 'unmark-failed':
                     url = '/api/unmark_failed_on_wq';
                     confirmMessage = '是否确认“取消失败”标记？\n此 Alpha 将可能被重新提交！';
                     break;
-                default:
-                    return;
+                default: return;
             }
-
-            if (confirmMessage && !confirm(confirmMessage)) {
-                return;
-            }
+            if (confirmMessage && !confirm(confirmMessage)) { return; }
             
-            // 发起 API 请求
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -835,9 +846,7 @@
                 if (data.status === 'success') {
                     showToast(data.message || '操作成功！');
                     fetchStatus(); // 重新加载所有数据
-                } else {
-                    throw new Error(data.message || 'API 请求失败');
-                }
+                } else { throw new Error(data.message || 'API 请求失败'); }
             })
             .catch(err => {
                 console.error('API Action Error:', err);
@@ -847,132 +856,71 @@
         
         function escapeHTML(str) {
             if (str === null || str === undefined) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
         
-        function escapeHTMLLogs(str) {
-            return escapeHTML(str).replace(/\n/g, '<br>');
-        }
+        function escapeHTMLLogs(str) { return escapeHTML(str).replace(/\n/g, '<br>'); }
 
-        // --- BEGIN v11.0.11: 修复局域网 HTTP 复制功能 ---
-        
-        // 统一的成功提示
         function showCopySuccess(buttonElement, message) {
             if (buttonElement) {
                 const originalTitle = buttonElement.title;
                 buttonElement.title = '已复制!';
-                
-                // 悬停提示
-                if (buttonElement.classList.contains('perf-value')) {
-                    buttonElement.setAttribute('data-original-title', originalTitle);
-                }
-                
+                if (buttonElement.classList.contains('perf-value')) { buttonElement.setAttribute('data-original-title', originalTitle); }
                 setTimeout(() => {
-                    // 恢复悬停提示
-                    if (buttonElement.classList.contains('perf-value')) {
-                         buttonElement.title = buttonElement.getAttribute('data-original-title') || '点击复制';
-                    } else {
-                         buttonElement.title = originalTitle || '点击复制表达式';
-                    }
+                    if (buttonElement.classList.contains('perf-value')) { buttonElement.title = buttonElement.getAttribute('data-original-title') || '点击复制'; } 
+                    else { buttonElement.title = originalTitle || '点击复制表达式'; }
                 }, 1500);
             }
-            // console.log(message); // 用于调试
             showToast('已复制到剪贴板！');
         }
         
-        // 旧的 execCommand 复制方法 (回退)
         function fallbackCopy(text, buttonElement) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
-            
-            // 避免在屏幕上闪烁
-            textArea.style.position = 'fixed';
-            textArea.style.top = 0;
-            textArea.style.left = 0;
-            textArea.style.width = '2em';
-            textArea.style.height = '2em';
-            textArea.style.padding = 0;
-            textArea.style.border = 'none';
-            textArea.style.outline = 'none';
-            textArea.style.boxShadow = 'none';
-            textArea.style.background = 'transparent';
-
+            textArea.style.position = 'fixed'; textArea.style.top = 0; textArea.style.left = 0;
+            textArea.style.width = '2em'; textArea.style.height = '2em';
+            textArea.style.padding = 0; textArea.style.border = 'none'; textArea.style.outline = 'none';
+            textArea.style.boxShadow = 'none'; textArea.style.background = 'transparent';
             document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-
+            textArea.focus(); textArea.select();
             try {
                 const successful = document.execCommand('copy');
-                if (successful) {
-                    showCopySuccess(buttonElement, '已复制 (Fallback)');
-                } else {
-                    throw new Error('execCommand 失败');
-                }
+                if (successful) { showCopySuccess(buttonElement, '已复制 (Fallback)'); } 
+                else { throw new Error('execCommand 失败'); }
             } catch (err) {
                 console.error('Fallback 复制失败: ', err);
                 showToast('复制失败！浏览器拒绝了该操作。', 'error');
             }
-
             document.body.removeChild(textArea);
         }
 
-        // 主复制函数 (v11.0.11)
         function copyToClipboard(text, buttonElement) {
-            // 1. 尝试现代安全 API (navigator.clipboard) - 仅在 localhost 或 https 上有效
-            // 检查 window.isSecureContext (安全上下文)
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(text).then(() => {
                     showCopySuccess(buttonElement, '已复制 (API)');
                 }).catch(err => {
                     console.error('API 复制失败, 尝试回退: ', err);
-                    // 即使 API 存在但失败 (例如用户拒绝权限)，也尝试回退
                     fallbackCopy(text, buttonElement);
                 });
             } else {
-                // 2. 回退到旧的 (不安全的) execCommand - 适用于 http://[LAN_IP]
-                // console.warn("Clipboard API 不可用 (非安全上下文?), 正在回退到 execCommand...");
                 fallbackCopy(text, buttonElement);
             }
         }
-        // --- END v11.0.11 ---
-
 
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = type === 'error' ? 'error' : '';
-            
             toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
         
-        // --- v11.0.10: 滚动按钮功能 (从 pending.html 引入) ---
         function setupScrollButtons() {
             const toTopBtn = document.getElementById('scrollToTopBtn');
             const toBottomBtn = document.getElementById('scrollToBottomBtn');
-
-            if (toTopBtn) {
-                toTopBtn.addEventListener('click', () => {
-                    // 使用平滑滚动
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                });
-            }
-
-            if (toBottomBtn) {
-                toBottomBtn.addEventListener('click', () => {
-                    // 使用平滑滚动
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                });
-            }
+            if (toTopBtn) { toTopBtn.addEventListener('click', () => { window.scrollTo({ top: 0, behavior: 'smooth' }); }); }
+            if (toBottomBtn) { toBottomBtn.addEventListener('click', () => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }); }
         }
-        // --- v11.0.10: 结束 ---
     </script>
 </body>
 </html>

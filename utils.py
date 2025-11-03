@@ -1,39 +1,77 @@
-# --- utils.py ---
+# --- utils.py v13.0 (Dual Watchdog) ---
 # 共享工具模块: 日志, 配置读取
 
 import logging
 import json
 import os
+import threading # v13.0: 新增
 
 # v8.0: 中心化配置
 SYSTEM_CONFIG_FILE = "system_config.json" 
+
+# --- v13.0: 新增线程安全锁 ---
+# 用于保护对 system_config.json 的读写操作
+_system_config_lock = threading.Lock()
+# --- v13.0 结束 ---
 
 # 获取一个专用的 logger
 logger = logging.getLogger(__name__)
 
 def load_system_config():
     """
-    (v8.0) 读取并返回 system_config.json 的内容。
-    注意: 这会在每次需要时都读取文件，以获取动态参数。
+    (v13.0) 线程安全地读取并返回 system_config.json 的内容。
     """
-    try:
-        with open(SYSTEM_CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        # 紧急回退 (Fallback)
-        logger.error(f"读取 {SYSTEM_CONFIG_FILE} 失败: {e}。将使用紧急回退值！")
-        return {
-            "wq_api_cooldown": 120,
-            "llm_api_cooldown": 5400,
-            "miner_concurrency": 1,
-            "miner_sleep": 120,
-            "evolver_concurrency": 1,
-            "evolver_sleep": 120
-        }
+    # v13.0: 增加锁
+    with _system_config_lock:
+        try:
+            with open(SYSTEM_CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            # 紧急回退 (Fallback)
+            logger.error(f"读取 {SYSTEM_CONFIG_FILE} 失败: {e}。将使用紧急回退值！")
+            # v13.0: 更新回退值以匹配新结构
+            return {
+                "miner_concurrency": 1,
+                "evolver_concurrency": 1,
+                "producer_queue_full_sleep": 10,
+                "llm_budget": {
+                    "comment": "看门狗 A: LLM API (Gemini) 每日预算",
+                    "daily_budget_limit": 2000,
+                    "budget_used_today": 0,
+                    "budget_last_used_date_utc": "2024-01-01"
+                },
+                "wq_api_limiter": {
+                    "comment": "看门狗 B: WQ API 动态令牌桶 (TPM)",
+                    "initial_tpm_limit": 60,
+                    "current_tpm_limit": 60,
+                    "min_tpm_limit": 15,
+                    "max_tpm_limit": 200,
+                    "tpm_increment_on_success": 1,
+                    "tpm_decrement_factor_on_429": 0.75,
+                    "last_failure_timestamp": 0,
+                    "seconds_to_wait_after_429": 60
+                },
+                "evolver_search_space": {}
+            }
+
+# --- v13.0: 新增配置保存函数 ---
+def save_system_config(config_data):
+    """
+    (v13.0) 线程安全地将更新后的配置字典写回 system_config.json。
+    """
+    with _system_config_lock:
+        try:
+            with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            logger.error(f"保存 {SYSTEM_CONFIG_FILE} 失败: {e}", exc_info=True)
+            return False
+# --- v13.0 结束 ---
 
 def setup_logging(log_file):
     """
-    配置全局日志系统。
+    配置全局日志系统。(v13.0: 无变更)
     """
     log_dir = "logs"
     if not os.path.exists(log_dir):

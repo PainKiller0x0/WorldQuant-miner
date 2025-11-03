@@ -1,9 +1,15 @@
-# --- llm_provider.py v12.0.0 (Feedback Loop) ---
+# --- llm_provider.py v13.0 (Dual Watchdog - Watchdog A) ---
 import logging
 import json
 import re
 import random
 from openai import OpenAI
+from datetime import datetime, timezone # v13.0: 新增
+import time # v13.0: 新增
+
+# --- v13.0: 新增导入 ---
+from utils import load_system_config, save_system_config
+# --- v13.0 结束 ---
 
 # 获取一个专用的 logger
 logger = logging.getLogger(__name__)
@@ -20,6 +26,56 @@ class LLMProvider:
         except Exception as e:
             logger.critical(f"加载 API 配置或初始化 LLM 客户端失败: {e}")
             raise
+
+    # --- v13.0: 看门狗 A (LLM 预算检查) ---
+    def _check_llm_budget(self):
+        """
+        检查并更新 LLM 每日预算。
+        - 如果预算充足，递增计数器并返回 "OK"。
+        - 如果预算耗尽，返回 "BUDGET_EXHAUSTED"。
+        - 实现了基于 UTC 日期的自动重置。
+        """
+        try:
+            config = load_system_config()
+            budget_config = config.get("llm_budget", {})
+            
+            daily_limit = budget_config.get("daily_budget_limit", 2000)
+            used_today = budget_config.get("budget_used_today", 0)
+            last_used_date_str = budget_config.get("budget_last_used_date_utc", "2024-01-01")
+            
+            # 关键：使用 UTC 日期进行比较
+            today_utc_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+            # 1. 检查是否是新的一天 (UTC)
+            if today_utc_str != last_used_date_str:
+                logger.info(f"[Watchdog A] 检测到新 UTC 日期: {today_utc_str}。重置 LLM 每日预算。")
+                used_today = 0
+                config["llm_budget"]["budget_last_used_date_utc"] = today_utc_str
+            
+            # 2. 检查预算是否已用尽
+            if used_today >= daily_limit:
+                logger.critical(f"[Watchdog A] LLM 每日预算已用尽 ({used_today}/{daily_limit})。今天将不再调用 LLM API。")
+                # (注意：alpha_generator 将负责处理此信号并进入休眠)
+                return "BUDGET_EXHAUSTED"
+
+            # 3. 预算充足，递增并保存
+            used_today += 1
+            config["llm_budget"]["budget_used_today"] = used_today
+            
+            if not save_system_config(config):
+                 logger.error("[Watchdog A] 严重错误：更新 LLM 预算后保存 system_config.json 失败！")
+            
+            if used_today % 100 == 0 or used_today == 1:
+                 logger.info(f"[Watchdog A] LLM 预算使用量: {used_today}/{daily_limit} (日期: {today_utc_str})")
+                 
+            return "OK"
+
+        except Exception as e:
+            logger.error(f"[Watchdog A] 检查 LLM 预算时发生严重错误: {e}", exc_info=True)
+            # 出现异常时，安全起见，暂时阻止调用
+            return "BUDGET_EXHAUSTED"
+    # --- v13.0 结束 ---
+
 
     # --- v12.0: 签名变更，增加 failed_examples ---
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
@@ -94,6 +150,12 @@ class LLMProvider:
         prompt = "\n".join(prompt_lines)
 
         try:
+            # --- v13.0: 看门狗 A 检查点 ---
+            budget_status = self._check_llm_budget()
+            if budget_status == "BUDGET_EXHAUSTED":
+                return "BUDGET_EXHAUSTED"
+            # --- v13.0 结束 ---
+
             chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=200, temperature=0.95) 
             idea = chat_completion.choices[0].message.content.strip().replace('`', '')
              # v7.8.1: 更严格的结尾检查和清理
@@ -182,6 +244,12 @@ class LLMProvider:
         prompt = "\n".join(prompt_lines)
 
         try:
+            # --- v13.0: 看门狗 A 检查点 ---
+            budget_status = self._check_llm_budget()
+            if budget_status == "BUDGET_EXHAUSTED":
+                return "BUDGET_EXHAUSTED"
+            # --- v13.0 结束 ---
+
             chat_completion = self.client.chat.completions.create(model=self.model_name, messages=[{"role": "user", "content": prompt}], max_tokens=300, temperature=0.7)
             response_text = chat_completion.choices[0].message.content.strip()
 

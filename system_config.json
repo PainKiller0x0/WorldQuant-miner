@@ -3,22 +3,22 @@
   "miner_concurrency": 3,
   "evolver_concurrency": 2,
   "producer_queue_full_sleep": 5,
-  "hopeful_pool_max_size": 200,
+  "hopeful_pool_max_size": 300,
   "llm_budget": {
     "comment": "看门狗 A: LLM API (Gemini) 每日预算",
     "daily_budget_limit": 2000,
-    "budget_used_today": 79,
+    "budget_used_today": 297,
     "budget_last_used_date_utc": "2025-11-03"
   },
   "wq_api_limiter": {
     "comment": "看门狗 B: WQ API 动态令牌桶 (TPM)",
-    "current_tpm_limit": 200,
+    "current_tpm_limit": 69,
     "min_tpm_limit": 15,
     "max_tpm_limit": 200,
     "tpm_increment_on_success": 1,
     "tpm_decrement_factor_on_429": 0.75,
     "wq_429_cooldown_seconds": 60,
-    "last_failure_timestamp": 1762174326.303695
+    "last_failure_timestamp": 1762186723.8700926
   },
   "evolver_search_space": {
     "universe": [

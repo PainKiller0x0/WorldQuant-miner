@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v13.0 (Dual Watchdog) ---
+# --- alpha_generator_ollama.py v13.2.0 (Dynamic Pool Size) ---
 import argparse
 import logging
 import json
@@ -19,9 +19,9 @@ from wq_client import WorldQuant
 from llm_provider import LLMProvider
 # --- v9.0 结束 ---
 
-# --- v13.0: 版本号 ---
-CURRENT_GENERATOR_VERSION = "v13.0.0 (Dual Watchdog)"
-# --- v13.0: 结束 ---
+# --- v13.2.0: 版本号 ---
+CURRENT_GENERATOR_VERSION = "v13.2.0 (Dynamic Pool Size)"
+# --- v13.2.0: 结束 ---
 
 # --- BUG 修复: 将 logger 定义移至全局作用域 ---
 logger = logging.getLogger(__name__)
@@ -86,8 +86,6 @@ class AlphaGenerator:
         self.load_submission_failures() # 初始化时加载一次
         # --- v12.0: 结束 ---
 
-        # v13.0: 移除 self._rate_limit_until，由看门狗动态处理
-
         self.invalid_functions_file = INVALID_FUNCTIONS_FILE
         self.blacklist_counts = self.load_blacklist_counts()
         self.blacklist_max_strikes = BLACKLIST_MAX_STRIKES
@@ -98,10 +96,6 @@ class AlphaGenerator:
         self.queue_max_size = self.concurrency_level * 2
         self.strategy_queue = queue.Queue(maxsize=self.queue_max_size)
         self.consumer_threads = []
-
-    # --- v13.0: 移除 _enter_cooldown 函数 ---
-    # (此功能现已由 wq_client 中的看门狗 B 动态处理)
-    # --- v13.0 结束 ---
 
     def _mutate_settings(self, settings_dict: dict) -> dict:
         try:
@@ -156,11 +150,8 @@ class AlphaGenerator:
                 logger.warning(f"加载 {self.tested_alphas_logfile} 出错: {e}, 将创建一个新的记录文件。")
                 return set()
 
-    # --- v12.0: 新增失败日志加载器 ---
     def load_submission_failures(self):
-        """
-        (v12.0) 从 submission_failure_log.json 加载“地面真相”失败数据。
-        """
+        """ (v12.0) 从 submission_failure_log.json 加载“地面真相”失败数据。 """
         filepath = self.submission_failure_log_file
         with self.failure_log_lock:
             if not os.path.exists(filepath):
@@ -181,7 +172,6 @@ class AlphaGenerator:
                     data = json.load(f)
                 
                 if isinstance(data, list):
-                    # 更新缓存
                     self.submission_failures_cache = data
                     new_set = set()
                     new_map = {}
@@ -189,26 +179,19 @@ class AlphaGenerator:
                         if isinstance(item, dict) and 'expression' in item:
                             expr = item['expression']
                             new_set.add(expr)
-                            # 存储最后一次记录的原因
                             new_map[expr] = item.get('reason', 'UNKNOWN')
-                    
-                    # 比较变化
                     if new_set != self.submission_failures_set:
                         new_failures = len(new_set - self.submission_failures_set)
                         if new_failures > 0:
                             logger.info(f"[Failure Log] 成功加载并刷新失败日志。检测到 {new_failures} 个新失败案例，总计 {len(new_set)} 个。")
                         else:
                             logger.info(f"[Failure Log] 成功加载失败日志。总计 {len(new_set)} 个 (无变化)。")
-                        
                         self.submission_failures_set = new_set
                         self.submission_failures_map = new_map
                 else:
                     logger.warning(f"[Failure Log] 文件 {filepath} 格式不正确（不是列表），已忽略。")
-                    
             except Exception as e:
                 logger.error(f"[Failure Log] 加载 {filepath} 时出错: {e}", exc_info=False)
-    # --- v12.0: 结束 ---
-
 
     def load_blacklist_counts(self):
         with self.blacklist_lock:
@@ -279,7 +262,6 @@ class AlphaGenerator:
         potential_pearls = []
         for record in sample_records:
             if not isinstance(record, dict): continue
-            # v12.0: 增加对“地面真相”失败日志的检查
             expr = record.get('expression')
             if not expr or record.get('status') != 'COMPLETE' or expr in hopeful_expressions or expr in self.submission_failures_set:
                 continue
@@ -338,9 +320,8 @@ class AlphaGenerator:
         if self_corr_value > 0.7:
             self_corr_penalty = (self_corr_value - 0.7) * 5.0
         
-        # v12.0: 如果在“地面真相”失败日志中，给予巨大惩罚
         if report.get('expression') in self.submission_failures_set:
-            self_corr_penalty += 10.0 # 巨大惩罚，使其几乎不可能被选中
+            self_corr_penalty += 10.0 
             
         score = fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1) - self_corr_penalty
         return score
@@ -361,7 +342,6 @@ class AlphaGenerator:
             if self_corr_value > 0.7:
                 self_corr_penalty = (self_corr_value - 0.7) * 5.0
             
-            # v12.0: 考古时也检查失败日志
             if record.get('expression') in self.submission_failures_set:
                 return -999.0 # 直接丢弃
                 
@@ -401,13 +381,11 @@ class AlphaGenerator:
             logger.warning("精英池为空，且未挖掘到遗珠，无法获取进化种子。")
             return []
 
-        # v12.0: _calculate_combined_score 现在包含对失败日志的惩罚
         for seed in seeds:
             seed['internal_score'] = self._calculate_combined_score(seed)
             
-        seeds.sort(key=lambda x: x['internal_score'], reverse=True) # v9.0: 使用新key排序
+        seeds.sort(key=lambda x: x['internal_score'], reverse=True) 
         
-        # v12.0: 过滤掉得分极低（即被失败日志惩罚）的种子
         original_seed_count = len(seeds)
         seeds = [s for s in seeds if s['internal_score'] > -10.0]
         filtered_count = original_seed_count - len(seeds)
@@ -482,33 +460,22 @@ class AlphaGenerator:
         logger.info(f"策略导师分析完成: 从 Top {len(operators)} 模式池中，加权随机抽取 {len(selected_guidance)} 个 *唯一* 指导: {selected_guidance}")
         return selected_guidance
 
-    # --- v12.0: 签名变更, 增加 failed_examples ---
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
-        """
-        v13.0: 委托 LLMProvider 生成, 增加 BUDGET_EXHAUSTED 信号处理
-        """
-        # --- v12.0: 传递 failed_examples ---
+        """ (v13.0) 委托 LLMProvider 生成, 增加 BUDGET_EXHAUSTED 信号处理 """
         result = self.llm.generate_alpha_idea(fields, operators, guidance, failed_examples)
         
-        # --- v13.0: 增加 BUDGET_EXHAUSTED 信号处理 ---
         if result == "BUDGET_EXHAUSTED":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 BUDGET_EXHAUSTED (Discover)。")
             return "BUDGET_EXHAUSTED"
-        # --- v13.0 结束 ---
         
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Discover)。")
-            # v13.0: 不再调用 _enter_cooldown
             return "RATE_LIMIT"
         
         return result
 
-    # --- v12.0: 重构, 加入“地面真相”失败检查 ---
     def generate_evolved_alpha_idea(self, base_alpha_obj, guidance=None):
-        """
-        v13.0: 委托 LLM 进化，增加 BUDGET_EXHAUSTED 信号处理
-        """
-        # 1. 确定父本设置 (用于继承和突变)
+        """ (v13.0) 委托 LLM 进化，增加 BUDGET_EXHAUSTED 信号处理 """
         if 'performance' not in base_alpha_obj or not base_alpha_obj['performance']:
              base_alpha_obj['performance'] = {}
         parent_settings = base_alpha_obj['performance'].get('settings', self.wq.default_settings)
@@ -516,62 +483,46 @@ class AlphaGenerator:
              parent_settings = self.wq.default_settings
         base_alpha_obj['performance']['settings'] = parent_settings
 
-        # --- v12.0: 检查“地面真相”失败日志 ---
         parent_expression = base_alpha_obj.get('expression')
         special_guidance = None
         
         if parent_expression in self.submission_failures_set:
-            # 方案一：父本在“地面真相”失败日志中 (最高优先级)
             failure_reason = self.submission_failures_map.get(parent_expression, 'UNKNOWN')
             logger.critical(f"[Evolve Guidance] 父本在'失败日志'中 (原因: {failure_reason})！强制“结构性突变”。")
             special_guidance = f"**CRITICAL MUTATION REQUIRED!** Parent is a KNOWN FAILURE (Reason: {failure_reason}). DO NOT micro-optimize. You MUST perform a major structural change (e.g., add new operators, change logic) to escape this failed pattern."
         else:
-            # 方案二：检查父本的模拟 Self-Correlation (v9.4 逻辑)
             parent_self_corr = self._get_self_correlation(base_alpha_obj)
             if parent_self_corr > 0.7:
                 logger.warning(f"[Evolve Guidance] 父本 {parent_expression[:30]}... 模拟 Self-Corr 高 ({parent_self_corr:.3f})，添加特殊指导。")
                 special_guidance = f"**PRIORITY: Reduce Self-Correlation!** Parent's simulated correlation is too high ({parent_self_corr:.3f}). Make significant changes to lower it."
         
-        # 将指导注入对象，LLMProvider v12.0 将会读取它
         if special_guidance:
             base_alpha_obj['_special_guidance_high_corr'] = special_guidance
         else:
             base_alpha_obj.pop('_special_guidance_high_corr', None)
-        # --- v12.0 结束 ---
 
-
-        # 2. 调用 LLM (只为了获取新的 expression)
-        # v12.0: llm_provider 的 prompt 已更新
         result = self.llm.generate_evolved_alpha_idea(base_alpha_obj, guidance=guidance) 
-        
-        # 清理掉特殊指导键，以防意外保存
         base_alpha_obj.pop('_special_guidance_high_corr', None)
 
-        # --- v13.0: 增加 BUDGET_EXHAUSTED 信号处理 ---
         if result == "BUDGET_EXHAUSTED":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 BUDGET_EXHAUSTED (Evolve)。")
             return "BUDGET_EXHAUSTED"
-        # --- v13.0 结束 ---
 
         if result == "RATE_LIMIT":
             logger.warning("[AlphaGenerator] 收到来自 LLMProvider 的 RATE_LIMIT (Evolve)。")
-            # v13.0: 不再调用 _enter_cooldown
             return "RATE_LIMIT"
         
         if not isinstance(result, dict) or not result.get('expression'):
             logger.warning("[AlphaGenerator] LLM 未能返回有效的进化 Expression 字典。")
-            return None # LLM 失败
+            return None 
 
-        # 3. v9.2: 强制 Settings 突变
         mutated_settings = self._mutate_settings(parent_settings)
         
         evolved_strategy = {
             "expression": result['expression'], # 来自 LLM
             "settings": mutated_settings         # 来自 Python 突变
         }
-
         return evolved_strategy
-    # --- v12.0 结束 ---
 
     def log_tested_alphas(self, reports_to_log):
         with self.tested_alphas_lock:
@@ -623,8 +574,24 @@ class AlphaGenerator:
         except IOError as e:
             logger.error(f"写入归档文件时出错: {e}")
 
-    def save_hopeful_reports(self, new_hopeful_reports, max_pool_size=200):
+    # --- v13.2.0: 修复 save_hopeful_reports ---
+    def save_hopeful_reports(self, new_hopeful_reports, max_pool_size=None):
+        """
+        v13.2.0: max_pool_size 现在默认为 None。
+                 如果为 None，将从 system_config.json 动态读取。
+        """
         with self.hopeful_file_lock:
+            
+            # --- v13.2.0: 动态精英池上限 ---
+            if max_pool_size is None:
+                try:
+                    config = load_system_config()
+                    max_pool_size = int(config.get("hopeful_pool_max_size", 200)) # 从配置读取
+                except Exception as e:
+                    logger.error(f"[Hopeful Save] 无法从 system_config 读取 hopeful_pool_max_size: {e}。回退到 200。")
+                    max_pool_size = 200 # 紧急回退
+            # --- v13.2.0: 结束 ---
+            
             existing_reports = []
             if os.path.exists(self.hopeful_alphas_file):
                 try:
@@ -638,6 +605,7 @@ class AlphaGenerator:
                 except (IOError, json.JSONDecodeError):
                     logger.warning(f"无法解析 {self.hopeful_alphas_file}，将创建新的精华文件。")
                     existing_reports = []
+            
             combined_reports = existing_reports + new_hopeful_reports
             purged_reports = []
             archived_reports = []
@@ -646,7 +614,6 @@ class AlphaGenerator:
                 if isinstance(report, dict) and 'expression' in report:
                      unique_reports_map[report.get('expression')] = report
             
-            # --- v12.0: 在清洗时，也使用“地面真相”失败日志 ---
             logger.info(f"[Hopeful Save] 开始精英池清洗... (传入 {len(new_hopeful_reports)} / 现有 {len(existing_reports)} / 独特 {len(unique_reports_map)})")
             expressions_to_archive = set()
             
@@ -695,19 +662,22 @@ class AlphaGenerator:
 
             logger.info(f"精英池清洗: {len(unique_reports_map)} -> {len(purged_reports)} (识别出 {len(archived_reports)} 个过时/高相关性/已知失败策略)")
             self.archive_purged_alphas(archived_reports, reason="标准清洗 (含Self-Corr > 0.7 或 Ground Truth Failure)")
-            # --- v12.0: 清洗逻辑结束 ---
             
             
-            # v12.0: _calculate_combined_score 内部已包含对失败日志的惩罚
             for report in purged_reports:
                 report['internal_score'] = self._calculate_combined_score(report)
             purged_reports.sort(key=lambda x: x['internal_score'], reverse=True) 
 
-            final_pool = purged_reports[:max_pool_size]
+            # --- v13.2.0: 关键修复 ---
+            # (现在 max_pool_size 是从 config 读取的动态值, e.g., 300)
+            final_pool = purged_reports[:max_pool_size] 
             if len(purged_reports) > max_pool_size:
                 eliminated = purged_reports[max_pool_size:]
+                # (日志现在将正确显示你的设置, e.g., 300)
                 logger.info(f"精英池末位淘汰: {len(purged_reports)} -> {len(final_pool)} (保留综合评分排名前 {max_pool_size} 的策略)")
                 self.archive_purged_alphas(eliminated, reason="末位淘汰")
+            # --- v13.2.0: 修复结束 ---
+                
             try:
                 with open(self.hopeful_alphas_file, 'w', encoding='utf-8') as f:
                     json.dump(final_pool, f, indent=4, ensure_ascii=False)
@@ -715,6 +685,7 @@ class AlphaGenerator:
                 self.hopeful_alphas_cache = final_pool
             except IOError as e:
                 logger.error(f"保存精华战报文件时出错: {e}")
+    # --- v13.2.0: 结束 ---
 
     def _consumer_worker(self):
         """消费者工作线程，从队列中获取策略并执行测试。"""
@@ -740,33 +711,25 @@ class AlphaGenerator:
                 logger.info(f"取得策略: {idea_expr[:60]}... (队列剩余: {self.strategy_queue.qsize()})")
                 log_report = {"expression": idea_expr, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-                # 2. 执行 WQ 测试 (v13.0: test_alpha 内部处理看门狗 B)
                 result = self.wq.test_alpha(idea_expr, strategy['settings'])
 
                 # --- v13.0: 重构 WQ 429 Rate Limit 处理 ---
                 if result == "RATE_LIMIT":
                     logger.warning(f"遭遇 WQ 429 (针对: {idea_expr})。")
-                    
-                    # (v13.0: 看门狗 B (wq_client) 已自动处理冷却和 TPM 降低)
                     logger.info(f"[Worker] 看门狗 B 已激活。策略将放回队列重试。")
-                    # v13.0: 移除 _enter_cooldown 和 time.sleep
-
                     try:
                         self.strategy_queue.put(strategy)
                         logger.info(f"策略 {idea_expr[:60]}... 已放回队列。")
                     except queue.Full:
                          logger.error(f"尝试放回策略 {idea_expr[:60]}... 时队列已满！该策略将被丢弃。")
                     
-                    # v13.0: 必须在 task_done() 之前 continue
                     self.strategy_queue.task_done()
                     continue 
                 # --- v13.0 结束 ---
 
-                # 4. 处理 ERROR (黑名单逻辑)
                 if isinstance(result, dict) and result.get("status") == "ERROR":
                     log_report["status"] = "ERROR"
                     self.log_tested_alphas([log_report])
-
                     error_message = ""
                     regular_result = result.get("regular", {})
                     if isinstance(regular_result, dict):
@@ -775,11 +738,8 @@ class AlphaGenerator:
                              error_message = regular_errors[0].get("message", "")
                     if not error_message: error_message = result.get("message", "")
                     match = re.search(r"(Unknown function|unknown operator|unknown variable) '(\w+)'", error_message or "")
-
                     if match:
-                        error_type = match.group(1)
-                        bad_identifier = match.group(2)
-                        should_blacklist = False
+                        error_type = match.group(1); bad_identifier = match.group(2); should_blacklist = False
                         if error_type == "unknown variable":
                             should_blacklist = True
                             logger.warning(f"检测到无效变量: '{bad_identifier}'。WQ API 报告其未知。")
@@ -793,25 +753,21 @@ class AlphaGenerator:
                             self.update_blacklist_count(bad_identifier)
                     else:
                         logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...")
-                    
-                    self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
+                    self.strategy_queue.task_done() 
                     continue 
 
-                # 5. 处理 TIMEOUT
                 if result in ["TIMEOUT"]:
                     log_report["status"] = result
                     self.log_tested_alphas([log_report])
                     logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
-                    self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
+                    self.strategy_queue.task_done() 
                     continue 
 
-                # 6. 处理 COMPLETE
                 if isinstance(result, dict):
-                    is_stats = result.get("is", {})
-                    alpha_id = result.get("id")
+                    is_stats = result.get("is", {}); alpha_id = result.get("id")
                     if not isinstance(is_stats, dict) or not alpha_id:
                         logger.warning(f"模拟返回不完整 (缺少 'is' 或 'id')，已丢弃: {idea_expr}")
-                        self.strategy_queue.task_done() # v13.0: 确保在 continue 前调用
+                        self.strategy_queue.task_done()
                         continue 
 
                     checks = is_stats.get("checks", [])
@@ -823,26 +779,19 @@ class AlphaGenerator:
                     try: fitness_float = float(fitness)
                     except (ValueError, TypeError): fitness_float = -999
 
-                    log_report["status"] = "COMPLETE"
-                    log_report["fitness"] = fitness_float
-                    log_report["passed_checks"] = passed_count
-                    log_report["performance"] = is_stats # v7.9
-                    
+                    log_report["status"] = "COMPLETE"; log_report["fitness"] = fitness_float
+                    log_report["passed_checks"] = passed_count; log_report["performance"] = is_stats 
                     log_report["performance"]["settings"] = strategy.get("settings", self.wq.default_settings)
-                    
                     self.log_tested_alphas([log_report])
                     checks_summary = f"{passed_count} PASS / {failed_count} FAIL / {pending_count} PENDING"
 
-                    self_corr_value = self._get_self_correlation(log_report) # v9.4: Use helper
+                    self_corr_value = self._get_self_correlation(log_report)
                     is_self_corr_ok = self_corr_value < 0.7
                     
-                    # --- v12.0: 增加对“地面真相”失败日志的检查 ---
                     if idea_expr in self.submission_failures_set:
                         logger.warning(f"策略 {idea_expr[:40]}... 因存在于'失败日志'中，被拒绝（即使模拟通过）。")
                         self.strategy_queue.task_done()
                         continue
-                    # --- v12.0: 结束 ---
-
                     
                     is_high_quality = fitness_float > 0 and passed_count >= 4
                     is_high_potential = fitness_float > -0.5 and passed_count >= 5
@@ -855,22 +804,22 @@ class AlphaGenerator:
 
                         regular_code = result.get("regular", {}).get("code") if isinstance(result.get("regular"), dict) else None
                         hopeful_report = {
-                            "expression": regular_code or idea_expr,
-                            "alpha_id": alpha_id,
+                            "expression": regular_code or idea_expr, "alpha_id": alpha_id,
                             "result_url": f"https://platform.worldquantbrain.com/alphas/regular/{alpha_id}",
-                            "grade": result.get("grade", "UNKNOWN"),
-                            "timestamp": log_report["timestamp"],
-                            "performance": log_report["performance"], # v9.3: 传递包含 settings 的 performance
-                            "checks_summary": checks_summary
+                            "grade": result.get("grade", "UNKNOWN"), "timestamp": log_report["timestamp"],
+                            "performance": log_report["performance"], "checks_summary": checks_summary
                         }
                         perf_items = is_stats.items()
                         stats_str = ", ".join([f"{key}: {value:.3f}" for key, value in perf_items if isinstance(value, (int, float))])
                         logger.info(f"生成高质量策略战报 [{checks_summary}] -> {stats_str}")
+                        
+                        # --- v13.2.0: 调用点 ---
+                        # (现在调用时, save_hopeful_reports 将在内部读取 config)
                         self.save_hopeful_reports([hopeful_report])
+                        # --- v13.2.0: 结束 ---
                     
                     elif (is_high_quality or is_high_potential) and not is_self_corr_ok:
                          logger.info(f"策略因 Self-Correlation 过高被拒绝。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
-                    
                     else:
                         logger.info(f"策略未达到高质量标准，已丢弃。Fitness: {fitness_float:.3f}, Checks: {passed_count} PASS, Self-Corr: {self_corr_value:.3f}. Alpha: {idea_expr}")
                 else:
@@ -878,8 +827,7 @@ class AlphaGenerator:
 
             except Exception as exc:
                 expr_for_log = "UNKNOWN"
-                if isinstance(strategy, dict) and 'expression' in strategy:
-                     expr_for_log = strategy['expression']
+                if isinstance(strategy, dict) and 'expression' in strategy: expr_for_log = strategy['expression']
                 logger.error(f"处理策略 '{expr_for_log}' 的结果时发生意外错误: {exc}", exc_info=True)
                 if isinstance(strategy, dict) and 'expression' in strategy:
                     try:
@@ -892,9 +840,7 @@ class AlphaGenerator:
                 self.strategy_queue.task_done()
 
 
-    # --- v13.0: 重构 run 循环, 移除 sleep_time ---
     def run(self, mode='discover'):
-
         logger.info(f"Alpha 生成器启动 | 版本: {CURRENT_GENERATOR_VERSION} | 模式: {mode.upper()} | 并发 Workers: {self.concurrency_level} | 队列大小: {self.queue_max_size}")
 
         self.fields = self.wq.get_data_fields()
@@ -902,13 +848,9 @@ class AlphaGenerator:
 
         if self.operators == "RATE_LIMIT":
             logger.critical("获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
-            # v13.0: 移除 _enter_cooldown
-
         if not self.fields or not self.operators or self.operators == "RATE_LIMIT":
             logger.error("无法获取字段或操作符，生成器将在60秒后退出。")
-            if self.operators != "RATE_LIMIT":
-                time.sleep(60)
-            # (如果 operators 是 RATE_LIMIT, wq_client 内部已设置冷却, 此处无需 sleep)
+            if self.operators != "RATE_LIMIT": time.sleep(60)
 
         logger.info(f"正在启动 {self.concurrency_level} 个消费者 (worker) 线程...")
         for i in range(self.concurrency_level):
@@ -916,38 +858,24 @@ class AlphaGenerator:
             t.start()
             self.consumer_threads.append(t)
 
-        evolution_seeds = []
-        strategic_guidance = []
-        
-        # --- v12.0: 失败案例列表 ---
-        failed_examples_for_miner = [] 
-        # --- v12.0: 结束 ---
+        evolution_seeds = []; strategic_guidance = []; failed_examples_for_miner = [] 
 
         while True:
             try:
-                # 1. (v13.0) 移除旧的冷却检查 (if time.time() < self._rate_limit_until)
-
-                # 2. 检查 WQ 字段/操作符
-                self.fields = self.wq.get_data_fields() # (本地, 无 API 调用)
-                self.operators = self.wq.get_operators() # (有 API 调用, 受看门狗 B 保护)
+                self.fields = self.wq.get_data_fields() 
+                self.operators = self.wq.get_operators() 
                 
                 if self.operators == "RATE_LIMIT":
                      logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
-                     # v13.0: 移除 _enter_cooldown
-                     # (看门狗 B 已设置冷却，让循环继续，将在队列检查处休眠或在下次 API 调用时休眠)
                      
                 if not self.fields or not self.operators:
                      logger.error("[生产者] 无法获取字段或操作符，将在60秒后重试。")
                      time.sleep(60)
                      continue
 
-                # --- v12.0: 刷新“地面真相”失败日志 ---
                 self.load_submission_failures()
-                # --- v12.0: 结束 ---
 
-                # 3. (Evolve 模式) 更新种子和指导
                 if mode == 'evolve':
-                    # v12.0: load_evolution_seeds 内部已更新，会过滤掉失败日志中的种子
                     evolution_seeds = self.load_evolution_seeds()
                     if not evolution_seeds:
                         mode = 'discover'
@@ -955,71 +883,49 @@ class AlphaGenerator:
                     else:
                         strategic_guidance = self.analyze_successful_patterns()
                 
-                # --- v12.0: (Discover 模式) 准备失败案例 ---
                 if mode == 'discover':
-                    # 从缓存中提取“高自相关”的失败案例
                     failed_examples_for_miner = [
                         item['expression'] for item in self.submission_failures_cache
                         if isinstance(item, dict) and 'HIGH_SELF_CORR' in item.get('reason', '').upper()
                     ]
                     if failed_examples_for_miner:
-                        # 只取最近的 N 个
-                        failed_examples_for_miner = failed_examples_for_miner[-20:] # 取最后20个
-                # --- v12.0: 结束 ---
+                        failed_examples_for_miner = failed_examples_for_miner[-20:]
 
-
-                # 4. 检查队列是否已满
                 if self.strategy_queue.qsize() >= self.queue_max_size:
                     config = load_system_config()
-                    queue_sleep = config.get("producer_queue_full_sleep", 10) # 默认10秒
-                    
+                    queue_sleep = config.get("producer_queue_full_sleep", 10) 
                     logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})，暂停生成 {queue_sleep} 秒...")
-                    time.sleep(queue_sleep) # <--- 使用配置值
+                    time.sleep(queue_sleep) 
                     continue
 
                 logger.info(f"[生产者] [{mode.upper()}] 开始生成 1 个新 Alpha... (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")
 
-                # 5. 生成新策略 (v13.0: 受看门狗 A 保护)
                 idea = None
                 if mode == 'discover':
-                    # --- v12.0: 注入失败案例 ---
-                    idea = self.generate_alpha_idea(
-                        self.fields, 
-                        self.operators, 
-                        guidance=strategic_guidance, 
-                        failed_examples=failed_examples_for_miner # <--- v12.0 新增
-                    )
+                    idea = self.generate_alpha_idea( self.fields, self.operators, guidance=strategic_guidance, failed_examples=failed_examples_for_miner )
                 elif mode == 'evolve':
                     if not evolution_seeds:
                          logger.warning("[生产者] 进化模式种子列表为空，跳过本轮生成。")
-                         time.sleep(1) # v13.0: 短暂休眠以防空转
+                         time.sleep(1) 
                          continue
                     base_alpha_obj = random.choice(evolution_seeds)
-                    # --- v12.0: generate_evolved_alpha_idea 内部已更新 ---
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) 
 
-                # --- v13.0: 处理看门狗信号 ---
                 if idea == "BUDGET_EXHAUSTED":
                     logger.critical(f"[生产者] 看门狗 A: LLM 预算已用尽。生产者线程将休眠 15 分钟...")
-                    time.sleep(900) # 休眠15分钟
-                    continue # 返回循环顶部
+                    time.sleep(900) 
+                    continue 
                 
                 if idea == "RATE_LIMIT":
                     logger.warning(f"[生产者] LLM API 速率限制 (非预算问题)。生产者线程将休眠 5 分钟...")
-                    time.sleep(300) # 休眠5分钟
-                    continue # 返回循环顶部
-                # --- v13.0 结束 ---
+                    time.sleep(300) 
+                    continue 
 
-                # 6. 预检
                 if isinstance(idea, dict) and idea.get("expression"):
                     expr = idea.get("expression")
                     with self.tested_alphas_lock:
                         is_tested = expr in self.tested_alphas
-                    
-                    # --- v12.0: 增加对“地面真相”失败日志的预检 ---
                     is_known_failure = expr in self.submission_failures_set
-                    # --- v12.0: 结束 ---
-
                     if is_tested:
                         logger.info(f"[生产者] 策略 {expr[:60]}... 已被测试过，丢弃。")
                         continue
@@ -1030,28 +936,20 @@ class AlphaGenerator:
                         continue
                     if self.is_using_blacklisted_identifier(expr):
                         continue
-
-                    # 7. 放入队列
                     try:
                          self.strategy_queue.put(idea)
                          logger.info(f"[生产者] 新策略已生成并通过预检，放入队列。 (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")
                     except queue.Full:
                          logger.error("[生产者] 尝试放入策略时队列已满！")
-
                 elif idea is None:
                      logger.warning("[生产者] LLM未能生成有效的 Alpha 策略。")
-                
-                # --- v13.0: 移除末尾的 time.sleep(sleep_time) ---
-                # 循环将立即继续，由队列或看门狗B进行限速
-                # --- v13.0 结束 ---
-
             except Exception as e:
                 logger.critical(f"[生产者] 循环发生致命错误: {e}", exc_info=True)
                 time.sleep(60)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v13.0 (Dual Watchdog)') # v13.0
+    parser = argparse.ArgumentParser(description='Alpha Generator v13.2 (Dynamic Pool Size)') # v13.2
     parser.add_argument('--user-id', type=str, required=True, help="WorldQuant User ID (email)")
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")
@@ -1066,7 +964,6 @@ if __name__ == "__main__":
     logger.info(f"正在加载 {args.api_config_path} (用于 LLM) 和 system_config.json (用于服务)...")
     config = load_system_config()
     
-    # --- v13.0: 移除 sleep_time ---
     if args.mode == 'discover':
         concurrency = config.get("miner_concurrency", 1)
         logger.info(f"[v13.0 Config] 启动 Miner (discover) 模式: Concurrency={concurrency}")
@@ -1076,15 +973,9 @@ if __name__ == "__main__":
     else:
         logger.error(f"未知的模式: {args.mode}。使用默认值 1。")
         concurrency = 1
-    # --- v13.0 结束 ---
 
-
-    MAX_INIT_RETRIES = 5
-    SHORT_SLEEP = 30
-    LONG_SLEEP = 300
-
-    retry_count = 0
-    wq_client = None
+    MAX_INIT_RETRIES = 5; SHORT_SLEEP = 30; LONG_SLEEP = 300
+    retry_count = 0; wq_client = None
 
     while wq_client is None:
         try:
@@ -1092,17 +983,13 @@ if __name__ == "__main__":
             logger.info("WorldQuant 客户端初始化成功。")
             retry_count = 0
         except requests.exceptions.RequestException as e:
-            # v13.0: 初始化失败时，看门狗 B 已自动处理冷却，我们只需等待
             if hasattr(e, 'response') and e.response is not None and e.response.status_code == 429:
                 logger.critical(f"初始化 WorldQuant 客户端时检测到 429 Rate Limit: {e}。")
                 logger.warning(f"[Watchdog B] 看门狗 B 已激活。将在下次重试时自动处理冷却...")
-                # (不需要 sleep，wq_client 内部已记录
-                # v13.0: 但如果认证失败，我们需要 sleep。
                 config_init = load_system_config()
-                wq_cooldown_init = config_init.get("wq_api_limiter", {}).get("seconds_to_wait_after_429", 60)
+                wq_cooldown_init = config_init.get("wq_api_limiter", {}).get("wq_429_cooldown_seconds", 60)
                 logger.warning(f"将进入 {wq_cooldown_init} 秒冷却期...")
                 time.sleep(wq_cooldown_init)
-                
                 retry_count = 0
                 continue
 
@@ -1121,9 +1008,6 @@ if __name__ == "__main__":
                                  api_config_path=args.api_config_path,
                                  batch_size=args.batch_size,
                                  concurrency_level=concurrency)
-
-        # v13.0: 移除 sleep_time
         generator.run(mode=args.mode)
-
     except Exception as e:
         logger.critical(f"生成器运行时发生致命错误: {e}", exc_info=True)

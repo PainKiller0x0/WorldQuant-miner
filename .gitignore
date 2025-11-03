@@ -10,7 +10,6 @@ api_config.json
 results/
 logs/
 *.log
-hopeful_alphas.json
 
 # Python
 __pycache__/
@@ -60,3 +59,12 @@ desktop.ini
 # Temporary files
 *.tmp
 *.temp
+
+# === v13.1.3: 忽略所有运行时数据 ===
+hopeful_alphas.json
+tested_alphas_log.json
+submission_failure_log.json
+submitted_alphas.json
+invalid_functions.json
+model_fleet_state.json
+*.json.bak

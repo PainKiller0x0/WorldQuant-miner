@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldQuant Miner 仪表盘 v13.1.0 (Watchdog UI)</title>
+    <title>WorldQuant Miner 仪表盘 v13.1.4 (UI Tweak)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -48,12 +48,35 @@
             color: #fff;
         }
 
+        /* --- v13.1.3: 响应式 UI 布局 --- */
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-top: 20px;
+            grid-template-columns: 1fr; /* 移动端: 1 列 */
         }
+        
+        @media (min-width: 992px) { /* 平板: 2 列 */
+             .status-grid {
+                grid-template-columns: 1fr 1fr;
+             }
+             /* 看门狗卡片在平板上跨越整行 */
+             #watchdog-card {
+                grid-column: 1 / -1; 
+             }
+        }
+        
+        @media (min-width: 1400px) { /* PC大屏: 3 列 (2.5 : 2.5 : 1) */
+             .status-grid {
+                grid-template-columns: 2.5fr 2.5fr 1fr;
+             }
+             /* 恢复看门狗卡片为 1 列 */
+             #watchdog-card {
+                grid-column: auto; 
+             }
+        }
+        /* --- v13.1.3: 结束 --- */
+        
         .status-card, .summary-card {
             background-color: #2a2a2a;
             padding: 20px;
@@ -71,13 +94,18 @@
         .status-STALLED { color: #dc3545; }
         .status-NOT-FOUND, .status-ERROR, .status-UNKNOWN { color: #ffc107; }
         
-        /* v13.1: 看门狗状态样式 */
         .watchdog-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             font-size: 0.95em;
         }
+        @media (max-width: 400px) {
+            .watchdog-grid {
+                 grid-template-columns: 1fr;
+            }
+        }
+        
         .watchdog-item {
              margin-top: 10px;
         }
@@ -97,6 +125,23 @@
         .watchdog-item span.status-cooldown {
             color: #dc3545; /* 红色 */
         }
+
+        /* --- v13.1.4: 看门狗说明 <details> 样式 --- */
+        .watchdog-details {
+            margin-top: 15px;
+        }
+        .watchdog-details summary {
+            cursor: pointer;
+            font-size: 0.85em;
+            color: #aaa;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .watchdog-details summary:hover {
+            opacity: 1;
+            color: #4dabf7;
+        }
+        /* --- v13.1.4: 结束 --- */
         
         .log-container {
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
@@ -384,7 +429,7 @@
                 <div id="evolverLogs" class="log-container">Loading...</div>
             </div>
             
-            <div class="status-card">
+            <div class="status-card" id="watchdog-card">
                 <h3>Watchdog 动态状态</h3>
                 <div class="watchdog-grid">
                     <div class="watchdog-item">
@@ -404,13 +449,17 @@
                         <span id="wqCooldownStatus" class="status-ok">...</span>
                     </div>
                 </div>
-                 <div id="watchdogLogs" class="log-container" style="height: 110px; margin-top: 15px;">
-                    - LLM 预算: Gemini API (UTC) 每日调用。<br>
-                    - WQ TPM: 动态调整的每分钟请求上限。<br>
-                    - WQ 冷却: 遭遇 429 后的强制冷却状态。
-                 </div>
-            </div>
-            </div>
+                 
+                 <details class="watchdog-details">
+                    <summary>查看说明</summary>
+                    <div class="log-container" style="height: 80px; margin-top: 10px; background-color: #1a1a1a;">
+                        - <strong>LLM 预算:</strong> Gemini API (UTC) 每日调用。<br>
+                        - <strong>WQ TPM:</strong> 动态调整的每分钟请求上限。<br>
+                        - <strong>WQ 冷却:</strong> 遭遇 429 后的强制冷却状态。
+                    </div>
+                </details>
+                </div>
+        </div>
 
         <div class="summary-card" style="margin-top: 20px;">
             <h2>Alpha 统计</h2>
@@ -483,7 +532,9 @@
         <button id="scrollToTopBtn" class="scroll-btn" title="滚动到顶部">▲</button>
         <button id="scrollToBottomBtn" class="scroll-btn" title="滚动到底部">▼</button>
     </div>
+    
     <script>
+        // (v13.1.4: JS 逻辑与 v13.1.2 完全一致，无需修改)
         let allAlphas = [];
         let currentSortKey = 'dashboard_score';
         let currentSortDir = 'desc';
@@ -542,11 +593,9 @@
                     return response.json();
                 })
                 .then(data => {
-                    // v13.1: 更新服务状态
                     updateServiceStatus('miner', data.miner);
                     updateServiceStatus('evolver', data.evolver);
                     
-                    // v13.1: 更新看门狗状态
                     if (data.watchdog_status) {
                         updateWatchdogStatus(data.watchdog_status);
                     }
@@ -604,7 +653,6 @@
             }
         }
         
-        // --- v13.1: 新增看门狗状态更新函数 ---
         function updateWatchdogStatus(data) {
             const llmBudgetEl = document.getElementById('llmBudgetUsed');
             const llmDateEl = document.getElementById('llmBudgetDate');
@@ -632,9 +680,7 @@
                 wqCooldownEl.className = "status-cooldown"; // Red
             }
         }
-        // --- v13.1: 结束 ---
         
-        // (v13.1: getAlphaStatus 保持 v11.0.15 不变)
         function getAlphaStatus(alpha) {
             if (alpha.is_failed_on_wq) { return "submitted-fail"; }
             if (alpha.is_submittable) {

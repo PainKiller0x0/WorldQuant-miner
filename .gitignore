@@ -68,3 +68,7 @@ submitted_alphas.json
 invalid_functions.json
 model_fleet_state.json
 *.json.bak
+
+# --- v13.2.2: 修复状态持久化 Bug ---
+system_config.json
+# --- v13.2.2: 修复结束 ---

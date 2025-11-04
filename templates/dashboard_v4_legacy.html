@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldQuant Miner 仪表盘 v13.1.4 (UI Tweak)</title>
+    <title>WorldQuant Miner 仪表盘 v13.2.1 (Log Rotation)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -522,7 +522,7 @@
         </table>
         <div id="loading">正在加载数据...</div>
         <div id="version-info">
-            Dashboard: <span id="dashboardVersion">...</span> | Generator: <span id="generatorVersion">...</span>
+            Dashboard: <span id="dashboardVersion">v13.2.1</span> | Generator: <span id="generatorVersion">...</span>
         </div>
     </div>
     
@@ -534,7 +534,7 @@
     </div>
     
     <script>
-        // (v13.1.4: JS 逻辑与 v13.1.2 完全一致，无需修改)
+        // (v13.2.1: JS 逻辑)
         let allAlphas = [];
         let currentSortKey = 'dashboard_score';
         let currentSortDir = 'desc';
@@ -572,6 +572,7 @@
             fetch('/api/version_info')
                 .then(response => response.json())
                 .then(data => {
+                    // v13.2.1: 更新 dashboardVersion
                     document.getElementById('dashboardVersion').textContent = data.dashboard_version || 'N/A';
                     document.getElementById('generatorVersion').textContent = data.generator_version || 'N/A';
                 })
@@ -644,12 +645,25 @@
             lastSeenEl.textContent = data.last_seen || 'Error';
             logsEl.innerHTML = data.logs ? escapeHTMLLogs(data.logs) : 'No logs found.';
             
+            // (v13.2.1: 后端 `Web仪表盘.py` 中 `allowed_files` 已包含 issues.log)
             const allowed_logs = ['miner.log', 'evolver.log', 'archaeologist.log', 'cron.log', 'miner_issues.log', 'evolver_issues.log'];
+            
             if (data.status !== "NOT FOUND") {
                  let log_filename = `${serviceName}.log`;
+                 
+                 // --- v13.2.1: 修复 - 添加 issues.log 下载链接 ---
+                 let issues_log_filename = log_filename.replace('.log', '_issues.log');
+                 let linksHtml = '';
+
                  if (allowed_logs.includes(log_filename)) {
-                    logsEl.innerHTML += `\n<a href="/download_logs/${log_filename}" target="_blank">[下载 ${log_filename}]</a>`;
+                    linksHtml += `\n<a href="/download_logs/${log_filename}" target="_blank">[下载 ${log_filename}]</a>`;
                  }
+                 // 检查 issues log 是否也允许下载
+                 if (allowed_logs.includes(issues_log_filename)) {
+                    linksHtml += ` <a href="/download_logs/${issues_log_filename}" target="_blank" style="color:#ffc107;">[下载 ${issues_log_filename}]</a>`;
+                 }
+                 logsEl.innerHTML += linksHtml;
+                 // --- v13.2.1: 修复结束 ---
             }
         }
         
@@ -925,8 +939,9 @@
             textArea.value = text;
             textArea.style.position = 'fixed'; textArea.style.top = 0; textArea.style.left = 0;
             textArea.style.width = '2em'; textArea.style.height = '2em';
-            textArea.style.padding = 0; textArea.style.border = 'none'; textArea.style.outline = 'none';
-            textArea.style.boxShadow = 'none'; textArea.style.background = 'transparent';
+            textArea.style.padding = 0; textArea.style.border = 'none';
+            textArea.style.outline = 'none'; textArea.style.boxShadow = 'none';
+            textArea.style.background = 'transparent';
             document.body.appendChild(textArea);
             textArea.focus(); textArea.select();
             try {

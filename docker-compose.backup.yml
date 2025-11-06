@@ -1,0 +1,53 @@
+# ⚠️ 已移除 version: 字段，因为 Compose v2 已弃用
+
+services:
+  backup-service:
+    image: alpine:latest
+    container_name: worldquant-backup
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - .:/app
+
+    command: >
+      sh -c '
+        set -e
+        apk add --no-cache tzdata coreutils findutils >/dev/null
+    
+        mkdir -p /app/backups
+        LOG_FILE="/app/backups/backup.log"
+        echo "[Backup Service] 启动成功 🧊 每 3 小时备份一次 hopeful_alphas.json" | tee -a "$LOG_FILE"
+        echo "[Backup Service] 当前时区: $TZ" | tee -a "$LOG_FILE"
+    
+        CLEAN_INTERVAL_DAYS=30
+        SLEEP_SECONDS=10800
+    
+        while true; do
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          SRC="/app/hopeful_alphas.json"
+          DEST="/app/backups/hopeful_alphas_${TIMESTAMP}.json"
+    
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "$DEST"
+            echo "[Backup Service] ✅ 已创建备份: $(basename "$DEST")" | tee -a "$LOG_FILE"
+    
+            TODAY=$(date +%Y%m%d)
+            FLAG_FILE="/app/backups/.last_clean"
+            LAST_CLEAN=$(cat "$FLAG_FILE" 2>/dev/null || echo "0")
+    
+            if [ "$LAST_CLEAN" != "$TODAY" ]; then
+              echo "$TODAY" > "$FLAG_FILE"
+              echo "[Backup Service] 🧹 开始清理 $CLEAN_INTERVAL_DAYS 天前的旧备份..." | tee -a "$LOG_FILE"
+              find /app/backups -name "hopeful_alphas_*.json" -mtime +$CLEAN_INTERVAL_DAYS -delete
+              echo "[Backup Service] 🧹 清理完成。" | tee -a "$LOG_FILE"
+            fi
+          else
+            echo "[Backup Service] ⚠️ 未找到 hopeful_alphas.json，跳过此次备份。" | tee -a "$LOG_FILE"
+          fi
+    
+          echo "[Backup Service] 😴 休眠 3 小时..." | tee -a "$LOG_FILE"
+          sleep $SLEEP_SECONDS
+        done
+      '
+
+    restart: unless-stopped

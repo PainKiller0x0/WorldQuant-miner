@@ -1,4 +1,5 @@
-# --- Web仪表盘.py v13.3.0 (Producer Cache + Wildcard) ---
+# --- Web仪表盘.py v13.3.7 (状态文件安全修复) ---
+# (此版本与 v13.3.5 相同, 重新应用以修复格式战 Bug)
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -12,32 +13,14 @@ import pandas as pd
 import numpy as np
 import time 
 
-# --- v13.1: 导入 utils 中的配置读写器 ---
-try:
-    from utils import load_system_config, save_system_config
-except ImportError:
-    # 紧急回退 (如果 utils.py 不在 PYTHONPATH)
-    logger.error("[Dashboard Init] 无法从 utils 导入配置读写器。将使用不安全的本地回退！")
-    SYSTEM_CONFIG_FILE_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'system_config.json')
-    _config_lock_local = threading.Lock()
-    def load_system_config():
-        with _config_lock_local:
-            try:
-                with open(SYSTEM_CONFIG_FILE_LOCAL, 'r') as f: return json.load(f)
-            except: return {} # 简化
-    def save_system_config(config_data):
-         with _config_lock_local:
-            try:
-                with open(SYSTEM_CONFIG_FILE_LOCAL, 'w', encoding='utf-8') as f:
-                    json.dump(config_data, f, indent=2, ensure_ascii=False)
-                return True
-            except: return False
-# --- v13.1: 结束 ---
+# --- v13.3.5: 强制使用 utils 中的安全函数 ---
+# 导入我们 v13.3.6 版的、带保险的 utils
+import utils
+# --- v13.3.5: 结束 ---
 
-
-# --- v13.3.0: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v13.3.0 (Producer Cache + Wildcard)"
-# --- v13.3.0: 结束 ---
+# --- v13.3.7: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v13.3.7 (State Safety Fix)"
+# --- v13.3.7: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -46,21 +29,24 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
-HOPEFUL_ALPHAS_FILE = os.path.join(BASE_DIR, 'hopeful_alphas.json')
+# --- v13.3.5: 移除不安全的本地路径和锁 (已集中到 utils.py) ---
+# HOPEFUL_ALPHAS_FILE = os.path.join(BASE_DIR, 'hopeful_alphas.json') # <--- 移除
+# hopeful_lock = threading.Lock() # <--- 移除
+# --- v13.3.5: 结束 ---
+
 SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas.json'))
 SUBMISSION_FAILURE_LOG_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submission_failure_log.json')) 
-FAILED_SUBMISSIONS_FILE_OLD = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json')) # 旧文件路径
+FAILED_SUBMISSIONS_FILE_OLD = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json')) 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
 DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py")
-SYSTEM_CONFIG_FILE = os.path.join(BASE_DIR, 'system_config.json') # (v13.1: 由 utils 管理)
 TESTED_ALPHAS_LOG_FILE = os.path.join(BASE_DIR, 'tested_alphas_log.json')
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
 CACHE_DURATION = timedelta(seconds=300) 
 
 file_lock = threading.Lock()
-hopeful_lock = threading.Lock()
+# hopeful_lock = threading.Lock() # v13.3.5: 移除
 failure_log_lock = threading.Lock() 
 tested_log_lock = threading.Lock()
 
@@ -72,7 +58,7 @@ _submission_cache = None
 _submission_cache_time = None
 _submission_cache_lock = threading.Lock()
 
-# (v13.3.0: 所有文件读写函数保持 v12.1.4 不变)
+# (v13.3.5: 我们暂时保留这些不安全的函数，只修复 hopeful_alphas)
 def load_submitted_alphas():
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
@@ -119,24 +105,27 @@ def save_submitted_alphas(submitted_dict):
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
 
-def load_hopeful_alphas_list():
-    with hopeful_lock:
-        filepath = HOPEFUL_ALPHAS_FILE
-        if not (os.path.exists(filepath) and os.path.isfile(filepath) and os.path.getsize(filepath) > 2): return []
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-            if isinstance(data, list): return data
-            else: logger.warning(f"[Hopeful Load] {filepath} is not a list. Returning empty."); return []
-        except Exception as e: logger.error(f"[Hopeful Load] Error loading {filepath}: {e}", exc_info=False); return []
+# --- v13.3.5: 移除不安全的 hopeful_alphas 读写函数 ---
+# def load_hopeful_alphas_list(): # <--- 移除 (这是 Bug 的根源)
+#     with hopeful_lock:
+#         filepath = HOPEFUL_ALPHAS_FILE
+#         if not (os.path.exists(filepath) and os.path.isfile(filepath) and os.path.getsize(filepath) > 2): return []
+#         try:
+#             with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
+#             if isinstance(data, list): return data # <--- 这一行导致了 Bug
+#             else: logger.warning(f"[Hopeful Load] {filepath} is not a list. Returning empty."); return [] # <--- 触发了
+#         except Exception as e: logger.error(f"[Hopeful Load] Error loading {filepath}: {e}", exc_info=False); return []
+#
+# def save_hopeful_alphas_list(alphas_list): # <--- 移除 (这个函数没被使用)
+#     with hopeful_lock:
+#         filepath = HOPEFUL_ALPHAS_FILE
+#         try:
+#             if not isinstance(alphas_list, list): logger.error(f"[Hopeful Save] Invalid data type: {type(alphas_list)}."); return False
+#             with open(filepath, 'w', encoding='utf-8') as f: json.dump(alphas_list, f, indent=4)
+#             return True
+#         except Exception as e: logger.error(f"[Hopeful Save] Error saving {filepath}: {e}", exc_info=False); return False
+# --- v13.3.5: 结束 ---
 
-def save_hopeful_alphas_list(alphas_list):
-    with hopeful_lock:
-        filepath = HOPEFUL_ALPHAS_FILE
-        try:
-            if not isinstance(alphas_list, list): logger.error(f"[Hopeful Save] Invalid data type: {type(alphas_list)}."); return False
-            with open(filepath, 'w', encoding='utf-8') as f: json.dump(alphas_list, f, indent=4)
-            return True
-        except Exception as e: logger.error(f"[Hopeful Save] Error saving {filepath}: {e}", exc_info=False); return False
 
 def load_failed_submissions_old_format():
     filepath = FAILED_SUBMISSIONS_FILE_OLD
@@ -231,7 +220,7 @@ def get_service_status(log_file):
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
 
-# (v13.3.0: 保持 v13.1.2 的统计修复逻辑)
+# --- v13.3.7: 修复 get_hopeful_alphas_stats (使用安全加载) ---
 def get_hopeful_alphas_stats():
     stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
               "submittable_pending_count": 0, "successfully_submitted_count": 0,
@@ -239,12 +228,15 @@ def get_hopeful_alphas_stats():
     try: 
         submitted_dict = load_submitted_alphas() 
         failed_map, failed_set = load_failed_submissions() 
-        alphas = load_hopeful_alphas_list() 
+        
+        # --- v13.3.7: 关键修复 ---
+        # 替换不安全的本地函数
+        # alphas = load_hopeful_alphas_list() # <--- 移除 (不安全, 导致 Bug)
+        alphas = utils.load_hopeful_alphas_safe() # <--- 替换 (安全, 兼容 list 和 dict)
+        # --- v13.3.7: 结束 ---
 
-        # --- v13.1.2: 修复统计 Bug ---
         total_submitted_count_local = len(submitted_dict) + len(failed_set)
         successfully_submitted_count_local = 0 
-        # --- v13.1.2: 修复结束 ---
 
         if alphas:
             valid_alphas_list = [a for a in alphas if isinstance(a, dict)]
@@ -279,6 +271,7 @@ def get_hopeful_alphas_stats():
                 return fitness_f + (passed_count * 0.2) + (abs(sharpe_f) * 0.3) - (turnover_f * 0.1)
 
             processed_alphas_temp = []
+            
             pass_pattern = re.compile(r'(\d+)\s+PASS') 
             fail_pattern = re.compile(r'(\d+)\s+FAIL') 
 
@@ -286,8 +279,10 @@ def get_hopeful_alphas_stats():
                 try: 
                     expression = alpha_report.get('expression')
                     if not expression: continue
+                    
                     is_failed_on_wq = expression in failed_set 
                     is_submitted = expression in submitted_dict 
+
                     perf_data = alpha_report.get('performance', {});
                     if not isinstance(perf_data, dict): perf_data = {}
                     summary_str = alpha_report.get('checks_summary', '') or ''
@@ -296,26 +291,48 @@ def get_hopeful_alphas_stats():
                     pass_match = pass_pattern.search(summary_str);
                     passed_count = int(pass_match.group(1)) if pass_match else 0
                     is_submittable = passed_count >= 7 and not has_fail
+                    
                     is_successfully_submitted = is_submittable and is_submitted and not is_failed_on_wq
+
                     if is_submittable and not is_submitted and not is_failed_on_wq: 
                         stats['submittable_pending_count'] += 1
-                    # --- v13.1.2: 重新添加 'Success' 计数器 ---
+
                     if is_successfully_submitted:
                         successfully_submitted_count_local += 1
-                    # --- v13.1.2: 结束 ---
+                    
                     manual_timestamp = "N/A"
-                    if is_submitted: manual_timestamp = submitted_dict.get(expression, {}).get('manual_timestamp', 'N/A')
-                    elif is_failed_on_wq: manual_timestamp = failed_map.get(expression, {}).get('timestamp', 'N/A') 
-                    processed_alpha_data = { "expression": expression, "timestamp": alpha_report.get('timestamp', 'N/A'), "manual_timestamp": manual_timestamp, "checks_summary": summary_str, "is_submittable": is_submittable, "is_submitted": is_submitted, "is_failed_on_wq": is_failed_on_wq, "is_successfully_submitted": is_successfully_submitted, "dashboard_score": calculate_dashboard_score(alpha_report), "performance": perf_data }
+                    if is_submitted:
+                        manual_timestamp = submitted_dict.get(expression, {}).get('manual_timestamp', 'N/A')
+                    elif is_failed_on_wq:
+                        manual_timestamp = failed_map.get(expression, {}).get('timestamp', 'N/A') 
+
+                    processed_alpha_data = {
+                        "expression": expression, 
+                        "timestamp": alpha_report.get('timestamp', 'N/A'),
+                        "manual_timestamp": manual_timestamp, 
+                        "checks_summary": summary_str, 
+                        "is_submittable": is_submittable,
+                        "is_submitted": is_submitted, 
+                        "is_failed_on_wq": is_failed_on_wq,
+                        "is_successfully_submitted": is_successfully_submitted,
+                        "dashboard_score": calculate_dashboard_score(alpha_report), 
+                        "performance": perf_data
+                    }
                     processed_alphas_temp.append(processed_alpha_data)
                 except Exception as e: logger.error(f"[Stats Process Alpha] Error for {expression[:30]}...: {e}", exc_info=False)
+
             stats['all_alphas'] = processed_alphas_temp
-        stats['successfully_submitted_count'] = successfully_submitted_count_local 
+            
+        stats['successfully_submitted_count'] = successfully_submitted_count_local
         stats['total_submitted_count'] = total_submitted_count_local
+
     except Exception as e:
         logger.error(f"[Stats] CRITICAL Error in get_hopeful_alphas_stats: {e}", exc_info=True)
-        stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0, "submittable_pending_count": 0, "successfully_submitted_count": 0, "total_submitted_count": 0, "all_alphas": [] }
+        stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
+                  "submittable_pending_count": 0, "successfully_submitted_count": 0,
+                  "total_submitted_count": 0, "all_alphas": [] }
     return stats
+# --- v13.3.7: 结束 ---
 
 def get_version_from_file(file_path, version_regex_str):
     version_regex = re.compile(version_regex_str)
@@ -326,7 +343,6 @@ def get_version_from_file(file_path, version_regex_str):
         return match.group(1) if match else "unknown_format"
     except Exception as e: logger.error(f"[Version] Error reading {file_path}: {e}"); return "read_error"
 
-# --- Routes ---
 @app.route('/')
 def dashboard():
     return render_template('dashboard_v4_legacy.html', settings_page=True, chart_page=True)
@@ -342,7 +358,8 @@ def chart_page():
 @app.route('/api/get_settings', methods=['GET'])
 def get_settings():
     try:
-        data = load_system_config()
+        # v13.3.7: 确保使用 utils 中的安全函数
+        data = utils.load_system_config() 
         if not data:
             return jsonify({"error": "Config file not found or empty."}), 404
         response = make_response(jsonify(data))
@@ -352,83 +369,79 @@ def get_settings():
         logger.error(f"[API /api/get_settings] Error: {e}", exc_info=True)
         return jsonify({"error": "读取配置文件时出错。"}), 500
 
-# --- v13.3.0: 重构 save_settings ---
 @app.route('/api/save_settings', methods=['POST'])
 def save_settings():
-    logger.info("[API /api/save_settings] (v13.3.0)")
+    logger.info("[API /api/save_settings] (v13.1)")
     if not request.is_json: return jsonify(status='error', message='请求必须是 JSON'), 400
     new_data = request.json
     if not isinstance(new_data, dict): return jsonify(status='error', message='无效的 JSON 格式'), 400
 
     try:
-        current_config = load_system_config()
-
-        # v13.3.0: 新增 evolver_wildcard_count
-        static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count']
+        # v13.3.7: 确保使用 utils 中的安全函数
+        current_config = utils.load_system_config()
+        static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size']
         llm_keys = ['daily_budget_limit']
         wq_keys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit']
         
         for key in static_keys:
             if key in new_data:
-                try:
-                    current_config[key] = int(new_data[key])
-                except (ValueError, TypeError):
-                    return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
+                try: current_config[key] = int(new_data[key])
+                except (ValueError, TypeError): return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
         
         if 'llm_budget' in new_data and isinstance(new_data['llm_budget'], dict):
             if 'llm_budget' not in current_config: current_config['llm_budget'] = {}
             for key in llm_keys:
                 if key in new_data['llm_budget']:
-                    try:
-                        current_config['llm_budget'][key] = int(new_data['llm_budget'][key])
-                    except (ValueError, TypeError):
-                         return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
+                    try: current_config['llm_budget'][key] = int(new_data['llm_budget'][key])
+                    except (ValueError, TypeError): return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
 
         if 'wq_api_limiter' in new_data and isinstance(new_data['wq_api_limiter'], dict):
             if 'wq_api_limiter' not in current_config: current_config['wq_api_limiter'] = {}
             for key in wq_keys:
                  if key in new_data['wq_api_limiter']:
-                    try:
-                        current_config['wq_api_limiter'][key] = int(new_data['wq_api_limiter'][key])
-                    except (ValueError, TypeError):
-                         return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
+                    try: current_config['wq_api_limiter'][key] = int(new_data['wq_api_limiter'][key])
+                    except (ValueError, TypeError): return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
 
         if 'evolver_search_space' in new_data:
             current_config['evolver_search_space'] = new_data.get('evolver_search_space', current_config.get('evolver_search_space', {}))
 
-        if save_system_config(current_config):
-            logger.info(f"[API /api/save_settings] v13.3.0 配置已保存。")
+        # v13.3.7: 确保使用 utils 中的安全函数
+        if utils.save_system_config(current_config):
+            logger.info(f"[API /api/save_settings] v13.1 配置已保存。")
             global _timeseries_cache, _timeseries_cache_time
             with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
             return jsonify(status='success', message='配置已保存')
         else:
-            logger.error(f"[API /api/save_settings] v13.3.0 保存失败。")
+            logger.error(f"[API /api/save_settings] v13.1 保存失败。")
             return jsonify(status='error', message='保存配置时发生内部错误。'), 500
-            
     except Exception as e:
         logger.error(f"[API /api/save_settings] Error: {e}", exc_info=True)
         return jsonify(status='error', message="保存配置时发生内部错误。"), 500
-# --- v13.3.0: 结束 ---
-
 
 @app.route('/status')
 def status():
     try:
+        # --- v13.3.7: 现在调用的是修复后的函数 ---
         data = { "miner": get_service_status('miner.log'),
                  "evolver": get_service_status('evolver.log'),
                  "hopeful_alphas": get_hopeful_alphas_stats() } 
+        # --- v13.3.7: 结束 ---
                  
         try:
-            config = load_system_config()
+            # v13.3.7: 确保使用 utils 中的安全函数
+            config = utils.load_system_config()
             llm_budget = config.get("llm_budget", {})
             wq_limiter = config.get("wq_api_limiter", {})
+            
             wq_cooldown_status = "OK"; wq_cooldown_remaining = 0
             last_failure = wq_limiter.get("last_failure_timestamp", 0)
             cooldown_period = wq_limiter.get("wq_429_cooldown_seconds", 60)
             now = time.time()
+            
             if now - last_failure < cooldown_period:
                 wq_cooldown_remaining = round(cooldown_period - (now - last_failure))
                 wq_cooldown_status = f"IN_COOLDOWN ({wq_cooldown_remaining}s)"
+
             data["watchdog_status"] = {
                 "llm_budget_used": llm_budget.get("budget_used_today", 0),
                 "llm_budget_limit": llm_budget.get("daily_budget_limit", 2000),
@@ -456,7 +469,7 @@ def status():
 
 @app.route('/api/version_info')
 def version_info():
-    dashboard_version = CURRENT_DASHBOARD_VERSION # 使用新版本号
+    dashboard_version = CURRENT_DASHBOARD_VERSION 
     generator_version = get_version_from_file(GENERATOR_FILE_PATH, r'CURRENT_GENERATOR_VERSION\s*=\s*["\'](v[0-9]+\.[0-9]+\.[^"\']*)["\']')
     data = {"dashboard_version": dashboard_version, "generator_version": generator_version}
     response = make_response(jsonify(data)); response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; return response
@@ -515,7 +528,12 @@ def get_daily_submission_stats():
                 daily_failed_counter[dt.date()] += 1
             except (ValueError, TypeError): pass 
     daily_hopeful_counter = Counter()
-    hopeful_list = load_hopeful_alphas_list()
+    
+    # --- v13.3.7: 关键修复 ---
+    # hopeful_list = load_hopeful_alphas_list() # <--- 移除 (不安全)
+    hopeful_list = utils.load_hopeful_alphas_safe() # <--- 替换 (安全)
+    # --- v13.3.7: 结束 ---
+
     for item in hopeful_list:
         if isinstance(item, dict) and 'timestamp' in item:
             try:
@@ -652,6 +670,69 @@ def get_pending_alphas():
     except Exception as e:
         logger.critical(f"[API /api/get_pending_alphas] CRITICAL Error: {e}", exc_info=True)
         return jsonify({"error": f"Failed to get pending alphas: {e}"}), 500
+
+# v15.1: 添加日志查看器 (这部分我们之前讨论过，但未合并，现在加上)
+LOG_DIR_FOR_VIEWER = "logs"
+LINES_TO_READ = 500 
+
+def get_last_n_lines(file_path, n):
+    """高效读取文件最后 N 行"""
+    if not os.path.exists(file_path):
+        return f"错误：日志文件未找到。\n请检查路径: {file_path}\n"
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = deque(f, n)
+            return "".join(lines)
+    except Exception as e:
+        return f"读取日志文件时发生错误: {e}\n"
+
+@app.route('/view_log/<service_name>')
+def view_log(service_name):
+    """
+    显示指定服务的日志 (最后 N 行)
+    """
+    # 假设 docker-compose.yml 中定义了 miner.log
+    # 假设 docker-compose.evolver.yml 中定义了 evolver.log
+    # 假设 docker-compose.dashboard.yml 中定义了 dashboard.log
+    log_map = {
+        "miner": "miner.log", # v13.3.7: 修复日志文件名 (从 miner.log 改为 miner_log.log 是错误的)
+        "evolver": "evolver.log",
+        "dashboard": "dashboard.log"
+    }
+    
+    # v13.2.1 引入了 issues 日志
+    log_map_issues = {
+        "miner_issues": "miner_issues.log",
+        "evolver_issues": "evolver_issues.log",
+        "dashboard_issues": "dashboard_issues.log"
+    }
+
+    file_name = log_map.get(service_name) or log_map_issues.get(service_name)
+    
+    if not file_name:
+        return "错误：未知的服务名称。", 404
+
+    log_file_path = os.path.join(LOG_DIR_FOR_VIEWER, file_name)
+    log_content = get_last_n_lines(log_file_path, LINES_TO_READ)
+    
+    response_html = f"""
+    <html>
+    <head>
+        <title>{file_name}</title>
+        <style>
+            body {{ font-family: monospace; background-color: #2b2b2b; color: #f5f5f5; }}
+            pre {{ white-space: pre-wrap; word-wrap: break-word; }}
+        </style>
+    </head>
+    <body>
+        <h3>显示日志: {file_name} (最后 {LINES_TO_READ} 行)</h3>
+        <pre>{log_content}</pre>
+    </body>
+    </html>
+    """
+    return response_html
+# --- v15.1: 结束 ---
 
 if __name__ == '__main__':
     if not os.path.exists(LOG_DIR):

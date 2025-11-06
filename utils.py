@@ -1,11 +1,12 @@
-# --- utils.py v13.2.1 (Log Rotation) ---
+# --- utils.py v13.2.3 (竞争条件修复) ---
 # 共享工具模块: 日志, 配置读取
 
 import logging
-import logging.handlers # v13.2.1: 新增日志轮转模块
+import logging.handlers 
 import json
 import os
 import threading 
+import time  # <-- v13.2.3: 引入 time 模块用于重试
 
 # v8.0: 中心化配置
 SYSTEM_CONFIG_FILE = "system_config.json" 
@@ -19,37 +20,65 @@ logger = logging.getLogger(__name__)
 
 def load_system_config():
     """
-    (v13.0) 线程安全地读取并返回 system_config.json 的内容。
+    (v13.2.3) 线程安全地读取 system_config.json，
+    增加了重试逻辑以防止 Docker 卷挂载竞争条件。
     """
+    # --- v13.2.3: 竞争条件修复配置 ---
+    max_retries = 3       # 重试 3 次
+    retry_delay_seconds = 2 # 每次间隔 2 秒
+    # --- v13.2.3 结束 ---
+
     with _system_config_lock:
-        try:
-            with open(SYSTEM_CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            # 紧急回退 (Fallback)
-            logger.error(f"读取 {SYSTEM_CONFIG_FILE} 失败: {e}。将使用紧急回退值！")
-            # v13.1: 更新回退值
-            return {
-                "miner_concurrency": 1,
-                "evolver_concurrency": 1,
-                "producer_queue_full_sleep": 10,
-                "hopeful_pool_max_size": 200,
-                "llm_budget": {
-                    "daily_budget_limit": 2000,
-                    "budget_used_today": 0,
-                    "budget_last_used_date_utc": "2024-01-01"
-                },
-                "wq_api_limiter": {
-                    "current_tpm_limit": 60,
-                    "min_tpm_limit": 15,
-                    "max_tpm_limit": 200,
-                    "tpm_increment_on_success": 1,
-                    "tpm_decrement_factor_on_429": 0.75,
-                    "wq_429_cooldown_seconds": 60,
-                    "last_failure_timestamp": 0
-                },
-                "evolver_search_space": {}
-            }
+        # --- v13.2.3: 增加重试循环 ---
+        for attempt in range(max_retries):
+            try:
+                # 检查文件是否存在且非空
+                if os.path.exists(SYSTEM_CONFIG_FILE) and os.path.getsize(SYSTEM_CONFIG_FILE) > 0:
+                    with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                        config_data = json.load(f)
+                        # 成功读取，立即返回
+                        logger.info(f"成功读取 {SYSTEM_CONFIG_FILE} (尝试 {attempt + 1}/{max_retries})")
+                        return config_data
+                else:
+                    logger.warning(f"读取 {SYSTEM_CONFIG_FILE} 失败 (第 {attempt + 1}/{max_retries} 次): 文件未找到或为空。Docker 卷可能正在挂载...")
+
+            except json.JSONDecodeError:
+                 logger.warning(f"读取 {SYSTEM_CONFIG_FILE} 失败 (第 {attempt + 1}/{max_retries} 次): 文件内容为空或 JSON 格式损坏。")
+            except Exception as e:
+                # 捕获其他潜在异常
+                logger.error(f"读取 {SYSTEM_CONFIG_FILE} 时发生意外错误 (第 {attempt + 1}/{max_retries} 次): {e}")
+
+            # 如果不是最后一次尝试，则等待
+            if attempt < max_retries - 1:
+                logger.info(f"将在 {retry_delay_seconds} 秒后重试...")
+                time.sleep(retry_delay_seconds)
+        # --- v13.2.3 循环结束 ---
+
+        # --- 紧急回退 (Fallback) ---
+        # 如果所有重试均失败
+        logger.error(f"所有 {max_retries} 次读取 {SYSTEM_CONFIG_FILE} 的尝试均失败。将使用紧急回退值！")
+        # v13.1: 更新回退值 (保持不变)
+        return {
+            "miner_concurrency": 1,
+            "evolver_concurrency": 1,
+            "producer_queue_full_sleep": 10,
+            "hopeful_pool_max_size": 200, # 这就是为什么你看到了 200
+            "llm_budget": {
+                "daily_budget_limit": 2000,
+                "budget_used_today": 0, # 这就是为什么预算清零了
+                "budget_last_used_date_utc": "2024-01-01"
+            },
+            "wq_api_limiter": {
+                "current_tpm_limit": 60,
+                "min_tpm_limit": 15,
+                "max_tpm_limit": 200,
+                "tpm_increment_on_success": 1,
+                "tpm_decrement_factor_on_429": 0.75,
+                "wq_429_cooldown_seconds": 60,
+                "last_failure_timestamp": 0
+            },
+            "evolver_search_space": {}
+        }
 
 def save_system_config(config_data):
     """
@@ -68,6 +97,7 @@ def save_system_config(config_data):
 def setup_logging(log_file):
     """
     v13.2.1: 实施日志轮转 (Log Rotation)
+    (此函数保持不变)
     """
     log_dir = "logs"
     if not os.path.exists(log_dir):
@@ -110,7 +140,7 @@ def setup_logging(log_file):
 
     issue_handler = logging.handlers.TimedRotatingFileHandler(
         issue_log_path,
-        when='D',           # 按天轮转
+        when='D',           # 按天N轮转
         interval=1,         # 每天
         backupCount=30,     # 同样保留 30 天
         encoding='utf-8'

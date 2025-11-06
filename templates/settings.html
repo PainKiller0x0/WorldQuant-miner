@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v13.1.6 控制面板 - WQminer</title>
+    <title>v13.3.0 控制面板 - WQminer</title>
 <style>
-        /* (v13.1.6: 样式与 v13.1.0 保持一致) */
+        /* (v13.3.0: 样式与 v13.1.6 保持一致) */
          :root {
             --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333;
             --muted-text-color: #7f8c8d; --header-bg-color: #3498db;
@@ -69,7 +69,7 @@
 
 <div class="container">
     <div class="header">
-        <h1>WQminer v13.1.6 控制面板</h1>
+        <h1>WQminer v13.3.0 控制面板</h1>
         <div class="header-controls">
             <a href="/">&larr; 返回主仪表盘</a>
             <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
@@ -129,6 +129,11 @@
                 <input type="number" id="hopeful_pool_max_size" name="hopeful_pool_max_size" min="10">
                 <small>Hopeful Alphas 精英池的最大容量。</small>
             </div>
+            <div class="form-group">
+                <label for="evolver_wildcard_count">Evolver 外卡池数量 (个)</label>
+                <input type="number" id="evolver_wildcard_count" name="evolver_wildcard_count" min="0">
+                <small>Evolver 每次抽样时，从“外卡池”抽取的父本数量。</small>
+            </div>
         </div>
         
         <div class="button-group">
@@ -164,16 +169,14 @@
         const messageEl = document.getElementById('message');
         const copyButton = document.getElementById('copy-restart-cmd');
 
-        // --- v13.1.6: 剪贴板修复 ---
+        // --- v13.1.6: 剪贴板修复逻辑 ---
         
-        // 1. showMessage (用于显示提示)
         function showMessage(type, html) {
             messageEl.className = type;
             messageEl.innerHTML = html;
             messageEl.style.display = 'block';
         }
         
-        // 2. showCopySuccess (用于按钮反馈)
         function showCopySuccess(buttonElement) {
             const originalText = buttonElement.textContent;
             buttonElement.textContent = '已复制!';
@@ -184,7 +187,6 @@
             }, 2000);
         }
         
-        // 3. fallbackCopy (用于不安全环境, e.g., http://)
         function fallbackCopy(text, buttonElement) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
@@ -210,7 +212,6 @@
             document.body.removeChild(textArea);
         }
 
-        // 4. copyRestartCommand (现在使用回退逻辑)
         const restartCommand = 'docker compose -f docker-compose.yml -f docker-compose.evolver.yml -f docker-compose.dashboard.yml up -d --build --force-recreate'; 
         function copyRestartCommand(buttonElement) {
              // 检查安全上下文
@@ -229,7 +230,7 @@
         // --- v13.1.6: 修复结束 ---
         
 
-        // 5. Load current settings
+        // 1. Load current settings
         fetch('/api/get_settings')
             .then(response => {
                  if (!response.ok) { 
@@ -238,11 +239,12 @@
                  return response.json();
              })
             .then(data => {
-                // v13.1: 填充顶层参数
+                // v13.1: 填充顶层参数 (v13.3.0: 新增 evolver_wildcard_count)
                 if (form.elements['miner_concurrency']) form.elements['miner_concurrency'].value = data.miner_concurrency;
                 if (form.elements['evolver_concurrency']) form.elements['evolver_concurrency'].value = data.evolver_concurrency;
                 if (form.elements['producer_queue_full_sleep']) form.elements['producer_queue_full_sleep'].value = data.producer_queue_full_sleep;
                 if (form.elements['hopeful_pool_max_size']) form.elements['hopeful_pool_max_size'].value = data.hopeful_pool_max_size;
+                if (form.elements['evolver_wildcard_count']) form.elements['evolver_wildcard_count'].value = data.evolver_wildcard_count;
                 
                 // v13.1: 填充看门狗 A
                 if (data.llm_budget && form.elements['daily_budget_limit']) {
@@ -258,12 +260,12 @@
             })
             .catch(err => showMessage('error', `加载配置时发生错误: ${err.message}`));
 
-        // 6. Save settings
+        // 2. Save settings
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            // v13.1: 定义所有需要保存的 Key
-            const staticKeys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size'];
+            // v13.3.0: 更新 Key 列表
+            const staticKeys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'];
             const llmKeys = ['daily_budget_limit'];
             const wqKeys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'];
 
@@ -305,7 +307,7 @@
             .then(response => response.json())
             .then(result => {
                 if (result.status === 'success') {
-                    showMessage('success', `<b>配置已保存！</b><br>看门狗参数 (TPM, Cooldowns) 已即时生效。<br>服务参数 (并发数, 精英池上限) 需要您点击<button type="button" class="copy-button" onclick="copyRestartCommand(this)">复制重启命令</button>并在主机上<b>手动执行</b>才能应用。`);
+                    showMessage('success', `<b>配置已保存！</b><br>看门狗参数 (TPM, Cooldowns) 已即时生效。<br>服务参数 (并发数, 池上限, 外卡数) 需要您点击<button type="button" class="copy-button" onclick="copyRestartCommand(this)">复制重启命令</button>并在主机上<b>手动执行</b>才能应用。`);
                 } else {
                     showMessage('error', `保存失败: ${result.message}`);
                 }
@@ -313,9 +315,9 @@
             .catch(err => showMessage('error', `保存时发生网络错误: ${err}`));
         });
 
-        // 7. Attach listener to the main copy button
+        // 3. Attach listener to the main copy button
         copyButton.addEventListener('click', function() {
-             copyRestartCommand(this); // 现在调用 DCL 内部的函数
+             copyRestartCommand(this); 
         });
 
     });

@@ -1,71 +1,67 @@
-# --- utils.py v13.2.3 (竞争条件修复) ---
-# 共享工具模块: 日志, 配置读取
-
+# --- utils.py v13.3.1 (跨进程锁修复) ---
 import logging
 import logging.handlers 
 import json
 import os
 import threading 
-import time  # <-- v13.2.3: 引入 time 模块用于重试
+import time
+from filelock import FileLock # v13.3.1: 引入跨进程文件锁
 
 # v8.0: 中心化配置
 SYSTEM_CONFIG_FILE = "system_config.json" 
+# v13.3.1: 锁文件 (必须是独立文件)
+SYSTEM_CONFIG_LOCK_FILE = "system_config.json.lock"
 
 # --- v13.0: 线程安全锁 ---
-_system_config_lock = threading.Lock()
+# _system_config_lock = threading.Lock() # v13.3.1: 移除无效的线程锁
 # --- v13.0 结束 ---
 
-# 获取一个专用的 logger
-logger = logging.getLogger(__name__)
+# ... logger ...
 
 def load_system_config():
     """
-    (v13.2.3) 线程安全地读取 system_config.json，
-    增加了重试逻辑以防止 Docker 卷挂载竞争条件。
+    (v13.3.1) 线程安全 + 跨进程安全地读取 system_config.json。
     """
-    # --- v13.2.3: 竞争条件修复配置 ---
-    max_retries = 3       # 重试 3 次
-    retry_delay_seconds = 2 # 每次间隔 2 秒
-    # --- v13.2.3 结束 ---
+    # ... (v13.2.3 的重试逻辑保持不变) ...
+    max_retries = 3       
+    retry_delay_seconds = 2 
 
-    with _system_config_lock:
-        # --- v13.2.3: 增加重试循环 ---
+    # --- v13.3.1: 使用 FileLock ---
+    # timeout=10 表示如果 10 秒内拿不到锁，就超时抛出异常
+    lock = FileLock(SYSTEM_CONFIG_LOCK_FILE, timeout=10) 
+    with lock:
+    # --- v13.3.1 结束 ---
+        
+        # ... (v13.2.3 的重试循环) ...
         for attempt in range(max_retries):
             try:
-                # 检查文件是否存在且非空
                 if os.path.exists(SYSTEM_CONFIG_FILE) and os.path.getsize(SYSTEM_CONFIG_FILE) > 0:
                     with open(SYSTEM_CONFIG_FILE, 'r', encoding='utf-8') as f:
                         config_data = json.load(f)
-                        # 成功读取，立即返回
-                        logger.info(f"成功读取 {SYSTEM_CONFIG_FILE} (尝试 {attempt + 1}/{max_retries})")
+                        # (v13.3.0: 移除成功日志)
+                        # logger.info(f"成功读取 {SYSTEM_CONFIG_FILE} (尝试 {attempt + 1}/{max_retries})")
                         return config_data
                 else:
-                    logger.warning(f"读取 {SYSTEM_CONFIG_FILE} 失败 (第 {attempt + 1}/{max_retries} 次): 文件未找到或为空。Docker 卷可能正在挂载...")
+                    logger.warning(f"读取 {SYSTEM_CONFIG_FILE} 失败 (第 {attempt + 1}/{max_retries} 次): 文件未找到或为空...")
 
-            except json.JSONDecodeError:
-                 logger.warning(f"读取 {SYSTEM_CONFIG_FILE} 失败 (第 {attempt + 1}/{max_retries} 次): 文件内容为空或 JSON 格式损坏。")
             except Exception as e:
-                # 捕获其他潜在异常
                 logger.error(f"读取 {SYSTEM_CONFIG_FILE} 时发生意外错误 (第 {attempt + 1}/{max_retries} 次): {e}")
 
-            # 如果不是最后一次尝试，则等待
             if attempt < max_retries - 1:
                 logger.info(f"将在 {retry_delay_seconds} 秒后重试...")
                 time.sleep(retry_delay_seconds)
-        # --- v13.2.3 循环结束 ---
-
+        
         # --- 紧急回退 (Fallback) ---
-        # 如果所有重试均失败
         logger.error(f"所有 {max_retries} 次读取 {SYSTEM_CONFIG_FILE} 的尝试均失败。将使用紧急回退值！")
-        # v13.1: 更新回退值 (保持不变)
         return {
+            # ... (回退值保持不变) ...
             "miner_concurrency": 1,
             "evolver_concurrency": 1,
             "producer_queue_full_sleep": 10,
-            "hopeful_pool_max_size": 200, # 这就是为什么你看到了 200
+            "hopeful_pool_max_size": 200,
             "llm_budget": {
                 "daily_budget_limit": 2000,
-                "budget_used_today": 0, # 这就是为什么预算清零了
+                "budget_used_today": 0,
                 "budget_last_used_date_utc": "2024-01-01"
             },
             "wq_api_limiter": {
@@ -82,9 +78,12 @@ def load_system_config():
 
 def save_system_config(config_data):
     """
-    (v13.0) 线程安全地将更新后的配置字典写回 system_config.json。
+    (v13.3.1) 线程安全 + 跨进程安全地将配置写回 system_config.json。
     """
-    with _system_config_lock:
+    # --- v13.3.1: 使用 FileLock ---
+    lock = FileLock(SYSTEM_CONFIG_LOCK_FILE, timeout=10)
+    with lock:
+    # --- v13.3.1 结束 ---
         try:
             with open(SYSTEM_CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
@@ -92,7 +91,8 @@ def save_system_config(config_data):
         except Exception as e:
             logger.error(f"保存 {SYSTEM_CONFIG_FILE} 失败: {e}", exc_info=True)
             return False
-# --- v13.0 结束 ---
+
+# ... setup_logging(log_file) ... (保持不变)
 
 def setup_logging(log_file):
     """

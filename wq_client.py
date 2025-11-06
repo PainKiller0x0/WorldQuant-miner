@@ -1,4 +1,4 @@
-# --- wq_client.py v13.0 (Dual Watchdog - Watchdog B) ---
+# --- wq_client.py v13.3.2 (修复 "sleep-while-holding-lock" Bug) ---
 # WorldQuant API 交互模块
 
 import logging
@@ -6,12 +6,11 @@ import json
 import time
 import requests
 import threading
-import math # v13.0: 新增
+import math 
 from requests.adapters import HTTPAdapter, Retry
 
-# --- v13.0: 新增导入 ---
+# v13.3.1: 我们现在依赖 utils 里的 FileLock，所以 utils 的正确性至关重要
 from utils import load_system_config, save_system_config
-# --- v13.0 结束 ---
 
 # 获取一个专用的 logger
 logger = logging.getLogger(__name__)
@@ -23,12 +22,11 @@ class WorldQuant:
         self.base_url = "https://api.worldquantbrain.com"
         self.session = self._create_resilient_session()
         
-        # --- v13.0: 锁具 (保留 v9.4.1 的锁, 新增 v13.0 的锁) ---
-        self.auth_lock = threading.Lock() # Lock for authentication process
-        self.request_lock = threading.Lock() # v9.4.1: Lock for 401 re-auth race conditions
+        self.auth_lock = threading.Lock() 
+        self.request_lock = threading.Lock() 
         
         # --- v13.0: 看门狗 B (WQ 令牌桶) 状态 ---
-        self.wq_limiter_lock = threading.Lock() # 保护对 system_config 和令牌桶的读写
+        self.wq_limiter_lock = threading.Lock() # 保护对 *内存中* 令牌桶的读写
         self.wq_token_bucket = [] # 存储请求的时间戳 (float)
         # --- v13.0 结束 ---
 
@@ -40,108 +38,133 @@ class WorldQuant:
             'nanHandling': 'ON', 'language': 'FASTEXPR', 'visualization': False,
         }
 
-    # --- v13.0: 看门狗 B (WQ 令牌桶) 核心逻辑 ---
+    # --- v13.3.2: 修复 "sleep-while-holding-lock" Bug ---
     def _acquire_wq_token(self):
         """
-        (v13.0) 线程安全地获取一个 WQ API 令牌。
-        如果速率超过动态 TPM 限制，将阻塞 (time.sleep)。
-        如果刚发生过 429，将强制冷却。
+        (v13.3.2) 线程安全地获取一个 WQ API 令牌。
+        修复了 v13.0 中的 "持锁休眠" Bug。
         """
-        with self.wq_limiter_lock:
-            try:
-                config = load_system_config()
-                limiter_config = config.get("wq_api_limiter", {})
-                
-                tpm_limit = limiter_config.get("current_tpm_limit", 60)
-                last_failure_ts = limiter_config.get("last_failure_timestamp", 0)
-                wait_after_429 = limiter_config.get("seconds_to_wait_after_429", 60)
-                
-                now = time.time()
-                
-                # 1. 检查是否处于 429 强制冷却期
-                if now - last_failure_ts < wait_after_429:
-                    wait_duration = (last_failure_ts + wait_after_429) - now
-                    logger.warning(f"[Watchdog B] 处于 429 冷却期。强制休眠 {wait_duration:.1f} 秒...")
-                    time.sleep(wait_duration)
-                    now = time.time() # 更新当前时间
+        
+        # --- 步骤 1: 检查是否需要休眠 (在锁内) ---
+        wait_duration = 0
+        try:
+            # (v13.3.1) utils.py 中的 FileLock 负责跨进程同步
+            config = load_system_config()
+            limiter_config = config.get("wq_api_limiter", {})
 
+            # (v13.3.2) 修复 v13.0 和 v13.1 之间的配置键名不匹配 Bug
+            # utils.py v13.1+ 使用 'wq_429_cooldown_seconds'
+            # wq_client.py v13.0 错误地使用了 'seconds_to_wait_after_429'
+            cooldown_key = "wq_429_cooldown_seconds"
+            wait_after_429 = limiter_config.get(cooldown_key, 60)
+
+            tpm_limit = limiter_config.get("current_tpm_limit", 60)
+            last_failure_ts = limiter_config.get("last_failure_timestamp", 0)
+
+            now = time.time()
+                
+            # 1. 检查是否处于 429 强制冷却期
+            time_since_failure = now - last_failure_ts
+            if time_since_failure < wait_after_429:
+                wait_duration = (last_failure_ts + wait_after_429) - now
+                logger.warning(f"[Watchdog B] 处于 429 冷却期。强制休眠 {wait_duration:.1f} 秒...")
+            
+            # --- 仅在锁内操作内存中的 wq_token_bucket ---
+            with self.wq_limiter_lock:
                 # 2. 清理过期的令牌 (60 秒前)
                 self.wq_token_bucket = [ts for ts in self.wq_token_bucket if now - ts < 60]
 
-                # 3. 检查令牌桶是否已满
-                if len(self.wq_token_bucket) >= tpm_limit:
+                # 3. 检查令牌桶是否已满 (仅当不在 429 冷却时)
+                if wait_duration == 0 and len(self.wq_token_bucket) >= tpm_limit:
                     # 桶已满，计算需要等待多长时间
-                    oldest_token_ts = self.wq_token_bucket[0]
+                    oldest_token_ts = self.wq_token_bucket[0] if self.wq_token_bucket else now
                     wait_duration = 60.0 - (now - oldest_token_ts) + 0.1 # +0.1s 缓冲
                     
                     logger.info(f"[Watchdog B] 速率限制器激活 (TPM: {tpm_limit})。等待 {wait_duration:.2f} 秒...")
-                    time.sleep(wait_duration)
-                    
-                    # 再次清理 (因为我们睡了一会)
-                    now = time.time()
-                    self.wq_token_bucket = [ts for ts in self.wq_token_bucket if now - ts < 60]
+            
+        except Exception as e:
+            logger.error(f"[Watchdog B] _acquire_wq_token (步骤 1: 检查) 发生严重错误: {e}", exc_info=True)
+            # 发生未知错误时，保守起见，休眠5秒
+            wait_duration = 5.0
+
+        # --- 步骤 2: 执行休眠 (在锁外) ---
+        # (v13.3.2) 关键修复：休眠时 *不* 持有任何锁！
+        if wait_duration > 0:
+            time.sleep(wait_duration)
+
+        # --- 步骤 3: 添加令牌 (在锁内) ---
+        try:
+            with self.wq_limiter_lock:
+                # 再次清理 (因为我们可能睡了)
+                now = time.time()
+                self.wq_token_bucket = [ts for ts in self.wq_token_bucket if now - ts < 60]
                 
                 # 4. 添加当前请求的令牌
                 self.wq_token_bucket.append(now)
-                
-            except Exception as e:
-                logger.error(f"[Watchdog B] _acquire_wq_token 发生严重错误: {e}", exc_info=True)
-                # 发生未知错误时，保守起见，休眠5秒
-                time.sleep(5)
+        
+        except Exception as e:
+             logger.error(f"[Watchdog B] _acquire_wq_token (步骤 3: 添加) 发生严重错误: {e}", exc_info=True)
+             # 如果添加令牌失败，也休眠一下
+             time.sleep(1)
+    # --- v13.3.2 修复结束 ---
 
     def _record_wq_success(self):
         """ (v13.0) 记录一次成功的 API 调用，动态增加 TPM 限制。"""
-        with self.wq_limiter_lock:
-            try:
-                config = load_system_config()
-                limiter_config = config.get("wq_api_limiter", {})
-                
-                current_tpm = limiter_config.get("current_tpm_limit", 60)
-                max_tpm = limiter_config.get("max_tpm_limit", 200)
-                increment = limiter_config.get("tpm_increment_on_success", 1)
-                
-                new_tpm = min(current_tpm + increment, max_tpm)
-                
-                if new_tpm != current_tpm:
-                    config["wq_api_limiter"]["current_tpm_limit"] = new_tpm
-                    if not save_system_config(config):
-                        logger.error("[Watchdog B] 保存 system_config (success) 失败！")
-                    else:
-                        logger.info(f"[Watchdog B] API 调用成功。TPM 限制提升至: {new_tpm}")
-            except Exception as e:
-                 logger.error(f"[Watchdog B] _record_wq_success 发生错误: {e}", exc_info=True)
+        # (v13.3.1) utils.py 中的 FileLock 保证了并发安全
+        try:
+            config = load_system_config()
+            limiter_config = config.get("wq_api_limiter", {})
+            
+            current_tpm = limiter_config.get("current_tpm_limit", 60)
+            max_tpm = limiter_config.get("max_tpm_limit", 200)
+            increment = limiter_config.get("tpm_increment_on_success", 1)
+            
+            new_tpm = min(current_tpm + increment, max_tpm)
+            
+            if new_tpm != current_tpm:
+                config["wq_api_limiter"]["current_tpm_limit"] = new_tpm
+                if not save_system_config(config):
+                    logger.error("[Watchdog B] 保存 system_config (success) 失败！")
+                else:
+                    logger.info(f"[Watchdog B] API 调用成功。TPM 限制提升至: {new_tpm}")
+        except Exception as e:
+             logger.error(f"[Watchdog B] _record_wq_success 发生错误: {e}", exc_info=True)
 
     def _record_wq_failure_429(self):
         """ (v13.0) 记录一次 429 失败，动态降低 TPM 限制并强制冷却。"""
-        with self.wq_limiter_lock:
-            try:
-                config = load_system_config()
-                limiter_config = config.get("wq_api_limiter", {})
+        # (v13.3.1) utils.py 中的 FileLock 保证了并发安全
+        try:
+            config = load_system_config()
+            limiter_config = config.get("wq_api_limiter", {})
 
-                current_tpm = limiter_config.get("current_tpm_limit", 60)
-                min_tpm = limiter_config.get("min_tpm_limit", 15)
-                decrement_factor = limiter_config.get("tpm_decrement_factor_on_429", 0.75)
-                wait_after_429 = limiter_config.get("seconds_to_wait_after_429", 60)
-                
-                # 计算新的 TPM
-                new_tpm = math.floor(current_tpm * decrement_factor)
-                new_tpm = max(new_tpm, min_tpm) # 不能低于下限
-                
-                now = time.time()
-                config["wq_api_limiter"]["current_tpm_limit"] = new_tpm
-                config["wq_api_limiter"]["last_failure_timestamp"] = now
-                
-                logger.critical(f"[Watchdog B] 检测到 WQ 429 Rate Limit！")
-                logger.critical(f"[Watchdog B] TPM 限制从 {current_tpm} 大幅降低至 {new_tpm}。")
-                logger.critical(f"[Watchdog B] 触发 {wait_after_429} 秒强制冷却期。")
+            current_tpm = limiter_config.get("current_tpm_limit", 60)
+            min_tpm = limiter_config.get("min_tpm_limit", 15)
+            decrement_factor = limiter_config.get("tpm_decrement_factor_on_429", 0.75)
+            
+            # v13.3.2: 修复配置键名
+            cooldown_key = "wq_429_cooldown_seconds"
+            wait_after_429 = limiter_config.get(cooldown_key, 60)
+            
+            # 计算新的 TPM
+            new_tpm = math.floor(current_tpm * decrement_factor)
+            new_tpm = max(new_tpm, min_tpm) # 不能低于下限
+            
+            now = time.time()
+            config["wq_api_limiter"]["current_tpm_limit"] = new_tpm
+            config["wq_api_limiter"]["last_failure_timestamp"] = now
+            
+            logger.critical(f"[Watchdog B] 检测到 WQ 429 Rate Limit！")
+            logger.critical(f"[Watchdog B] TPM 限制从 {current_tpm} 大幅降低至 {new_tpm}。")
+            logger.critical(f"[Watchdog B] 触发 {wait_after_429} 秒强制冷却期。")
 
-                # 关键：清空令牌桶，强制所有等待的线程重新评估冷却
+            # 关键：清空令牌桶，强制所有等待的线程重新评估冷却
+            with self.wq_limiter_lock:
                 self.wq_token_bucket = [] 
 
-                if not save_system_config(config):
-                    logger.error("[Watchdog B] 保存 system_config (failure) 失败！")
-            except Exception as e:
-                 logger.error(f"[Watchdog B] _record_wq_failure_429 发生错误: {e}", exc_info=True)
+            if not save_system_config(config):
+                logger.error("[Watchdog B] 保存 system_config (failure) 失败！")
+        except Exception as e:
+             logger.error(f"[Watchdog B] _record_wq_failure_429 发生错误: {e}", exc_info=True)
     # --- v13.0 结束 ---
 
 
@@ -154,7 +177,6 @@ class WorldQuant:
         return session
 
     def _authenticate(self):
-        # Use the dedicated auth_lock here
         with self.auth_lock:
             # v13.0: 认证请求也需要令牌
             self._acquire_wq_token()
@@ -171,81 +193,69 @@ class WorldQuant:
                 logger.info("WorldQuant Brain authentication successful.")
             except requests.exceptions.RequestException as e:
                 
-                # v13.0: 处理认证时的 429
                 if e.response is not None and e.response.status_code == 429:
                     logger.critical(f"认证时遭遇 WQ 429 Rate Limit！")
                     self._record_wq_failure_429()
                 
                 logger.error(f"WorldQuant Brain authentication failed: {e}")
                 self.session.auth = None
-                raise # Re-raise the exception to be handled by the caller
+                raise 
 
     def _make_request(self, method, url, **kwargs):
         """
         v13.0: 重构，集成看门狗 B (令牌桶)
         """
         
-        # 1. (v13.0) 获取令牌 (此函数会阻塞/休眠，直到令牌可用或冷却结束)
+        # 1. (v13.3.2) 获取令牌 (此函数会阻塞/休眠，但不再锁死其他线程)
         self._acquire_wq_token()
 
-        # 2. (v9.4.1) 获取 401 重试锁
         with self.request_lock:
             try:
-                # 3. 执行请求
                 response = self.session.request(method, url, **kwargs)
-                response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+                response.raise_for_status() 
                 
-                # 4. (v13.0) 记录成功
                 self._record_wq_success()
-                
                 return response
                 
             except requests.exceptions.RequestException as e:
                 
-                # 5. (v13.0) 处理 429
                 if e.response is not None and e.response.status_code == 429:
                     self._record_wq_failure_429()
-                    raise e # 重新引发 429 异常，由调用者 (test_alpha/get_operators) 处理
+                    raise e 
                 
-                # 6. (v9.4.1) 处理 401
                 if e.response is not None and e.response.status_code == 401:
                     logger.warning(f"Request failed with 401 Unauthorized for {method} {url}. Attempting re-authentication...")
                     try:
-                        self._authenticate() # Attempt to re-authenticate (内部已包含令牌获取/成功逻辑)
+                        self._authenticate() 
                         logger.info(f"Re-authentication successful. Retrying the original request to {url}...")
                         
-                        # 7. (v13.0) 重试请求也需要新令牌
+                        # (v13.3.2) 重试请求也需要新令牌
                         self._acquire_wq_token()
                         
                         response = self.session.request(method, url, **kwargs)
                         response.raise_for_status()
                         
-                        # 8. (v13.0) 重试成功
                         self._record_wq_success()
                         return response
                         
                     except requests.exceptions.RequestException as auth_e:
-                         # 9. (v13.0) 检查重试是否也失败 (例如 429)
                         if auth_e.response is not None and auth_e.response.status_code == 429:
                             self._record_wq_failure_429()
-                            raise auth_e # 重新引发 429
+                            raise auth_e 
                         
                         logger.error(f"Re-authentication or retry failed: {auth_e}")
-                        raise auth_e # Raise the authentication or retry error
+                        raise auth_e 
                     except Exception as general_auth_e:
                          logger.error(f"An unexpected error occurred during re-authentication: {general_auth_e}")
                          raise general_auth_e 
                 else:
-                    # For other request exceptions (non-401, non-429), just re-raise them
                     raise e
             except Exception as general_e:
                  logger.error(f"An unexpected error occurred during the request to {url}: {general_e}")
                  raise general_e
 
-
-    # --- v9.4.2: Remove problematic advXX fields ---
+    # ... (get_data_fields 保持不变) ...
     def get_data_fields(self):
-        # (v13.0: 此函数是硬编码的，不调用 API，因此不需要令牌)
         logger.info("正在使用筛选后的核心及高级数据字段列表...")
         safe_fields = [
             "open", "high", "low", "close", "volume", "vwap",
@@ -255,13 +265,11 @@ class WorldQuant:
         ]
         logger.info(f"成功加载 {len(safe_fields)} 个筛选后的数据字段。")
         return safe_fields
-    # --- v9.4.2 End ---
 
-    # --- v13.0: Updated get_operators with 429 handling ---
+    # ... (get_operators 保持不变) ...
     def get_operators(self):
         url = f"{self.base_url}/operators"
         try:
-            # Use the helper method (v13.0: _make_request 内部处理 429)
             response = self._make_request('GET', url, timeout=60) 
             data = response.json()
             op_list = data.get('results', []) if isinstance(data, dict) else data
@@ -269,7 +277,6 @@ class WorldQuant:
             logger.info(f"成功獲取 {len(operators)} 個操作符。")
             return operators
         except requests.exceptions.RequestException as e:
-            # v13.0: _make_request 会在 429 时重新引发异常，我们在这里捕获它
             if e.response is not None and e.response.status_code == 429:
                 logger.critical(f"获取操作符时检测到 WorldQuant 429 Rate Limit (已由 Watchdog B 处理)。")
                 return "RATE_LIMIT"
@@ -282,9 +289,8 @@ class WorldQuant:
         except Exception as e: 
              logger.error(f"An unexpected error occurred in get_operators: {e}", exc_info=True)
              return []
-    # --- v13.0 End ---
 
-    # --- v13.0: Updated test_alpha with 429 handling ---
+    # ... (test_alpha 保持不变) ...
     def test_alpha(self, alpha_expression: str, custom_settings: dict = None):
         submit_url = f"{self.base_url}/simulations"
         current_settings = self.default_settings.copy()
@@ -303,7 +309,6 @@ class WorldQuant:
 
         progress_url = None 
         try:
-            # Use helper for submission (v13.0)
             submit_response = self._make_request('POST', submit_url, json=payload, timeout=120)
 
             progress_url = submit_response.headers.get('location')
@@ -313,7 +318,6 @@ class WorldQuant:
             logger.info(f"成功提交模拟任务，进度URL: {progress_url}")
 
         except requests.exceptions.RequestException as e:
-            # v13.0: 捕获 429
             if e.response is not None and e.response.status_code == 429:
                 logger.critical(f"提交模拟时检测到 WorldQuant 429 Rate Limit (已由 Watchdog B 处理)。")
                 return "RATE_LIMIT"
@@ -335,7 +339,6 @@ class WorldQuant:
 
         while time.time() - polling_start_time < POLLING_TIMEOUT:
             try:
-                # Use helper for polling (v13.0)
                 poll_url = progress_url
                 if not poll_url.startswith('http'):
                     poll_url = f"{self.base_url}{poll_url}" 
@@ -350,7 +353,6 @@ class WorldQuant:
                         logger.error(f"模拟完成，但未找到 alpha id。 Data: {result_data}")
                         return None 
                     
-                    # (v13.0) Final get also needs a token
                     final_alpha_url = f"{self.base_url}/alphas/{alpha_id}"
                     final_response = self._make_request('GET', final_alpha_url, timeout=60) 
                     final_data = final_response.json()
@@ -362,10 +364,9 @@ class WorldQuant:
                     return result_data 
                 else:
                     logger.debug(f"Alpha '{alpha_expression}' 仍在模拟中... 状态: {status}")
-                    time.sleep(10) # (v13.0: 保留这个轮询间隔)
+                    time.sleep(10) 
 
             except requests.exceptions.RequestException as e:
-                # v13.0: 捕获 429
                 if e.response is not None and e.response.status_code == 429:
                     logger.critical(f"轮询结果时检测到 WorldQuant 429 Rate Limit (已由 Watchdog B 处理)。")
                     return "RATE_LIMIT"
@@ -381,4 +382,3 @@ class WorldQuant:
 
         logger.warning(f"Alpha '{alpha_expression}' 模拟超时（超过 {POLLING_TIMEOUT/60:.0f} 分钟）。")
         return "TIMEOUT"
-    # --- v13.0 End ---

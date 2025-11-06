@@ -6,6 +6,7 @@ import os
 import threading 
 import time
 from filelock import FileLock # v13.3.1: 引入跨进程文件锁
+import random
 
 # v8.0: 中心化配置
 SYSTEM_CONFIG_FILE = "system_config.json" 
@@ -15,6 +16,11 @@ SYSTEM_CONFIG_LOCK_FILE = "system_config.json.lock"
 # --- v13.0: 线程安全锁 ---
 # _system_config_lock = threading.Lock() # v13.3.1: 移除无效的线程锁
 # --- v13.0 结束 ---
+
+# --- v13.3.1: 确保这一行存在！---
+# 获取一个专用的 logger
+logger = logging.getLogger(__name__)
+# --- 修复结束 ---
 
 # ... logger ...
 

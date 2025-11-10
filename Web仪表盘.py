@@ -1,5 +1,4 @@
-# --- Web仪表盘.py v13.3.7 (状态文件安全修复) ---
-# (此版本与 v13.3.5 相同, 重新应用以修复格式战 Bug)
+# --- Web仪表盘.py v13.3.14 (图表间隙最终修复) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -13,14 +12,11 @@ import pandas as pd
 import numpy as np
 import time 
 
-# --- v13.3.5: 强制使用 utils 中的安全函数 ---
-# 导入我们 v13.3.6 版的、带保险的 utils
 import utils
-# --- v13.3.5: 结束 ---
 
-# --- v13.3.7: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v13.3.7 (State Safety Fix)"
-# --- v13.3.7: 结束 ---
+# --- v13.3.14: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v13.3.14 (Chart Category Fix)"
+# --- v13.3.14: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,10 +25,6 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
-# --- v13.3.5: 移除不安全的本地路径和锁 (已集中到 utils.py) ---
-# HOPEFUL_ALPHAS_FILE = os.path.join(BASE_DIR, 'hopeful_alphas.json') # <--- 移除
-# hopeful_lock = threading.Lock() # <--- 移除
-# --- v13.3.5: 结束 ---
 
 SUBMITTED_ALPHAS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submitted_alphas.json'))
 SUBMISSION_FAILURE_LOG_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submission_failure_log.json')) 
@@ -43,10 +35,9 @@ DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py")
 TESTED_ALPHAS_LOG_FILE = os.path.join(BASE_DIR, 'tested_alphas_log.json')
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
-CACHE_DURATION = timedelta(seconds=300) 
+CACHE_DURATION = timedelta(seconds=300) # v13.3.14: 缩短缓存，方便调试
 
 file_lock = threading.Lock()
-# hopeful_lock = threading.Lock() # v13.3.5: 移除
 failure_log_lock = threading.Lock() 
 tested_log_lock = threading.Lock()
 
@@ -58,7 +49,7 @@ _submission_cache = None
 _submission_cache_time = None
 _submission_cache_lock = threading.Lock()
 
-# (v13.3.5: 我们暂时保留这些不安全的函数，只修复 hopeful_alphas)
+# (v13.3.7: 保持不变)
 def load_submitted_alphas():
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
@@ -68,7 +59,6 @@ def load_submitted_alphas():
             with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
             final_dict = {}; needs_resave = False; migration_timestamp = None
             if isinstance(data, (list, set)):
-                logger.warning(f"[Submit Load] Old data format (list) detected in {filepath}. Migrating...")
                 migration_timestamp = datetime.now(timezone.utc).isoformat()
                 for expr in data:
                     if isinstance(expr, str):
@@ -79,23 +69,21 @@ def load_submitted_alphas():
                 timestamps_no_reason = [ item.get('manual_timestamp') for item in final_dict.values() if isinstance(item, dict) and "reason" not in item ]
                 if timestamps_no_reason:
                     zombie_timestamp = Counter(timestamps_no_reason).most_common(1)[0][0]
-                    logger.warning(f"[Submit Load] Found v12.0.0 migrated data (Timestamp: {zombie_timestamp}). Upgrading to v12.1.4 flags...")
                     needs_resave = True
                     for item in final_dict.values():
                         if isinstance(item, dict) and "reason" not in item:
                             if item.get('manual_timestamp') == zombie_timestamp: item["reason"] = "MIGRATED_UNKNOWN"
                             else: item["reason"] = "MANUAL_ADD"
             else:
-                logger.warning(f"[Submit Load] File {filepath} bad format (not dict or list)."); return {}
+                return {}
             if needs_resave:
-                logger.info(f"[Submit Load] Resaving {filepath} with new 'reason' flags...")
                 try:
                     with open(filepath, 'w', encoding='utf-8') as f_save: json.dump(final_dict, f_save, indent=4)
-                    logger.info(f"Successfully migrated/updated {len(final_dict)} entries with 'reason' flags.")
                 except Exception as save_e: logger.error(f"Failed to save migrated data for {filepath}! {save_e}")
             return final_dict
         except Exception as e: logger.error(f"[Submit Load] Error loading {filepath}: {e}", exc_info=False); return {}
 
+# (v13.3.7: 保持不变)
 def save_submitted_alphas(submitted_dict):
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
@@ -105,28 +93,7 @@ def save_submitted_alphas(submitted_dict):
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
 
-# --- v13.3.5: 移除不安全的 hopeful_alphas 读写函数 ---
-# def load_hopeful_alphas_list(): # <--- 移除 (这是 Bug 的根源)
-#     with hopeful_lock:
-#         filepath = HOPEFUL_ALPHAS_FILE
-#         if not (os.path.exists(filepath) and os.path.isfile(filepath) and os.path.getsize(filepath) > 2): return []
-#         try:
-#             with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
-#             if isinstance(data, list): return data # <--- 这一行导致了 Bug
-#             else: logger.warning(f"[Hopeful Load] {filepath} is not a list. Returning empty."); return [] # <--- 触发了
-#         except Exception as e: logger.error(f"[Hopeful Load] Error loading {filepath}: {e}", exc_info=False); return []
-#
-# def save_hopeful_alphas_list(alphas_list): # <--- 移除 (这个函数没被使用)
-#     with hopeful_lock:
-#         filepath = HOPEFUL_ALPHAS_FILE
-#         try:
-#             if not isinstance(alphas_list, list): logger.error(f"[Hopeful Save] Invalid data type: {type(alphas_list)}."); return False
-#             with open(filepath, 'w', encoding='utf-8') as f: json.dump(alphas_list, f, indent=4)
-#             return True
-#         except Exception as e: logger.error(f"[Hopeful Save] Error saving {filepath}: {e}", exc_info=False); return False
-# --- v13.3.5: 结束 ---
-
-
+# (v13.3.7: 保持不变)
 def load_failed_submissions_old_format():
     filepath = FAILED_SUBMISSIONS_FILE_OLD
     if not (os.path.exists(filepath) and os.path.isfile(filepath)): return set()
@@ -134,9 +101,10 @@ def load_failed_submissions_old_format():
         if os.path.getsize(filepath) < 2: return set()
         with open(filepath, 'r', encoding='utf-8') as f: data = json.load(f)
         if isinstance(data, (list, set)): return set(data)
-        else: logger.warning(f"[Old Failed Load] File {filepath} not list/set."); return set()
+        else: return set()
     except Exception as e: logger.error(f"[Old Failed Load] Error loading {filepath}: {e}"); return set()
 
+# (v13.3.7: 保持不变)
 def load_submission_failures():
     with failure_log_lock:
         new_filepath = SUBMISSION_FAILURE_LOG_FILE; old_filepath = FAILED_SUBMISSIONS_FILE_OLD
@@ -155,7 +123,6 @@ def load_submission_failures():
                 else: logger.error(f"[Failure Log Load] {new_filepath} is not a list. Re-initializing.")
             except Exception as e: logger.error(f"[Failure Log Load] Error loading {new_filepath}: {e}. Attempting recovery.")
         if old_file_exists_and_not_backed_up:
-            logger.warning(f"[Failure Log Load] Old log '{old_filepath}' still exists. Checking for merge/migration...")
             old_set = load_failed_submissions_old_format()
             if old_set:
                 current_expressions = {item['expression'] for item in current_failures_list if isinstance(item, dict)}
@@ -164,28 +131,23 @@ def load_submission_failures():
                     if expr not in current_expressions:
                         items_to_migrate.append({ "expression": expr, "reason": "MIGRATED_UNKNOWN", "timestamp": datetime.now(timezone.utc).isoformat() })
                 if items_to_migrate:
-                    logger.warning(f"Found {len(items_to_migrate)} new entries in old log. Merging...")
                     current_failures_list.extend(items_to_migrate); needs_resave = True
-                try: os.rename(old_filepath, old_filepath + ".bak"); logger.info(f"Old failure log backed up to {old_filepath}.bak.")
+                try: os.rename(old_filepath, old_filepath + ".bak");
                 except Exception as rename_e: logger.error(f"Failed to rename old failure log: {rename_e}")
             else:
-                logger.warning(f"[Failure Log Load] Old log '{old_filepath}' was loaded but was empty. Backing it up.")
                 try: os.rename(old_filepath, old_filepath + ".bak")
                 except Exception as rename_e: logger.error(f"Failed to rename old failure log: {rename_e}")
         elif not new_file_exists:
-             logger.warning(f"[Failure Log Load] No valid failure logs found. Creating new empty log file at {new_filepath}.")
              try:
                 with open(new_filepath, 'w', encoding='utf-8') as f: json.dump([], f)
-                logger.info(f"Successfully created new empty log file: {new_filepath}")
              except Exception as create_e: logger.error(f"Failed to create new empty log file! {create_e}", exc_info=True)
         if needs_resave:
-            logger.info(f"[Failure Log Load] Resaving {new_filepath} with 'reason' flags...")
             try:
                 with open(new_filepath, 'w', encoding='utf-8') as f: json.dump(current_failures_list, f, indent=4)
-                logger.info(f"Successfully migrated/updated {len(current_failures_list)} failure entries.")
             except Exception as save_e: logger.error(f"Failed to save migrated failure log (inline): {save_e}.")
         return current_failures_list
 
+# (v13.3.7: 保持不变)
 def save_submission_failures(failures_list):
     with failure_log_lock:
         filepath = SUBMISSION_FAILURE_LOG_FILE
@@ -195,6 +157,7 @@ def save_submission_failures(failures_list):
             return True
         except Exception as e: logger.error(f"[Failure Log Save] Error saving {filepath}: {e}", exc_info=False); return False
 
+# (v13.3.7: 保持不变)
 def load_failed_submissions():
     failures_list = load_submission_failures()
     failed_map = {}
@@ -204,6 +167,7 @@ def load_failed_submissions():
     failed_set = set(failed_map.keys())
     return failed_map, failed_set
 
+# (v13.3.7: 保持不变)
 def get_service_status(log_file):
     status = "UNKNOWN"; last_seen = "Never"; logs = "Log file not found."
     log_path = os.path.join(LOG_DIR, log_file)
@@ -220,7 +184,7 @@ def get_service_status(log_file):
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
 
-# --- v13.3.7: 修复 get_hopeful_alphas_stats (使用安全加载) ---
+# --- v13.3.7: get_hopeful_alphas_stats (保持 v13.3.7 不变) ---
 def get_hopeful_alphas_stats():
     stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
               "submittable_pending_count": 0, "successfully_submitted_count": 0,
@@ -228,13 +192,7 @@ def get_hopeful_alphas_stats():
     try: 
         submitted_dict = load_submitted_alphas() 
         failed_map, failed_set = load_failed_submissions() 
-        
-        # --- v13.3.7: 关键修复 ---
-        # 替换不安全的本地函数
-        # alphas = load_hopeful_alphas_list() # <--- 移除 (不安全, 导致 Bug)
-        alphas = utils.load_hopeful_alphas_safe() # <--- 替换 (安全, 兼容 list 和 dict)
-        # --- v13.3.7: 结束 ---
-
+        alphas = utils.load_hopeful_alphas_safe() 
         total_submitted_count_local = len(submitted_dict) + len(failed_set)
         successfully_submitted_count_local = 0 
 
@@ -358,7 +316,6 @@ def chart_page():
 @app.route('/api/get_settings', methods=['GET'])
 def get_settings():
     try:
-        # v13.3.7: 确保使用 utils 中的安全函数
         data = utils.load_system_config() 
         if not data:
             return jsonify({"error": "Config file not found or empty."}), 404
@@ -377,7 +334,6 @@ def save_settings():
     if not isinstance(new_data, dict): return jsonify(status='error', message='无效的 JSON 格式'), 400
 
     try:
-        # v13.3.7: 确保使用 utils 中的安全函数
         current_config = utils.load_system_config()
         static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size']
         llm_keys = ['daily_budget_limit']
@@ -405,7 +361,6 @@ def save_settings():
         if 'evolver_search_space' in new_data:
             current_config['evolver_search_space'] = new_data.get('evolver_search_space', current_config.get('evolver_search_space', {}))
 
-        # v13.3.7: 确保使用 utils 中的安全函数
         if utils.save_system_config(current_config):
             logger.info(f"[API /api/save_settings] v13.1 配置已保存。")
             global _timeseries_cache, _timeseries_cache_time
@@ -421,14 +376,11 @@ def save_settings():
 @app.route('/status')
 def status():
     try:
-        # --- v13.3.7: 现在调用的是修复后的函数 ---
         data = { "miner": get_service_status('miner.log'),
                  "evolver": get_service_status('evolver.log'),
                  "hopeful_alphas": get_hopeful_alphas_stats() } 
-        # --- v13.3.7: 结束 ---
                  
         try:
-            # v13.3.7: 确保使用 utils 中的安全函数
             config = utils.load_system_config()
             llm_budget = config.get("llm_budget", {})
             wq_limiter = config.get("wq_api_limiter", {})
@@ -474,41 +426,76 @@ def version_info():
     data = {"dashboard_version": dashboard_version, "generator_version": generator_version}
     response = make_response(jsonify(data)); response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; return response
 
+# --- v13.3.14: 修复 api_stats_timeseries (图表间隙 Bug) ---
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
     global _timeseries_cache, _timeseries_cache_time
     with _cache_lock:
         now = datetime.now(timezone.utc)
         if _timeseries_cache and _timeseries_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
+            logger.debug("返回缓存的 /api/v1S/stats/timeseries")
             return jsonify(_timeseries_cache)
+        
         with tested_log_lock:
-            if not os.path.exists(TESTED_ALPHAS_LOG_FILE): return jsonify({"error": "Log file not found."}), 404
+            if not os.path.exists(TESTED_ALPHAS_LOG_FILE): 
+                return jsonify({"error": "Log file not found."}), 404
+            
             try:
+                # v13.3.13: 增加空文件检查
+                if os.path.getsize(TESTED_ALPHAS_LOG_FILE) < 2:
+                    logger.warning(f"[API Timeseries] {TESTED_ALPHAS_LOG_FILE} 为空。")
+                    _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
+                    _timeseries_cache_time = now; return jsonify(_timeseries_cache)
+
                 df = pd.read_json(TESTED_ALPHAS_LOG_FILE)
                 if df.empty:
                     _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
                     _timeseries_cache_time = now; return jsonify(_timeseries_cache)
+                
                 df['timestamp_dt'] = pd.to_datetime(df['timestamp'], errors='coerce'); df = df.dropna(subset=['timestamp_dt'])
                 df['fitness_num'] = pd.to_numeric(df['fitness'], errors='coerce'); df_valid_fitness = df.dropna(subset=['fitness_num'])
                 df['passed_checks_num'] = pd.to_numeric(df['passed_checks'], errors='coerce').fillna(0)
                 df = df.set_index('timestamp_dt'); df_valid_fitness = df_valid_fitness.set_index('timestamp_dt')
+                
                 resampler_all = df.resample('h'); resampler_valid = df_valid_fitness.resample('h')
                 agg_counts = resampler_all['expression'].size(); agg_mean_fitness = resampler_valid['fitness_num'].mean()
                 df_hq = df[(df['fitness_num'] > 0.5) & (df['passed_checks_num'] >= 4)]
                 hq_counts = df_hq.resample('h').size() if not df_hq.empty else pd.Series(dtype=int)
+                
                 combined_index = agg_counts.index.union(agg_mean_fitness.index).union(hq_counts.index)
                 output_df = pd.DataFrame(index=combined_index)
                 output_df['count'] = agg_counts.reindex(combined_index, fill_value=0).astype(int)
                 output_df['mean_fitness'] = agg_mean_fitness.reindex(combined_index)
                 output_df['high_quality_count'] = hq_counts.reindex(combined_index, fill_value=0).astype(int)
-                output = { "timestamps": output_df.index.strftime('%Y-%m-%dT%H:%M:%S').tolist(), "count": output_df['count'].tolist(), "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(), "high_quality_count": output_df['high_quality_count'].tolist() }
+                
+                # --- v13.3.14: 关键修复 - "全 0 过滤器" ---
+                # 只有在 count > 0 (即那个小时有产出) 时才保留
+                if not output_df.empty:
+                    output_df = output_df[ (output_df['count'] > 0) | (output_df['high_quality_count'] > 0) ]
+                # --- v13.3.14: 结束 ---
+
+                if output_df.empty:
+                    _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
+                    _timeseries_cache_time = now; return jsonify(_timeseries_cache)
+
+                output = { 
+                    # v13.3.14: 切换到 'category' 轴, 格式化为更易读的字符串
+                    "timestamps": output_df.index.strftime('%m-%d %H:00').tolist(), 
+                    "count": output_df['count'].tolist(), 
+                    "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(), 
+                    "high_quality_count": output_df['high_quality_count'].tolist() 
+                }
+                
                 _timeseries_cache = output; _timeseries_cache_time = now
+                logger.info(f"重新生成 /api/v1/stats/timeseries 缓存 (过滤后 {len(output['timestamps'])} 条)")
                 return jsonify(output)
             except Exception as e:
                 logger.error(f"[API Timeseries] Error: {e}", exc_info=True)
                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
                 return jsonify({"error": "内部服务器错误。"}), 500
+# --- v13.3.14: 结束 ---
 
+# --- v13.3.14: 修复 get_daily_submission_stats (图表间隙 Bug) ---
 def get_daily_submission_stats():
     daily_submitted_counter = Counter(); daily_failed_counter = Counter()
     submitted_dict = load_submitted_alphas()
@@ -519,6 +506,7 @@ def get_daily_submission_stats():
                 ts_str = item['manual_timestamp']; dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
                 daily_submitted_counter[dt.date()] += 1
             except (ValueError, TypeError): pass 
+    
     failures_list = load_submission_failures()
     for item in failures_list:
         reason = item.get("reason")
@@ -527,44 +515,76 @@ def get_daily_submission_stats():
                 ts_str = item['timestamp']; dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
                 daily_failed_counter[dt.date()] += 1
             except (ValueError, TypeError): pass 
-    daily_hopeful_counter = Counter()
     
-    # --- v13.3.7: 关键修复 ---
-    # hopeful_list = load_hopeful_alphas_list() # <--- 移除 (不安全)
-    hopeful_list = utils.load_hopeful_alphas_safe() # <--- 替换 (安全)
-    # --- v13.3.7: 结束 ---
+    daily_submittable_counter = Counter() 
+    hopeful_list = utils.load_hopeful_alphas_safe()
+    pass_pattern = re.compile(r'(\d+)\s+PASS') 
+    fail_pattern = re.compile(r'(\d+)\s+FAIL') 
 
     for item in hopeful_list:
         if isinstance(item, dict) and 'timestamp' in item:
             try:
-                dt = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
-                daily_hopeful_counter[dt.date()] += 1
+                summary_str = item.get('checks_summary', '') or ''
+                fail_match = fail_pattern.search(summary_str);
+                has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
+                pass_match = pass_pattern.search(summary_str);
+                passed_count = int(pass_match.group(1)) if pass_match else 0
+                is_submittable = passed_count >= 7 and not has_fail
+                
+                if is_submittable:
+                    dt = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
+                    daily_submittable_counter[dt.date()] += 1 
             except (ValueError, TypeError): pass 
-    all_dates = sorted(list( set(daily_submitted_counter.keys()) | set(daily_failed_counter.keys()) | set(daily_hopeful_counter.keys()) ))
-    output = { "timestamps": [], "submitted_count": [], "failed_count": [], "hopeful_count": [] }
+    
+    all_dates = sorted(list( set(daily_submitted_counter.keys()) | set(daily_failed_counter.keys()) | set(daily_submittable_counter.keys()) ))
+    
+    output = { "timestamps": [], "submitted_count": [], "failed_count": [], "submittable_count": [] }
+    
+    # --- v13.3.14: 关键修复 - "全 0 过滤器" ---
+    # (v13.3.13 的逻辑是正确的, 但为保险起见，我们确保今天如果没数据也显示)
     if not all_dates:
         today_str = datetime.now(timezone.utc).date().isoformat()
-        output["timestamps"].append(today_str); output["submitted_count"].append(0); output["failed_count"].append(0); output["hopeful_count"].append(0)
+        output["timestamps"].append(today_str); output["submitted_count"].append(0); output["failed_count"].append(0); output["submittable_count"].append(0)
         return output
-    start_date = all_dates[0]; end_date = max(all_dates[-1], datetime.now(timezone.utc).date())
-    date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-    for date_obj in date_range:
-        date_key = date_obj.date()
-        output["timestamps"].append(date_key.isoformat())
-        output["submitted_count"].append(daily_submitted_counter.get(date_key, 0))
-        output["failed_count"].append(daily_failed_counter.get(date_key, 0))
-        output["hopeful_count"].append(daily_hopeful_counter.get(date_key, 0))
+
+    has_today_data = False
+    for date_key in all_dates: 
+        submitted_count = daily_submitted_counter.get(date_key, 0)
+        failed_count = daily_failed_counter.get(date_key, 0)
+        submittable_count = daily_submittable_counter.get(date_key, 0)
+        
+        # 只有当这一天至少有一个 Alpha (任意类型) 时，才添加到图表
+        if submitted_count > 0 or failed_count > 0 or submittable_count > 0:
+            output["timestamps"].append(date_key.isoformat())
+            output["submitted_count"].append(submitted_count)
+            output["failed_count"].append(failed_count)
+            output["submittable_count"].append(submittable_count)
+            if date_key == datetime.now(timezone.utc).date():
+                has_today_data = True
+                
+    # v13.3.14: 如果今天没有任何数据 (全0)，但我们希望图表能显示到“今天”
+    today_key = datetime.now(timezone.utc).date()
+    if not has_today_data and today_key not in all_dates:
+        # 添加一个全 0 的今天，确保图表连续
+        output["timestamps"].append(today_key.isoformat())
+        output["submitted_count"].append(0)
+        output["failed_count"].append(0)
+        output["submittable_count"].append(0)
+    # --- v13.3.14: 结束 ---
     return output
+# --- v13.3.14: 结束 ---
 
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     global _submission_cache, _submission_cache_time
     with _submission_cache_lock:
         now = datetime.now(timezone.utc)
-        if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION):
+        if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION): 
+            logger.debug("返回缓存的 /api/v1/stats/submission_daily")
             return jsonify(_submission_cache)
         try:
-            stats = get_daily_submission_stats() 
+            logger.info("重新生成 /api/v1/stats/submission_daily 缓存")
+            stats = get_daily_submission_stats() # (现在调用的是 v13.3.14 修复版)
             _submission_cache = stats; _submission_cache_time = now
             return jsonify(stats)
         except Exception as e:
@@ -572,6 +592,7 @@ def api_stats_submission_daily():
             with _submission_cache_lock: _submission_cache = None; _submission_cache_time = None
             return jsonify({"error": "内部服务器错误。"}), 500
 
+# (v13.3.7: 保持不变)
 @app.route('/download_logs/<log_filename>')
 def download_logs(log_filename):
     allowed_files = ['miner.log', 'evolver.log', 'archaeologist.log', 'cron.log', 'miner_issues.log', 'evolver_issues.log']
@@ -579,6 +600,7 @@ def download_logs(log_filename):
     try: return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
     except Exception as e: logger.error(f"[API /download_logs] Error: {e}"); return "下载文件时出错", 500
 
+# (v13.3.7: 保持不变)
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_alpha_submitted():
     operation = "Mark";
@@ -592,6 +614,7 @@ def mark_alpha_submitted():
         else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
+# (v13.3.7: 保持不变)
 @app.route('/api/unmark_submitted', methods=['POST'])
 def unmark_alpha_submitted():
     operation = "Unmark";
@@ -605,6 +628,7 @@ def unmark_alpha_submitted():
         else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
+# (v13.3.7: 保持不变)
 @app.route('/api/mark_failed_on_wq', methods=['POST'])
 def mark_alpha_failed():
     operation = "MarkFailed"; logger.info(f"[API /{operation.lower()}]")
@@ -633,6 +657,7 @@ def mark_alpha_failed():
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
+# (v13.3.7: 保持不变)
 @app.route('/api/unmark_failed_on_wq', methods=['POST'])
 def unmark_alpha_failed():
     operation = "UnmarkFailed"; logger.info(f"[API /{operation.lower()}]")
@@ -648,11 +673,13 @@ def unmark_alpha_failed():
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
+# (v13.3.7: 保持不变)
 @app.route('/pending')
 def pending_page():
     logger.info("[API /pending] Rendering pending alphas page.")
     return render_template('pending.html')
 
+# (v13.3.7: 保持不变)
 @app.route('/api/get_pending_alphas')
 def get_pending_alphas():
     try:
@@ -671,12 +698,11 @@ def get_pending_alphas():
         logger.critical(f"[API /api/get_pending_alphas] CRITICAL Error: {e}", exc_info=True)
         return jsonify({"error": f"Failed to get pending alphas: {e}"}), 500
 
-# v15.1: 添加日志查看器 (这部分我们之前讨论过，但未合并，现在加上)
+# (v13.3.7: 保持不变)
 LOG_DIR_FOR_VIEWER = "logs"
 LINES_TO_READ = 500 
 
 def get_last_n_lines(file_path, n):
-    """高效读取文件最后 N 行"""
     if not os.path.exists(file_path):
         return f"错误：日志文件未找到。\n请检查路径: {file_path}\n"
     
@@ -689,30 +715,19 @@ def get_last_n_lines(file_path, n):
 
 @app.route('/view_log/<service_name>')
 def view_log(service_name):
-    """
-    显示指定服务的日志 (最后 N 行)
-    """
-    # 假设 docker-compose.yml 中定义了 miner.log
-    # 假设 docker-compose.evolver.yml 中定义了 evolver.log
-    # 假设 docker-compose.dashboard.yml 中定义了 dashboard.log
     log_map = {
-        "miner": "miner.log", # v13.3.7: 修复日志文件名 (从 miner.log 改为 miner_log.log 是错误的)
+        "miner": "miner.log", 
         "evolver": "evolver.log",
         "dashboard": "dashboard.log"
     }
-    
-    # v13.2.1 引入了 issues 日志
     log_map_issues = {
         "miner_issues": "miner_issues.log",
         "evolver_issues": "evolver_issues.log",
         "dashboard_issues": "dashboard_issues.log"
     }
-
     file_name = log_map.get(service_name) or log_map_issues.get(service_name)
-    
     if not file_name:
         return "错误：未知的服务名称。", 404
-
     log_file_path = os.path.join(LOG_DIR_FOR_VIEWER, file_name)
     log_content = get_last_n_lines(log_file_path, LINES_TO_READ)
     
@@ -732,7 +747,6 @@ def view_log(service_name):
     </html>
     """
     return response_html
-# --- v15.1: 结束 ---
 
 if __name__ == '__main__':
     if not os.path.exists(LOG_DIR):

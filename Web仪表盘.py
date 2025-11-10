@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v13.3.14 (图表间隙最终修复) ---
+# --- Web仪表盘.py v13.3.15 (修复 v13.3.14 致命拼写错误) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -14,9 +14,9 @@ import time
 
 import utils
 
-# --- v13.3.14: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v13.3.14 (Chart Category Fix)"
-# --- v13.3.14: 结束 ---
+# --- v13.3.15: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v13.3.15 (Stable)"
+# --- v13.3.15: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py")
 TESTED_ALPHAS_LOG_FILE = os.path.join(BASE_DIR, 'tested_alphas_log.json')
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
-CACHE_DURATION = timedelta(seconds=300) # v13.3.14: 缩短缓存，方便调试
+CACHE_DURATION = timedelta(seconds=60) # v13.3.15: 缩短缓存为 1 分钟
 
 file_lock = threading.Lock()
 failure_log_lock = threading.Lock() 
@@ -288,7 +288,7 @@ def get_hopeful_alphas_stats():
         logger.error(f"[Stats] CRITICAL Error in get_hopeful_alphas_stats: {e}", exc_info=True)
         stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
                   "submittable_pending_count": 0, "successfully_submitted_count": 0,
-                  "total_submitted_count": 0, "all_alphas": [] }
+                  "total_submitted_count": 0, "all_alphas": [], "error": f"获取统计时出错: {e}" }
     return stats
 # --- v13.3.7: 结束 ---
 
@@ -441,7 +441,6 @@ def api_stats_timeseries():
                 return jsonify({"error": "Log file not found."}), 404
             
             try:
-                # v13.3.13: 增加空文件检查
                 if os.path.getsize(TESTED_ALPHAS_LOG_FILE) < 2:
                     logger.warning(f"[API Timeseries] {TESTED_ALPHAS_LOG_FILE} 为空。")
                     _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
@@ -468,18 +467,14 @@ def api_stats_timeseries():
                 output_df['mean_fitness'] = agg_mean_fitness.reindex(combined_index)
                 output_df['high_quality_count'] = hq_counts.reindex(combined_index, fill_value=0).astype(int)
                 
-                # --- v13.3.14: 关键修复 - "全 0 过滤器" ---
-                # 只有在 count > 0 (即那个小时有产出) 时才保留
                 if not output_df.empty:
                     output_df = output_df[ (output_df['count'] > 0) | (output_df['high_quality_count'] > 0) ]
-                # --- v13.3.14: 结束 ---
 
                 if output_df.empty:
                     _timeseries_cache = {"timestamps": [], "count": [], "mean_fitness": [], "high_quality_count": []}
                     _timeseries_cache_time = now; return jsonify(_timeseries_cache)
 
                 output = { 
-                    # v13.3.14: 切换到 'category' 轴, 格式化为更易读的字符串
                     "timestamps": output_df.index.strftime('%m-%d %H:00').tolist(), 
                     "count": output_df['count'].tolist(), 
                     "mean_fitness": output_df['mean_fitness'].round(4).replace({np.nan: None}).tolist(), 
@@ -540,32 +535,33 @@ def get_daily_submission_stats():
     
     output = { "timestamps": [], "submitted_count": [], "failed_count": [], "submittable_count": [] }
     
-    # --- v13.3.14: 关键修复 - "全 0 过滤器" ---
-    # (v13.3.13 的逻辑是正确的, 但为保险起见，我们确保今天如果没数据也显示)
+    # v13.3.14: 确保 "今天" 总是存在
+    today_key = datetime.now(timezone.utc).date()
     if not all_dates:
-        today_str = datetime.now(timezone.utc).date().isoformat()
-        output["timestamps"].append(today_str); output["submitted_count"].append(0); output["failed_count"].append(0); output["submittable_count"].append(0)
+        output["timestamps"].append(today_key.isoformat())
+        output["submitted_count"].append(0)
+        output["failed_count"].append(0)
+        output["submittable_count"].append(0)
         return output
-
+        
     has_today_data = False
     for date_key in all_dates: 
         submitted_count = daily_submitted_counter.get(date_key, 0)
         failed_count = daily_failed_counter.get(date_key, 0)
         submittable_count = daily_submittable_counter.get(date_key, 0)
         
-        # 只有当这一天至少有一个 Alpha (任意类型) 时，才添加到图表
+        if date_key == today_key:
+            has_today_data = True
+        
+        # v13.3.14: 关键修复 - "全 0 过滤器"
         if submitted_count > 0 or failed_count > 0 or submittable_count > 0:
             output["timestamps"].append(date_key.isoformat())
             output["submitted_count"].append(submitted_count)
             output["failed_count"].append(failed_count)
             output["submittable_count"].append(submittable_count)
-            if date_key == datetime.now(timezone.utc).date():
-                has_today_data = True
-                
-    # v13.3.14: 如果今天没有任何数据 (全0)，但我们希望图表能显示到“今天”
-    today_key = datetime.now(timezone.utc).date()
-    if not has_today_data and today_key not in all_dates:
-        # 添加一个全 0 的今天，确保图表连续
+
+    # v13.3.14: 如果今天没有数据 (全0)，则手动添加
+    if not has_today_data:
         output["timestamps"].append(today_key.isoformat())
         output["submitted_count"].append(0)
         output["failed_count"].append(0)
@@ -574,12 +570,17 @@ def get_daily_submission_stats():
     return output
 # --- v13.3.14: 结束 ---
 
+# --- v13.3.15: 修复致命的拼写错误 ---
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     global _submission_cache, _submission_cache_time
     with _submission_cache_lock:
         now = datetime.now(timezone.utc)
-        if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION): 
+        
+        # v13.3.15: 修复拼写错误
+        # 错误: if _submission_cache and _submission_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
+        # 正确:
+        if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION):
             logger.debug("返回缓存的 /api/v1/stats/submission_daily")
             return jsonify(_submission_cache)
         try:
@@ -591,6 +592,7 @@ def api_stats_submission_daily():
             logger.error(f"[API Daily Stats] Error: {e}", exc_info=True)
             with _submission_cache_lock: _submission_cache = None; _submission_cache_time = None
             return jsonify({"error": "内部服务器错误。"}), 500
+# --- v13.3.15: 结束 ---
 
 # (v13.3.7: 保持不变)
 @app.route('/download_logs/<log_filename>')

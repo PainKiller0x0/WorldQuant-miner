@@ -1,327 +1,338 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>v13.3.0 控制面板 - WQminer</title>
-<style>
-        /* (v13.3.0: 样式与 v13.1.6 保持一致) */
-         :root {
-            --bg-color: #f4f7f6; --card-bg-color: #fff; --text-color: #333;
-            --muted-text-color: #7f8c8d; --header-bg-color: #3498db;
-            --header-text-color: white; --link-color: #2980b9; --border-color: #ddd;
-            --input-border-color: #ddd; --button-primary-bg: #007bff;
-            --button-primary-hover-bg: #0056b3; --button-secondary-bg: #6c757d;
-            --button-secondary-hover-bg: #5a6268; --button-text-color: white;
-            --message-success-bg: #d4edda; --message-success-text: #155724; --message-success-border: #c3e6cb;
-            --message-error-bg: #f8d7da; --message-error-text: #721c24; --message-error-border: #f5c6cb;
-            --message-warning-bg: #fff3cd; --message-warning-text: #856404; --message-warning-border: #ffeeba;
-         }
-        [data-theme="dark"] {
-            --bg-color: #1a1a1a; --card-bg-color: #2c2c2c; --text-color: #e0e0e0;
-            --muted-text-color: #999; --header-bg-color: #0056b3;
-            --header-text-color: #f0f0f0; --link-color: #5dade2; --border-color: #444;
-            --input-border-color: #555; --button-primary-bg: #0056b3;
-            --button-primary-hover-bg: #004494; --button-secondary-bg: #5a6268;
-            --button-secondary-hover-bg: #495057; --message-success-bg: #2d5a2d;
-            --message-success-text: #c3e6cb; --message-success-border: #3a7d44;
-            --message-error-bg: #5a2d2d; --message-error-text: #f5c6cb; --message-error-border: #a73c47;
-            --message-warning-bg: #7d6608; --message-warning-text: #ffeeba; --message-warning-border: #b3930b;
+    <title>全局设置 - WQ 监控</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
         }
-
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; transition: background-color 0.3s, color 0.3s; }
-        .container { max-width: 800px; margin: 10px auto; background: var(--card-bg-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: background-color 0.3s; }
-        .header { background: var(--header-bg-color); color: var(--header-text-color); padding: 15px; border-top-left-radius: 8px; border-top-right-radius: 8px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; transition: background-color 0.3s, color 0.3s; }
-        .header h1 { margin: 0; font-size: 1.5rem; }
-        .header a { color: var(--header-text-color); text-decoration: none; font-size: 13px; opacity: 0.8; margin-left: 10px;}
-        .header a:hover { opacity: 1; }
-        .header-controls { display: flex; align-items: center; margin-top: 5px; }
-        form { padding: 15px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--muted-text-color); transition: color 0.3s; font-size: 0.9rem; }
-        .form-group input { width: calc(100% - 20px); padding: 8px 10px; border: 1px solid var(--input-border-color); border-radius: 4px; font-size: 14px; background-color: var(--card-bg-color); color: var(--text-color); transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
-        .form-group input:focus { outline: none; border-color: var(--link-color); box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25); }
-        .form-group small { display: block; color: var(--muted-text-color); margin-top: 4px; transition: color 0.3s; font-size: 0.8rem; }
-        .section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; border-top: 1px solid var(--border-color); padding-top: 15px; transition: border-color 0.3s; }
-        h2 { border-bottom: 2px solid var(--header-bg-color); padding-bottom: 5px; color: var(--link-color); transition: border-color 0.3s, color 0.3s; margin-bottom: 15px; font-size: 1.2rem; }
-        .button-group { margin-top: 15px; }
-        button { background-color: var(--button-primary-bg); color: var(--button-text-color); padding: 10px 15px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; transition: background-color 0.3s ease; margin-right: 8px; margin-bottom: 8px; }
-        button:hover { background-color: var(--button-primary-hover-bg); }
-        .copy-button { background-color: var(--button-secondary-bg); }
-        .copy-button:hover { background-color: var(--button-secondary-hover-bg); }
-        #message { margin-top: 15px; padding: 12px; border-radius: 4px; display: none; font-size: 0.9rem; }
-        .success { background-color: var(--message-success-bg); color: var(--message-success-text); border: 1px solid var(--message-success-border); }
-        .error { background-color: var(--message-error-bg); color: var(--message-error-text); border: 1px solid var(--message-error-border); }
-        .warning { background-color: var(--message-warning-bg); color: var(--message-warning-text); border: 1px solid var(--message-warning-border); }
-        #theme-toggle { cursor: pointer; font-size: 18px; background: none; border: none; color: var(--header-text-color); margin-left: 10px; }
-
-        @media (max-width: 768px) {
-             .header h1 { font-size: 1.3rem; width: 100%; margin-bottom: 8px; text-align: center; }
-             .header-controls { width: 100%; justify-content: space-around; }
-             .section { grid-template-columns: 1fr; /* Stack columns on mobile */ }
-             .form-group label { text-align: left; }
-             .form-group input { width: calc(100% - 20px); }
-             button { width: calc(50% - 12px); margin: 5px; }
+        [data-bs-theme="dark"] body {
+            background-color: #212529;
         }
+        .theme-toggle {
+            cursor: pointer;
+            font-size: 1.25rem;
+            padding: 0.5rem 0.75rem;
+            color: var(--bs-nav-link-color);
+        }
+        .theme-toggle:hover {
+            color: var(--bs-nav-link-hover-color);
+        }
+        .theme-toggle .bi-sun-fill { display: none; }
+        .theme-toggle .bi-moon-stars-fill { display: block; }
+        [data-bs-theme="dark"] .theme-toggle .bi-sun-fill { display: block; }
+        [data-bs-theme="dark"] .theme-toggle .bi-moon-stars-fill { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <h1>WQminer v13.3.0 控制面板</h1>
-        <div class="header-controls">
-            <a href="/">&larr; 返回主仪表盘</a>
-            <button id="theme-toggle" title="切换亮色/暗色模式">🌓</button>
+    <div class="container-fluid mt-3">
+        <nav class="nav nav-tabs">
+            <a class="nav-link" href="/">
+                <i class="bi bi-speedometer2"></i> 主仪表盘
+            </a>
+            <a class="nav-link active" aria-current="page" href="/settings">
+                <i class="bi bi-gear-fill"></i> 全局设置
+            </a>
+            <a class="nav-link" href="/chart">
+                <i class="bi bi-bar-chart-line-fill"></i> 统计图表
+            </a>
+            <a class="nav-link" href="/pending">
+                <i class="bi bi-clipboard-data-fill"></i> 待提交列表
+            </a>
+            <a class="nav-link ms-auto theme-toggle" id="theme-toggler" title="切换亮色/暗色模式">
+                <i class="bi bi-sun-fill"></i>
+                <i class="bi bi-moon-stars-fill"></i>
+            </a>
+        </nav>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>WQminer v13.3.0 控制面板</h5>
+            </div>
+            <div class="card-body">
+                <form id="settings-form">
+        
+                    <h2>看门狗 A (LLM API 预算)</h2>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="daily_budget_limit" class="form-label">LLM 每日预算 (次)</label>
+                            <input type="number" class="form-control" id="daily_budget_limit" name="daily_budget_limit" min="0">
+                            <div class="form-text">Gemini API 每日调用硬上限 (UTC 时间)。</div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <h2>看门狗 B (WQ API 动态令牌桶)</h2>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="wq_429_cooldown_seconds" class="form-label">WQ 429 冷却 (秒)</label>
+                            <input type="number" class="form-control" id="wq_429_cooldown_seconds" name="wq_429_cooldown_seconds" min="0">
+                            <div class="form-text">遇到 429 后的强制冷却时间 (最小CD)。</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="max_tpm_limit" class="form-label">最大 TPM (每分钟请求数)</label>
+                            <input type="number" class="form-control" id="max_tpm_limit" name="max_tpm_limit" min="1">
+                            <div class="form-text">看门狗 B 动态调整的 TPM 上限。</div>
+                        </div>
+                         <div class="col-md-6 mb-3">
+                            <label for="min_tpm_limit" class="form-label">最小 TPM (每分钟请求数)</label>
+                            <input type="number" class="form-control" id="min_tpm_limit" name="min_tpm_limit" min="1">
+                            <div class="form-text">看门狗 B 动态调整的 TPM 下限。</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <h2>服务参数 (需要重启服务生效)</h2>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="miner_concurrency" class="form-label">Miner 并发数</label>
+                            <input type="number" class="form-control" id="miner_concurrency" name="miner_concurrency" min="0">
+                            <div class="form-text">Miner (Discover) 的 Worker 线程数。</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="evolver_concurrency" class="form-label">Evolver 并发数</label>
+                            <input type="number" class="form-control" id="evolver_concurrency" name="evolver_concurrency" min="0">
+                            <div class="form-text">Evolver (Evolve) 的 Worker 线程数。</div>
+                        </div>
+                         <div class="col-md-6 mb-3">
+                            <label for="producer_queue_full_sleep" class="form-label">队列已满暂停 (秒)</label>
+                            <input type="number" class="form-control" id="producer_queue_full_sleep" name="producer_queue_full_sleep" min="0">
+                            <div class="form-text">当队列已满时，生产者的暂停时间。</div>
+                        </div>
+                         <div class="col-md-6 mb-3">
+                            <label for="hopeful_pool_max_size" class="form-label">精英池上限 (个)</label>
+                            <input type="number" class="form-control" id="hopeful_pool_max_size" name="hopeful_pool_max_size" min="10">
+                            <div class="form-text">Hopeful Alphas 精英池的最大容量。</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="evolver_wildcard_count" class="form-label">Evolver 外卡池数量 (个)</label>
+                            <input type="number" class="form-control" id="evolver_wildcard_count" name="evolver_wildcard_count" min="0">
+                            <div class="form-text">Evolver 每次抽样时，从“外卡池”抽取的父本数量。</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                         <button type="submit" class="btn btn-primary">保存设置</button>
+                         <button type="button" class="btn btn-secondary" id="copy-restart-cmd">复制重启命令</button>
+                    </div>
+                    
+                    <div id="message" class="alert mt-3" style="display: none;" role="alert"></div>
+                </form>
+            </div>
         </div>
+
     </div>
-    <form id="settings-form">
-        
-        <h2>看门狗 A (LLM API 预算)</h2>
-        <div class="section">
-            <div class="form-group">
-                <label for="daily_budget_limit">LLM 每日预算 (次)</label>
-                <input type="number" id="daily_budget_limit" name="daily_budget_limit" min="0">
-                <small>Gemini API 每日调用硬上限 (UTC 时间)。</small>
-            </div>
-             <div class="form-group">
-                </div>
-        </div>
-        
-        <h2>看门狗 B (WQ API 动态令牌桶)</h2>
-        <div class="section">
-            <div class="form-group">
-                <label for="wq_429_cooldown_seconds">WQ 429 冷却 (秒)</label>
-                <input type="number" id="wq_429_cooldown_seconds" name="wq_429_cooldown_seconds" min="0">
-                <small>遇到 429 后的强制冷却时间 (最小CD)。</small>
-            </div>
-            <div class="form-group">
-                <label for="max_tpm_limit">最大 TPM (每分钟请求数)</label>
-                <input type="number" id="max_tpm_limit" name="max_tpm_limit" min="1">
-                <small>看门狗 B 动态调整的 TPM 上限。</small>
-            </div>
-             <div class="form-group">
-                <label for="min_tpm_limit">最小 TPM (每分钟请求数)</label>
-                <input type="number" id="min_tpm_limit" name="min_tpm_limit" min="1">
-                <small>看门狗 B 动态调整的 TPM 下限。</small>
-            </div>
-        </div>
 
-        <h2>服务参数 (需要重启服务生效)</h2>
-        <div class="section">
-            <div class="form-group">
-                <label for="miner_concurrency">Miner 并发数</label>
-                <input type="number" id="miner_concurrency" name="miner_concurrency" min="0">
-                <small>Miner (Discover) 的 Worker 线程数。</small>
-            </div>
-            <div class="form-group">
-                <label for="evolver_concurrency">Evolver 并发数</label>
-                <input type="number" id="evolver_concurrency" name="evolver_concurrency" min="0">
-                <small>Evolver (Evolve) 的 Worker 线程数。</small>
-            </div>
-             <div class="form-group">
-                <label for="producer_queue_full_sleep">队列已满暂停 (秒)</label>
-                <input type="number" id="producer_queue_full_sleep" name="producer_queue_full_sleep" min="0">
-                <small>当队列已满时，生产者的暂停时间。</small>
-            </div>
-             <div class="form-group">
-                <label for="hopeful_pool_max_size">精英池上限 (个)</label>
-                <input type="number" id="hopeful_pool_max_size" name="hopeful_pool_max_size" min="10">
-                <small>Hopeful Alphas 精英池的最大容量。</small>
-            </div>
-            <div class="form-group">
-                <label for="evolver_wildcard_count">Evolver 外卡池数量 (个)</label>
-                <input type="number" id="evolver_wildcard_count" name="evolver_wildcard_count" min="0">
-                <small>Evolver 每次抽样时，从“外卡池”抽取的父本数量。</small>
-            </div>
-        </div>
-        
-        <div class="button-group">
-             <button type="submit">保存设置</button>
-             <button type="button" class="copy-button" id="copy-restart-cmd">复制重启命令</button>
-        </div>
-        
-        <div id="message"></div>
-    </form>
-</div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<script>
-    const themeToggle = document.getElementById('theme-toggle');
-    const currentTheme = localStorage.getItem('theme') || 'dark'; // Default dark
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌓';
+    <script>
+        // --- v13.3.12: 标准夜间模式逻辑 (来自 chart.html) ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const THEME_KEY = 'theme-preference';
+            const htmlEl = document.documentElement;
 
-    themeToggle.addEventListener('click', () => {
-        let targetTheme = 'light';
-        if (document.documentElement.getAttribute('data-theme') === 'light') {
-            targetTheme = 'dark';
-            themeToggle.textContent = '☀️';
-        } else {
-            themeToggle.textContent = '🌓';
-        }
-        document.documentElement.setAttribute('data-theme', targetTheme);
-        localStorage.setItem('theme', targetTheme);
-    });
+            function getCurrentTheme() {
+                return htmlEl.getAttribute('data-bs-theme');
+            }
+
+            function loadThemePreference() {
+                const preference = localStorage.getItem(THEME_KEY);
+                // 默认 'dark'
+                const systemPreference = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                htmlEl.setAttribute('data-bs-theme', preference || systemPreference);
+            }
+
+            document.getElementById('theme-toggler').addEventListener('click', () => {
+                const currentTheme = getCurrentTheme();
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                htmlEl.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem(THEME_KEY, newTheme);
+            });
+            
+            loadThemePreference();
+        });
+        // --- 结束 ---
+    </script>
     
-
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('settings-form');
-        const messageEl = document.getElementById('message');
-        const copyButton = document.getElementById('copy-restart-cmd');
-
-        // --- v13.1.6: 剪贴板修复逻辑 ---
+    <script>
+        // --- (v13.3.0: 核心 JS 逻辑 - 保持不变) ---
+        // (唯一的修改是 showMessage 函数以适配 Bootstrap 5 Alerts)
         
-        function showMessage(type, html) {
-            messageEl.className = type;
-            messageEl.innerHTML = html;
-            messageEl.style.display = 'block';
-        }
-        
-        function showCopySuccess(buttonElement) {
-            const originalText = buttonElement.textContent;
-            buttonElement.textContent = '已复制!';
-            buttonElement.disabled = true;
-            setTimeout(() => {
-                buttonElement.textContent = originalText || '复制重启命令';
-                buttonElement.disabled = false;
-            }, 2000);
-        }
-        
-        function fallbackCopy(text, buttonElement) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed'; textArea.style.top = 0; textArea.style.left = 0;
-            textArea.style.width = '2em'; textArea.style.height = '2em';
-            textArea.style.padding = 0; textArea.style.border = 'none';
-            textArea.style.outline = 'none'; textArea.style.boxShadow = 'none';
-            textArea.style.background = 'transparent';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    showCopySuccess(buttonElement);
-                } else {
-                    throw new Error('execCommand 失败');
-                }
-            } catch (err) {
-                console.error('Fallback 复制失败: ', err);
-                showMessage('error', '复制失败！浏览器拒绝了该操作。');
-            }
-            document.body.removeChild(textArea);
-        }
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('settings-form');
+            const messageEl = document.getElementById('message');
+            const copyButton = document.getElementById('copy-restart-cmd');
 
-        const restartCommand = 'docker compose -f docker-compose.yml -f docker-compose.evolver.yml -f docker-compose.dashboard.yml up -d --build --force-recreate'; 
-        function copyRestartCommand(buttonElement) {
-             // 检查安全上下文
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(restartCommand).then(() => {
-                    showCopySuccess(buttonElement);
-                }).catch(err => {
-                    console.error('API 复制失败, 尝试回退: ', err);
-                    fallbackCopy(restartCommand, buttonElement); // API 失败时回退
-                });
-            } else {
-                // 非安全上下文 (http://) 时, 直接使用回退
-                fallbackCopy(restartCommand, buttonElement);
-            }
-        }
-        // --- v13.1.6: 修复结束 ---
-        
-
-        // 1. Load current settings
-        fetch('/api/get_settings')
-            .then(response => {
-                 if (!response.ok) { 
-                    return response.json().then(err => { throw new Error(err.error || `HTTP ${response.status}`); });
-                 }
-                 return response.json();
-             })
-            .then(data => {
-                // v13.1: 填充顶层参数 (v13.3.0: 新增 evolver_wildcard_count)
-                if (form.elements['miner_concurrency']) form.elements['miner_concurrency'].value = data.miner_concurrency;
-                if (form.elements['evolver_concurrency']) form.elements['evolver_concurrency'].value = data.evolver_concurrency;
-                if (form.elements['producer_queue_full_sleep']) form.elements['producer_queue_full_sleep'].value = data.producer_queue_full_sleep;
-                if (form.elements['hopeful_pool_max_size']) form.elements['hopeful_pool_max_size'].value = data.hopeful_pool_max_size;
-                if (form.elements['evolver_wildcard_count']) form.elements['evolver_wildcard_count'].value = data.evolver_wildcard_count;
-                
-                // v13.1: 填充看门狗 A
-                if (data.llm_budget && form.elements['daily_budget_limit']) {
-                    form.elements['daily_budget_limit'].value = data.llm_budget.daily_budget_limit;
-                }
-                
-                // v13.1: 填充看门狗 B
-                if (data.wq_api_limiter) {
-                    if (form.elements['wq_429_cooldown_seconds']) form.elements['wq_429_cooldown_seconds'].value = data.wq_api_limiter.wq_429_cooldown_seconds;
-                    if (form.elements['max_tpm_limit']) form.elements['max_tpm_limit'].value = data.wq_api_limiter.max_tpm_limit;
-                    if (form.elements['min_tpm_limit']) form.elements['min_tpm_limit'].value = data.wq_api_limiter.min_tpm_limit;
-                }
-            })
-            .catch(err => showMessage('error', `加载配置时发生错误: ${err.message}`));
-
-        // 2. Save settings
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
+            // --- v13.1.6: 剪贴板修复逻辑 ---
             
-            // v13.3.0: 更新 Key 列表
-            const staticKeys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'];
-            const llmKeys = ['daily_budget_limit'];
-            const wqKeys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'];
-
-            const data = {
-                llm_budget: {},
-                wq_api_limiter: {}
-            };
-            
-            let hasError = false;
-
-            // 辅助函数
-            const processKey = (keyName, targetObj, minVal = 0) => {
-                const inputElement = form.elements[keyName];
-                if (!inputElement) return;
-                const value = inputElement.value;
-                const numValue = Number(value);
-                if (value.trim() === '' || isNaN(numValue) || numValue < minVal) {
-                    showMessage('error', `无效值: ${keyName} 必须是一个不小于 ${minVal} 的数字。`);
-                    hasError = true;
-                    return;
-                }
-                targetObj[keyName] = numValue;
-            };
-
-            // 填充数据
-            staticKeys.forEach(key => processKey(key, data, 0));
-            llmKeys.forEach(key => processKey(key, data.llm_budget, 1));
-            wqKeys.forEach(key => processKey(key, data.wq_api_limiter, 1));
-
-            if (hasError) return;
-
-            showMessage('warning', '正在保存...');
-
-            fetch('/api/save_settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.status === 'success') {
-                    showMessage('success', `<b>配置已保存！</b><br>看门狗参数 (TPM, Cooldowns) 已即时生效。<br>服务参数 (并发数, 池上限, 外卡数) 需要您点击<button type="button" class="copy-button" onclick="copyRestartCommand(this)">复制重启命令</button>并在主机上<b>手动执行</b>才能应用。`);
+            function showMessage(type, html) {
+                // [已修改] 适配 Bootstrap 5 Alerts
+                messageEl.className = 'alert mt-3'; // 重置
+                if (type === 'success') {
+                    messageEl.classList.add('alert-success');
+                } else if (type === 'error') {
+                    messageEl.classList.add('alert-danger');
                 } else {
-                    showMessage('error', `保存失败: ${result.message}`);
+                    messageEl.classList.add('alert-warning');
                 }
-            })
-            .catch(err => showMessage('error', `保存时发生网络错误: ${err}`));
+                // [结束修改]
+                
+                messageEl.innerHTML = html;
+                messageEl.style.display = 'block';
+            }
+            
+            function showCopySuccess(buttonElement) {
+                const originalText = buttonElement.textContent;
+                buttonElement.textContent = '已复制!';
+                buttonElement.disabled = true;
+                setTimeout(() => {
+                    buttonElement.textContent = originalText || '复制重启命令';
+                    buttonElement.disabled = false;
+                }, 2000);
+            }
+            
+            function fallbackCopy(text, buttonElement) {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed'; textArea.style.top = 0; textArea.style.left = 0;
+                textArea.style.width = '2em'; textArea.style.height = '2em';
+                textArea.style.padding = 0; textArea.style.border = 'none';
+                textArea.style.outline = 'none'; textArea.style.boxShadow = 'none';
+                textArea.style.background = 'transparent';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showCopySuccess(buttonElement);
+                    } else {
+                        throw new Error('execCommand 失败');
+                    }
+                } catch (err) {
+                    console.error('Fallback 复制失败: ', err);
+                    showMessage('error', '复制失败！浏览器拒绝了该操作。');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            const restartCommand = 'docker compose -f docker-compose.yml -f docker-compose.evolver.yml -f docker-compose.dashboard.yml up -d --build --force-recreate'; 
+            function copyRestartCommand(buttonElement) {
+                 // 检查安全上下文
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(restartCommand).then(() => {
+                        showCopySuccess(buttonElement);
+                    }).catch(err => {
+                        console.error('API 复制失败, 尝试回退: ', err);
+                        fallbackCopy(restartCommand, buttonElement); // API 失败时回退
+                    });
+                } else {
+                    // 非安全上下文 (http://) 时, 直接使用回退
+                    fallbackCopy(restartCommand, buttonElement);
+                }
+            }
+            // --- v13.1.6: 修复结束 ---
+            
+
+            // 1. Load current settings
+            fetch('/api/get_settings')
+                .then(response => {
+                     if (!response.ok) { 
+                        return response.json().then(err => { throw new Error(err.error || `HTTP ${response.status}`); });
+                     }
+                     return response.json();
+                 })
+                .then(data => {
+                    // v13.1: 填充顶层参数 (v13.3.0: 新增 evolver_wildcard_count)
+                    if (form.elements['miner_concurrency']) form.elements['miner_concurrency'].value = data.miner_concurrency;
+                    if (form.elements['evolver_concurrency']) form.elements['evolver_concurrency'].value = data.evolver_concurrency;
+                    if (form.elements['producer_queue_full_sleep']) form.elements['producer_queue_full_sleep'].value = data.producer_queue_full_sleep;
+                    if (form.elements['hopeful_pool_max_size']) form.elements['hopeful_pool_max_size'].value = data.hopeful_pool_max_size;
+                    if (form.elements['evolver_wildcard_count']) form.elements['evolver_wildcard_count'].value = data.evolver_wildcard_count;
+                    
+                    // v13.1: 填充看门狗 A
+                    if (data.llm_budget && form.elements['daily_budget_limit']) {
+                        form.elements['daily_budget_limit'].value = data.llm_budget.daily_budget_limit;
+                    }
+                    
+                    // v13.1: 填充看门狗 B
+                    if (data.wq_api_limiter) {
+                        if (form.elements['wq_429_cooldown_seconds']) form.elements['wq_429_cooldown_seconds'].value = data.wq_api_limiter.wq_429_cooldown_seconds;
+                        if (form.elements['max_tpm_limit']) form.elements['max_tpm_limit'].value = data.wq_api_limiter.max_tpm_limit;
+                        if (form.elements['min_tpm_limit']) form.elements['min_tpm_limit'].value = data.wq_api_limiter.min_tpm_limit;
+                    }
+                })
+                .catch(err => showMessage('error', `加载配置时发生错误: ${err.message}`));
+
+            // 2. Save settings
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // v13.3.0: 更新 Key 列表
+                const staticKeys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'];
+                const llmKeys = ['daily_budget_limit'];
+                const wqKeys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'];
+
+                const data = {
+                    llm_budget: {},
+                    wq_api_limiter: {}
+                };
+                
+                let hasError = false;
+
+                // 辅助函数
+                const processKey = (keyName, targetObj, minVal = 0) => {
+                    const inputElement = form.elements[keyName];
+                    if (!inputElement) return;
+                    const value = inputElement.value;
+                    const numValue = Number(value);
+                    if (value.trim() === '' || isNaN(numValue) || numValue < minVal) {
+                        showMessage('error', `无效值: ${keyName} 必须是一个不小于 ${minVal} 的数字。`);
+                        hasError = true;
+                        return;
+                    }
+                    targetObj[keyName] = numValue;
+                };
+
+                // 填充数据
+                staticKeys.forEach(key => processKey(key, data, 0));
+                llmKeys.forEach(key => processKey(key, data.llm_budget, 1));
+                wqKeys.forEach(key => processKey(key, data.wq_api_limiter, 1));
+
+                if (hasError) return;
+
+                showMessage('warning', '正在保存...');
+
+                fetch('/api/save_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        // [已修改] 适配 Bootstrap 5 的按钮样式
+                        showMessage('success', `<b>配置已保存！</b><br>看门狗参数 (TPM, Cooldowns) 已即时生效。<br>服务参数 (并发数, 池上限, 外卡数) 需要您点击<button type="button" class="btn btn-secondary btn-sm" onclick="copyRestartCommand(this)">复制重启命令</button>并在主机上<b>手动执行</b>才能应用。`);
+                    } else {
+                        showMessage('error', `保存失败: ${result.message}`);
+                    }
+                })
+                .catch(err => showMessage('error', `保存时发生网络错误: ${err}`));
+            });
+
+            // 3. Attach listener to the main copy button
+            copyButton.addEventListener('click', function() {
+                 copyRestartCommand(this); 
+            });
+
         });
-
-        // 3. Attach listener to the main copy button
-        copyButton.addEventListener('click', function() {
-             copyRestartCommand(this); 
-        });
-
-    });
-</script>
-
+    </script>
 </body>
 </html>

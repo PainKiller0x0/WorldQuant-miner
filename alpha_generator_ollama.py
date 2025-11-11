@@ -224,8 +224,12 @@ class AlphaGenerator:
                 logger.error(f"保存黑名单计数文件时出错: {e}")
 
     def is_using_blacklisted_identifier(self, alpha_code: str) -> bool:
-        with self.blacklist_lock:
-            current_counts = self.blacklist_counts
+        # --- v13.3.18: 修复黑名单状态同步 Bug ---
+        # 强制每次都从磁盘读取，以在 wq-miner 和 wq-evolver 之间同步黑名单
+        # 之前：使用 self.blacklist_counts (内存缓存)，导致一个进程的“学习”无法传递给另一个
+        current_counts = self.load_blacklist_counts() 
+        # --- v13.3.18 修复结束 ---
+
         if not current_counts: return False
         found_identifiers = self.identifier_pattern.findall(alpha_code)
         if not found_identifiers: return False
@@ -703,7 +707,7 @@ class AlphaGenerator:
                     # 从而优雅地暂停整个系统，而不是被这个任务卡死。
                     
                     # 我们仍然需要标记此任务 "完成"，以释放 worker 去做别的任务。
-                    self.strategy_queue.task_done()
+                    # self.strategy_queue.task_done()
                     continue 
                     # --- 修复结束 ---
 
@@ -717,30 +721,49 @@ class AlphaGenerator:
                          if regular_errors and isinstance(regular_errors, list) and len(regular_errors) > 0 and isinstance(regular_errors[0], dict):
                              error_message = regular_errors[0].get("message", "")
                     if not error_message: error_message = result.get("message", "")
-                    match = re.search(r"(Unknown function|unknown operator|unknown variable) '(\w+)'", error_message or "")
-                    if match:
-                        error_type = match.group(1); bad_identifier = match.group(2); should_blacklist = False
-                        if error_type == "unknown variable":
+                    # --- v13.3.17: 修复黑名单正则表达式 ---
+                    # 之前的 regex (v13.3.16) 太具体，无法匹配 "inaccessible or unknown operator"
+                    
+                    # 1. 检查关键字 (忽略大小写)
+                    error_lower = (error_message or "").lower()
+                    is_unknown_error = "unknown" in error_lower or "inaccessible" in error_lower
+                    
+                    # 2. 提取带引号的标识符 (我们只关心这个)
+                    match = re.search(r"['\"](\w+)['\"]", error_message or "")
+                    
+                    if is_unknown_error and match:
+                        bad_identifier = match.group(1)
+                        should_blacklist = False
+
+                        # 3. 判断是否应该拉黑 (基于错误信息中的关键字)
+                        if "variable" in error_lower:
                             should_blacklist = True
                             logger.warning(f"检测到无效变量: '{bad_identifier}'。WQ API 报告其未知。")
-                        elif error_type in ["Unknown function", "unknown operator"]:
+                        elif "function" in error_lower or "operator" in error_lower:
+                            # 检查它是否只是一个被误用的 "data field"
                             if bad_identifier not in (self.fields if isinstance(self.fields, list) else []):
                                 should_blacklist = True
                                 logger.warning(f"检测到无效函数/操作符: '{bad_identifier}'。")
                             else:
                                 logger.info(f"Alpha 模拟出错: '{bad_identifier}' 是一个数据字段，但被误用为函数。已记录，不计入黑名单。")
+                        else:
+                             # 备用：如果只提到 unknown 和 "ts_returns"，但没提类型，也拉黑
+                             if bad_identifier not in (self.fields if isinstance(self.fields, list) else []):
+                                should_blacklist = True
+                                logger.warning(f"检测到未知标识符 (类型未指定): '{bad_identifier}'。")
+
                         if should_blacklist:
                             self.update_blacklist_count(bad_identifier)
+                    # --- v13.3.17 修复结束 ---
                     else:
                         logger.warning(f"Alpha 模拟出错 (非特定标识符错误)，已记录: {idea_expr} | Error: {str(error_message)[:200]}...")
-                    self.strategy_queue.task_done() 
                     continue 
 
                 if result in ["TIMEOUT"]:
                     log_report["status"] = result
                     self.log_tested_alphas([log_report])
                     logger.warning(f"Alpha 模拟{result}，已记录并丢弃 (不计入黑名单): {idea_expr}")
-                    self.strategy_queue.task_done() 
+                    # self.strategy_queue.task_done() 
                     continue 
 
                 if isinstance(result, dict):

@@ -690,16 +690,19 @@ class AlphaGenerator:
                 result = self.wq.test_alpha(idea_expr, strategy['settings'])
 
                 if result == "RATE_LIMIT":
+                    # --- v13.3.11 Livelock (锁死) 修复 ---
                     logger.warning(f"遭遇 WQ 429 (针对: {idea_expr})。")
-                    logger.info(f"[Worker] 看门狗 B 已激活。策略将放回队列重试。")
-                    try:
-                        self.strategy_queue.put(strategy)
-                        logger.info(f"策略 {idea_expr[:60]}... 已放回队列。")
-                    except queue.Full:
-                         logger.error(f"尝试放回策略 {idea_expr[:60]}... 时队列已满！该策略将被丢弃。")
+                    logger.warning(f"[Worker] 看门狗 B (wq_client) 已激活。此策略 {idea_expr[:60]}... 将被丢弃 (不再放回队列)。")
                     
+                    # 关键修复：我们不再将 'strategy' 放回队列。
+                    # wq_client 已经在 system_config.json 中设置了全局冷却时间戳。
+                    # 所有 *其他* worker 在下次调用 _acquire_wq_token 时会自动休眠，
+                    # 从而优雅地暂停整个系统，而不是被这个任务卡死。
+                    
+                    # 我们仍然需要标记此任务 "完成"，以释放 worker 去做别的任务。
                     self.strategy_queue.task_done()
                     continue 
+                    # --- 修复结束 ---
 
                 if isinstance(result, dict) and result.get("status") == "ERROR":
                     log_report["status"] = "ERROR"

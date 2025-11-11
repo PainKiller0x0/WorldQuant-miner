@@ -1,4 +1,4 @@
-version: '3.8'
+# ⚠️ 已移除 version: 字段，因为 Compose v2 已弃用
 
 networks:
   wq-network:

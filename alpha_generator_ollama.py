@@ -865,42 +865,35 @@ class AlphaGenerator:
 
         while True:
             try:
-                # --- v13.3.15: 修复生产者日志刷屏 ---
+                # --- v13.3.19: 修复生产者与消费者 API 争抢 (最终修复) ---
+                # 生产者 (MainThread) 永远不应该在主循环中调用 WQ API (get_fields/get_operators)
+                # 这些 API 调用会与 Worker 线程争抢 TPM 配额，导致系统在低 TPM 时完全锁死。
+                # self.fields 和 self.operators 在 run() 函数启动时 已加载一次，这足够了。
+
+                # --- v13.3.15: 生产者日志合并 (保留) ---
                 if self.strategy_queue.qsize() >= self.queue_max_size:
                     config = utils.load_system_config()
                     queue_sleep = config.get("producer_queue_full_sleep", 10) 
                     
-                    # 仅在状态 *首次* 变为“暂停”时记录
                     if not self._producer_paused_logging_state:
                         logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})。生产者将暂停，直到队列出现空位... (此消息将合并)")
-                        self._producer_paused_logging_state = True # 设置状态为“已暂停”
+                        self._producer_paused_logging_state = True
                     
                     time.sleep(queue_sleep) 
-                    continue # <--- 关键：跳过本轮循环
+                    continue
                 
-                # 如果代码运行到这里，说明队列 *未* 满。
-                # 检查是否需要记录“恢复”日志
                 if self._producer_paused_logging_state:
-                    logger.info(f"[生产者] 队列出现空位 ({self.strategy_queue.qsize()}/{self.queue_max_size})。恢复刷新 fields/operators 并生成...")
-                    self._producer_paused_logging_state = False # 重置状态
-                # --- v13.3.15 修复结束 ---
-
-                # (v13.3.15: 移除旧的 "队列未满..." 日志)
-                self.fields = self.wq.get_data_fields() 
-                self.operators = self.wq.get_operators()
+                    logger.info(f"[生产者] 队列出现空位 ({self.strategy_queue.qsize()}/{self.queue_max_size})。恢复生成...")
+                    self._producer_paused_logging_state = False
+                # --- v13.3.15 结束 ---
                 
-                if self.operators == "RATE_LIMIT":
-                     logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
-                     
-                if not self.fields or not self.operators:
-                     logger.error("[生产者] 无法获取字段或操作符，将在60秒后重试。")
-                     time.sleep(60)
-                     continue
+                # (v13.3.19: 已删除所有 wq.get_data_fields() 和 wq.get_operators() 调用)
 
+                # 1. 加载本地文件 (无 API 消耗)
                 self.load_submission_failures()
 
+                # 2. 准备种子 (无 API 消耗)
                 if mode == 'evolve':
-                    # v13.3.5: 此函数现在是安全的
                     evolution_seeds = self.load_evolution_seeds()
                     if not evolution_seeds:
                         mode = 'discover'
@@ -916,12 +909,12 @@ class AlphaGenerator:
                     if failed_examples_for_miner:
                         failed_examples_for_miner = failed_examples_for_miner[-20:]
                 
-                # (v13.3.13: 旧的队列检查 [line 841] 已被移到顶部)
-
                 logger.info(f"[生产者] [{mode.upper()}] 开始生成 1 个新 Alpha... (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")
 
+                # 3. 调用 LLM (非 WQ API)
                 idea = None
                 if mode == 'discover':
+                    # (self.fields 和 self.operators 现在是启动时加载的)
                     idea = self.generate_alpha_idea( self.fields, self.operators, guidance=strategic_guidance, failed_examples=failed_examples_for_miner )
                 elif mode == 'evolve':
                     if not evolution_seeds:
@@ -931,6 +924,7 @@ class AlphaGenerator:
                     base_alpha_obj = random.choice(evolution_seeds)
                     idea = self.generate_evolved_alpha_idea(base_alpha_obj, guidance=strategic_guidance) 
 
+                # 4. 处理 LLM 结果 (无 API 消耗)
                 if idea == "BUDGET_EXHAUSTED":
                     logger.critical(f"[生产者] 看门狗 A: LLM 预算已用尽。生产者线程将休眠 15 分钟...")
                     time.sleep(900) 
@@ -943,6 +937,12 @@ class AlphaGenerator:
 
                 if isinstance(idea, dict) and idea.get("expression"):
                     expr = idea.get("expression")
+                    
+                    # 5. 预检 (v13.3.18 修复：会从磁盘读黑名单，无 API 消耗)
+                    if self.is_using_blacklisted_identifier(expr):
+                        continue # 已被拉黑，丢弃
+
+                    # (其他本地检查)
                     with self.tested_alphas_lock:
                         is_tested = expr in self.tested_alphas
                     is_known_failure = expr in self.submission_failures_set
@@ -954,8 +954,8 @@ class AlphaGenerator:
                         continue
                     if is_alpha_syntactically_suspicious(expr):
                         continue
-                    if self.is_using_blacklisted_identifier(expr):
-                        continue
+                    
+                    # 6. 放入队列 (无 API 消耗)
                     try:
                          self.strategy_queue.put(idea)
                          logger.info(f"[生产者] 新策略已生成并通过预检，放入队列。 (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")

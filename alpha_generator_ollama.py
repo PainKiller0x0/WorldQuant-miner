@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v13.3.5 (状态文件安全修复) ---
+# --- alpha_generator_ollama.py v13.3.13 (修复生产者 I/O 风暴) ---
 import argparse
 import logging
 import json
@@ -21,9 +21,9 @@ import utils
 from wq_client import WorldQuant
 from llm_provider import LLMProvider
 
-# --- v13.3.5: 版本号 ---
-CURRENT_GENERATOR_VERSION = "v13.3.5 (State Safety Fix)"
-# --- v13.3.5: 结束 ---
+# --- v13.3.13: 版本号 ---
+CURRENT_GENERATOR_VERSION = "v13.3.13 (Producer I/O Storm Fix)"
+# --- v13.3.13: 结束 ---
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,9 @@ class AlphaGenerator:
         self.queue_max_size = self.concurrency_level * 2
         self.strategy_queue = queue.Queue(maxsize=self.queue_max_size)
         self.consumer_threads = []
+        # --- v13.3.15: 添加日志合并状态 ---
+        self._producer_paused_logging_state = False 
+        # --- v13.3.15 结束 ---
 
     def _mutate_settings(self, settings_dict: dict) -> dict:
         try:
@@ -839,8 +842,29 @@ class AlphaGenerator:
 
         while True:
             try:
+                # --- v13.3.15: 修复生产者日志刷屏 ---
+                if self.strategy_queue.qsize() >= self.queue_max_size:
+                    config = utils.load_system_config()
+                    queue_sleep = config.get("producer_queue_full_sleep", 10) 
+                    
+                    # 仅在状态 *首次* 变为“暂停”时记录
+                    if not self._producer_paused_logging_state:
+                        logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})。生产者将暂停，直到队列出现空位... (此消息将合并)")
+                        self._producer_paused_logging_state = True # 设置状态为“已暂停”
+                    
+                    time.sleep(queue_sleep) 
+                    continue # <--- 关键：跳过本轮循环
+                
+                # 如果代码运行到这里，说明队列 *未* 满。
+                # 检查是否需要记录“恢复”日志
+                if self._producer_paused_logging_state:
+                    logger.info(f"[生产者] 队列出现空位 ({self.strategy_queue.qsize()}/{self.queue_max_size})。恢复刷新 fields/operators 并生成...")
+                    self._producer_paused_logging_state = False # 重置状态
+                # --- v13.3.15 修复结束 ---
+
+                # (v13.3.15: 移除旧的 "队列未满..." 日志)
                 self.fields = self.wq.get_data_fields() 
-                self.operators = self.wq.get_operators() 
+                self.operators = self.wq.get_operators()
                 
                 if self.operators == "RATE_LIMIT":
                      logger.critical("[生产者] 获取操作符时遭遇 WorldQuant 429。看门狗 B 将在下次调用时处理。")
@@ -868,14 +892,8 @@ class AlphaGenerator:
                     ]
                     if failed_examples_for_miner:
                         failed_examples_for_miner = failed_examples_for_miner[-20:]
-
-                if self.strategy_queue.qsize() >= self.queue_max_size:
-                    # v13.3.5: 使用 utils 的安全函数
-                    config = utils.load_system_config()
-                    queue_sleep = config.get("producer_queue_full_sleep", 10) 
-                    logger.info(f"[生产者] 队列已满 ({self.strategy_queue.qsize()}/{self.queue_max_size})，暂停生成 {queue_sleep} 秒...")
-                    time.sleep(queue_sleep) 
-                    continue
+                
+                # (v13.3.13: 旧的队列检查 [line 841] 已被移到顶部)
 
                 logger.info(f"[生产者] [{mode.upper()}] 开始生成 1 个新 Alpha... (队列: {self.strategy_queue.qsize()}/{self.queue_max_size})")
 
@@ -928,7 +946,7 @@ class AlphaGenerator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v13.3.5 (State Safety Fix)') # v13.3.5
+    parser = argparse.ArgumentParser(description='Alpha Generator v13.3.13 (Producer I/O Storm Fix)') # v13.3.13
     parser.add_argument('--user-id', type=str, required=True, help="WorldQuant User ID (email)")
     parser.add_argument('--api-key', type=str, required=True, help="WorldQuant API Key (password)")
     parser.add_argument('--batch-size', type=int, default=5, help="Number of alphas to generate per cycle (v7.7: 已弃用，但保留)")

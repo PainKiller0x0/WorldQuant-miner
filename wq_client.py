@@ -25,6 +25,11 @@ class WorldQuant:
         self.wq_limiter_lock = threading.Lock() 
         self.wq_token_bucket = [] 
 
+        # --- v13.3.12: 添加“低 I/O”成功计数器 ---
+        self.successful_requests_since_last_write = 0
+        self.success_io_lock = threading.Lock() # 保护计数器和文件I/O
+        # --- v13.3.12 结束 ---
+
         self._authenticate()
         self.default_settings = {
             'instrumentType': 'EQUITY', 'universe': 'TOP3000', 'region': 'USA',
@@ -92,14 +97,44 @@ class WorldQuant:
              time.sleep(1)
     # --- v13.3.2 修复结束 ---
 
-    # --- v13.3.4: 移除动态TPM增长 (保留) ---
+    # --- v13.3.12: 恢复“低 I/O”的 TPM 增长 ---
     def _record_wq_success(self):
         """ 
-        (v13.3.4) 动态TPM增长已被禁用，以确保稳定性。
-        此函数现在什么也不做 (No-op)。
+        (v13.3.12) 恢复 TPM 增长, 但使用计数器来防止 I/O 风暴。
+        每 20 次成功请求才触发一次磁盘写入。
         """
-        pass # <-- 彻底移除所有 I/O 风暴的来源
-    # --- v13.3.4 修复结束 ---
+        try:
+            with self.success_io_lock:
+                self.successful_requests_since_last_write += 1
+                
+                # 仅在累积 20 次成功后才执行 I/O
+                if self.successful_requests_since_last_write < 20:
+                    return # 快速退出, 不执行 I/O
+
+                # --- 达到 20 次，执行 I/O ---
+                self.successful_requests_since_last_write = 0 # 重置计数器
+                
+                # (v13.3.1) utils.py 中的 FileLock 负责跨进程同步
+                config = load_system_config()
+                limiter_config = config.get("wq_api_limiter", {})
+
+                current_tpm = limiter_config.get("current_tpm_limit", 60)
+                max_tpm = limiter_config.get("max_tpm_limit", 200)
+                increment = limiter_config.get("tpm_increment_on_success", 1) # (v13.3.12: 恢复使用此配置)
+
+                if current_tpm < max_tpm:
+                    new_tpm = min(current_tpm + increment, max_tpm)
+                    config["wq_api_limiter"]["current_tpm_limit"] = new_tpm
+                    
+                    # 立即写入磁盘 (低频)
+                    if not save_system_config(config):
+                        logger.error("[Watchdog B] 保存 system_config (success) 失败！")
+                    else:
+                        logger.info(f"[Watchdog B] TPM 限制在 20 次成功后，从 {current_tpm} 增加到 {new_tpm}。")
+                
+        except Exception as e:
+            logger.error(f"[Watchdog B] _record_wq_success 发生错误: {e}", exc_info=True)
+    # --- v13.3.12 修复结束 ---
 
     # --- v13.3.10: 恢复安全刹车 (必须) ---
     def _record_wq_failure_429(self):
@@ -109,6 +144,10 @@ class WorldQuant:
         """
         # (v13.3.1) utils.py 中的 FileLock 保证了并发安全
         try:
+            # --- v13.3.12: 重置成功计数器 ---
+            with self.success_io_lock:
+                self.successful_requests_since_last_write = 0
+            # --- v13.3.12 结束 ---
             config = load_system_config()
             limiter_config = config.get("wq_api_limiter", {})
 
@@ -176,55 +215,61 @@ class WorldQuant:
                 raise 
 
     def _make_request(self, method, url, **kwargs):
-        """
-        (v13.3.10) 集成所有修复
-        """
-        
-        self._acquire_wq_token()
-
-        with self.request_lock:
-            try:
-                response = self.session.request(method, url, **kwargs)
-                response.raise_for_status() 
-                
-                self._record_wq_success() # (v13.3.4: 空操作)
-                return response
-                
-            except requests.exceptions.RequestException as e:
-                
-                if e.response is not None and e.response.status_code == 429:
-                    self._record_wq_failure_429() # (v13.3.10: 恢复功能)
-                    raise e 
-                
-                if e.response is not None and e.response.status_code == 401:
-                    logger.warning(f"Request failed with 401 Unauthorized for {method} {url}. Attempting re-authentication...")
-                    try:
-                        self._authenticate() 
-                        logger.info(f"Re-authentication successful. Retrying the original request to {url}...")
-                        
-                        self._acquire_wq_token()
-                        
-                        response = self.session.request(method, url, **kwargs)
-                        response.raise_for_status()
-                        
-                        self._record_wq_success() # (v13.3.4: 空操作)
-                        return response
-                        
-                    except requests.exceptions.RequestException as auth_e:
-                        if auth_e.response is not None and auth_e.response.status_code == 429:
-                            self._record_wq_failure_429() # (v13.3.10: 恢复功能)
+            """
+            (v13.3.14) 修复并发踩踏 (Thundering Herd) Livelock
+            """
+            
+            # 关键修复：必须先获取“请求锁”，确保同一时间只有一个线程
+            # 可以尝试获取 API 令牌。这可以序列化所有 worker 的请求。
+            with self.request_lock: 
+            
+                # 关键修复：在锁 *内部* 获取令牌
+                self._acquire_wq_token() 
+    
+                try:
+                    response = self.session.request(method, url, **kwargs)
+                    response.raise_for_status() 
+                    
+                    self._record_wq_success() # (v13.3.12: 低 I/O 恢复)
+                    return response
+                    
+                except requests.exceptions.RequestException as e:
+                    
+                    if e.response is not None and e.response.status_code == 429:
+                        self._record_wq_failure_429() # (v13.3.10: 恢复功能)
+                        raise e 
+                    
+                    if e.response is not None and e.response.status_code == 401:
+                        logger.warning(f"Request failed with 401 Unauthorized for {method} {url}. Attempting re-authentication...")
+                        try:
+                            # 注意：_authenticate() 会自己获取令牌，但它也在 self.request_lock 内部
+                            self._authenticate() 
+                            logger.info(f"Re-authentication successful. Retrying the original request to {url}...")
+                            
+                            # 重试也必须在锁内部获取令牌
+                            self._acquire_wq_token()
+                            
+                            response = self.session.request(method, url, **kwargs)
+                            response.raise_for_status()
+                            
+                            self._record_wq_success() # (v13.3.12: 低 I/O 恢复)
+                            return response
+                            
+                        except requests.exceptions.RequestException as auth_e:
+                            if auth_e.response is not None and auth_e.response.status_code == 429:
+                                self._record_wq_failure_429() # (v13.3.10: 恢复功能)
+                                raise auth_e 
+                            
+                            logger.error(f"Re-authentication or retry failed: {auth_e}")
                             raise auth_e 
-                        
-                        logger.error(f"Re-authentication or retry failed: {auth_e}")
-                        raise auth_e 
-                    except Exception as general_auth_e:
-                         logger.error(f"An unexpected error occurred during re-authentication: {general_auth_e}")
-                         raise general_auth_e 
-                else:
-                    raise e
-            except Exception as general_e:
-                 logger.error(f"An unexpected error occurred during the request to {url}: {general_e}")
-                 raise general_e
+                        except Exception as general_auth_e:
+                             logger.error(f"An unexpected error occurred during re-authentication: {general_auth_e}")
+                             raise general_auth_e 
+                    else:
+                        raise e
+                except Exception as general_e:
+                     logger.error(f"An unexpected error occurred during the request to {url}: {general_e}")
+                     raise general_e
 
     # (get_data_fields 保持不变)
     def get_data_fields(self):

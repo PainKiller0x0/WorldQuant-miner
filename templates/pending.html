@@ -3,300 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>待提交列表 - WQ 监控</title>
+    <title>待提交列表 - WQ Alpha 舰队</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        [data-bs-theme="dark"] body {
-            background-color: #212529;
-        }
-        .theme-toggle {
-            cursor: pointer;
-            font-size: 1.25rem;
-            padding: 0.5rem 0.75rem;
-            color: var(--bs-nav-link-color);
-        }
-        .theme-toggle:hover {
-            color: var(--bs-nav-link-hover-color);
-        }
-        .theme-toggle .bi-sun-fill { display: none; }
-        .theme-toggle .bi-moon-stars-fill { display: block; }
-        [data-bs-theme="dark"] .theme-toggle .bi-sun-fill { display: block; }
-        [data-bs-theme="dark"] .theme-toggle .bi-moon-stars-fill { display: none; }
-    </style>
-    
-    <style>
-        /* --- [v13.3.19] 升级到 Bootstrap 5 CSS 变量 --- */
-        body {
-            /* 基础字体和 padding 由 BS5 接管 */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            padding: 0;
-            margin: 0;
-        }
-        /* .container 替换为 .card */
-        .card-body h1, .card-body h2 {
-            color: var(--bs-body-color);
-            border-bottom: 2px solid var(--bs-border-color);
-            padding-bottom: 10px;
-        }
-        .card-body h1 a {
-            color: #4dabf7; /* 保留品牌色 */
-            text-decoration: none;
-            font-size: 0.7em;
-            margin-left: 15px;
-        }
-        .card-body h1 a:hover { text-decoration: underline; }
-        
-        #loading { font-size: 1.2em; color: #f0ad4e; text-align: center; padding: 40px; }
-
-        /* --- 表格样式 (已应用 .table 类) --- */
-        #alphaTable {
-            width: 100%;
-            margin-top: 20px;
-            /* border-collapse 已由 BS5 table 处理 */
-        }
-        #alphaTable th, #alphaTable td {
-            /* border 由 BS5 table-bordered 处理 */
-            padding: 10px 12px;
-            text-align: left;
-            vertical-align: top;
-            white-space: normal;
-        }
-        #alphaTable th {
-            /* background-color 由 BS5 .table-* 处理，或保留默认 */
-            color: var(--bs-body-color);
-            cursor: pointer;
-            position: relative;
-            white-space: nowrap;
-        }
-        #alphaTable th:hover .sort-icon { opacity: 0.7; }
-        
-        /* --- 排序图标 --- */
-        .sort-icon {
-            display: inline-block;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            margin-left: 8px;
-            opacity: 0.3;
-            vertical-align: middle;
-        }
-        /* [v13.3.19] 适配亮/暗模式的图标颜色 */
-        [data-bs-theme="dark"] .sort-icon.asc { border-bottom: 5px solid #fff; }
-        [data-bs-theme="dark"] .sort-icon.desc { border-top: 5px solid #fff; }
-        [data-bs-theme="light"] .sort-icon.asc { border-bottom: 5px solid #000; }
-        [data-bs-theme="light"] .sort-icon.desc { border-top: 5px solid #000; }
-
-        /* --- Alpha 表达式 --- */
-        .alpha-expression {
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-            font-size: 0.9em;
-            color: #7ec699; /* 保留高亮 */
-            max-width: 350px;
-            overflow-x: auto;
-            background-color: var(--bs-tertiary-bg); /* BS5 变量 */
-            padding: 5px;
-            border-radius: 4px;
-            cursor: pointer;
-            border: 1px solid var(--bs-border-color); /* BS5 变量 */
-        }
-        .alpha-expression:hover { border-color: #888; }
-        
-        /* Checks Summary 标签 (保持不变, 已兼容) */
-        .checks-cell { min-width: 140px; }
-        .check-tag {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin: 2px;
-            color: #fff;
-        }
-        .check-tag.pass { background-color: #28a745; }
-        .check-tag.fail { background-color: #dc3545; }
-        .check-tag.pending { background-color: #ffc107; color: #333; }
-        .check-tag.unknown { background-color: #6c757d; }
-
-        /* 可复制的性能指标 */
+        body { font-family: 'Segoe UI', Roboto, "Helvetica Neue", Arial, sans-serif; transition: background-color 0.3s; }
+        .alpha-expression { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.9em; color: #7ec699; max-width: 350px; overflow-x: auto; background-color: var(--bs-tertiary-bg); padding: 5px; border-radius: 4px; cursor: pointer; border: 1px solid var(--bs-border-color); }
+        .check-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600; margin: 2px; color: #fff; }
+        .check-tag.pass { background-color: #28a745; } .check-tag.fail { background-color: #dc3545; } .check-tag.pending { background-color: #ffc107; color: #333; } .check-tag.unknown { background-color: #6c757d; }
         .perf-cell { font-size: 0.9em; line-height: 1.6; min-width: 180px; }
-        .perf-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .perf-item strong { color: var(--bs-body-emphasis-color); min-width: 70px; display: inline-block;}
-        .perf-item span { color: var(--bs-body-color); }
-        .perf-value-copy {
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background-color: var(--bs-secondary-bg); /* BS5 变量 */
-            font-family: "SFMono-Regular", Consolas, monospace;
-            border: 1px solid var(--bs-border-color); /* BS5 变量 */
-            transition: background-color 0.2s;
-        }
-        .perf-value-copy:hover { background-color: #007bff; color: #fff; }
-        
-        /* 操作按钮 (使用 BS5 .btn 样式) */
-        .actions-cell { min-width: 130px; }
-        .btn-action {
-            /* 样式由 .btn .btn-* 接管 */
-            display: block;
-            width: 100%;
-            margin-bottom: 5px;
-            font-size: 0.9em;
-        }
-        
-        /* --- 提示消息 (使用 BS5 Toast 样式) --- */
-        /* #toast 已被 BS5 .toast 替换 (如果需要，但这里是自定义 toast) */
-        #toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: #28a745;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 5px;
-            z-index: 1056; /* 高于 BS5 导航栏 */
-            opacity: 0;
-            transition: opacity 0.5s, top 0.5s;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        #toast.show {
-            opacity: 1;
-            top: 30px;
-        }
-        #toast.error {
-            background-color: #dc3545;
-        }
-        
-        /* --- 滚动按钮 --- */
-        .scroll-buttons {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 999;
-            display: flex;
-            flex-direction: column;
-        }
-        .scroll-btn {
-            background-color: var(--bs-secondary-bg); /* BS5 变量 */
-            color: var(--bs-body-color); /* BS5 变量 */
-            border: 1px solid var(--bs-border-color); /* BS5 变量 */
-            border-radius: 5px;
-            padding: 10px 12px;
-            cursor: pointer;
-            opacity: 0.7;
-            font-size: 1.2em;
-            margin-top: 5px;
-            transition: opacity 0.2s, background-color 0.2s;
-        }
-        .scroll-btn:hover {
-            background-color: #007bff;
-            opacity: 1;
-            color: #fff; /* 确保 hover 时文字清晰 */
-        }
+        .perf-item { display: flex; justify-content: space-between; align-items: center; }
+        .perf-value-copy { cursor: pointer; padding: 2px 6px; border-radius: 4px; background-color: var(--bs-secondary-bg); border: 1px solid var(--bs-border-color); transition: background-color 0.2s; }
+        .perf-value-copy:hover { background-color: #0d6efd; color: #fff; }
+        #toast { position: fixed; top: 20px; right: 20px; background-color: #28a745; color: white; padding: 15px 20px; border-radius: 5px; z-index: 1056; opacity: 0; transition: opacity 0.5s, top 0.5s; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        #toast.show { opacity: 1; top: 30px; } #toast.error { background-color: #dc3545; }
+        .scroll-buttons { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; }
+        .scroll-btn { background-color: var(--bs-secondary-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); border-radius: 5px; padding: 10px 12px; cursor: pointer; opacity: 0.7; font-size: 1.2em; margin-top: 5px; transition: opacity 0.2s; }
+        .scroll-btn:hover { background-color: #0d6efd; opacity: 1; color: #fff; }
     </style>
 </head>
 <body>
 
-    <div class="container-fluid mt-3">
-        <nav class="nav nav-tabs">
-            <a class="nav-link" href="/">
-                <i class="bi bi-speedometer2"></i> 主仪表盘
-            </a>
-            <a class="nav-link" href="/settings">
-                <i class="bi bi-gear-fill"></i> 全局设置
-            </a>
-            <a class="nav-link" href="/chart">
-                <i class="bi bi-bar-chart-line-fill"></i> 统计图表
-            </a>
-            <a class="nav-link active" aria-current="page" href="/pending">
-                <i class="bi bi-clipboard-data-fill"></i> 待提交列表
-            </a>
-            <a class="nav-link ms-auto theme-toggle" id="theme-toggler" title="切换亮色/暗色模式">
-                <i class="bi bi-sun-fill"></i>
-                <i class="bi bi-moon-stars-fill"></i>
-            </a>
-        </nav>
+<nav class="navbar navbar-expand-lg bg-body-tertiary sticky-top shadow-sm mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold text-primary" href="/"><i class="bi bi-cpu-fill"></i> WQ Alpha 舰队</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> 仪表盘</a></li>
+        <li class="nav-item"><a class="nav-link" href="/chart"><i class="bi bi-graph-up"></i> 统计图表</a></li>
+        <li class="nav-item"><a class="nav-link" href="/settings"><i class="bi bi-sliders"></i> 设置</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/pending"><i class="bi bi-hourglass-split"></i> 待处理</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3">
+        <span class="badge bg-secondary bg-opacity-25 text-body-secondary border border-secondary-subtle d-none d-md-inline">
+            Dash: <span id="dashboard-version">...</span> | Gen: <span id="generator-version">...</span>
+        </span>
+        <button class="btn btn-outline-secondary btn-sm rounded-circle" id="theme-toggle"><i class="bi bi-moon-stars-fill"></i></button>
+      </div>
+    </div>
+  </div>
+</nav>
 
-        <div class="card mt-3">
-            <div class="card-body">
-                <h1>
-                    待提交的 Alphas
-                    </h1>
-                <h2 id="summary">总数: 0</h2>
-                <div id="loading">正在加载数据，请稍候...</div>
-                
-                <table id="alphaTable" class="table table-bordered table-striped table-hover" style="display:none;">
-                    <thead>
+<div class="container-fluid px-4">
+    <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-clipboard-data"></i> 待提交 Alphas</h5>
+            <span class="badge bg-primary rounded-pill fs-6" id="summary">总数: 0</span>
+        </div>
+        <div class="card-body p-0">
+            <div id="loading" class="text-center p-5 text-muted">
+                <div class="spinner-border text-primary mb-2" role="status"></div>
+                <div>正在加载数据...</div>
+            </div>
+            
+            <div class="table-responsive">
+                <table id="alphaTable" class="table table-hover table-striped mb-0 align-middle" style="display:none;">
+                    <thead class="table-light">
                         <tr>
                             <th>操作</th>
-                            <th data-sort-key="dashboard_score" data-sort-dir="desc">得分 <span class="sort-icon desc"></span></th>
+                            <th data-sort-key="dashboard_score">得分 <i class="bi bi-arrow-down-up sort-icon"></i></th>
                             <th data-sort-key="expression">Alpha 表达式 (点击复制)</th>
-                            <th data-sort-key="fitness">性能指标 (点击复制数值)</th>
+                            <th data-sort-key="fitness">性能指标</th>
                             <th data-sort-key="checks_summary_pass">检查摘要</th>
                             <th data-sort-key="timestamp">时间戳</th>
                         </tr>
                     </thead>
-                    <tbody id="alphaTableBody" class="table-group-divider">
-                        </tbody>
+                    <tbody id="alphaTableBody"></tbody>
                 </table>
             </div>
         </div>
     </div>
-    
-    <div id="toast"></div>
+</div>
 
-    <div class="scroll-buttons">
-        <button id="scrollToTopBtn" class="scroll-btn" title="滚动到顶部">▲</button>
-        <button id="scrollToBottomBtn" class="scroll-btn" title="滚动到底部">▼</button>
-    </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<div id="toast"></div>
+<div class="scroll-buttons">
+    <button id="scrollToTopBtn" class="scroll-btn" title="顶部">▲</button>
+    <button id="scrollToBottomBtn" class="scroll-btn" title="底部">▼</button>
+</div>
 
-    <script>
-        // --- v13.3.12: 标准夜间模式逻辑 (来自 chart.html) ---
-        document.addEventListener('DOMContentLoaded', function() {
-            const THEME_KEY = 'theme-preference';
-            const htmlEl = document.documentElement;
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // --- 主题与版本号逻辑 ---
+    const THEME_KEY = 'theme-preference';
+    const htmlEl = document.documentElement;
+    const themeToggle = document.getElementById('theme-toggle');
 
-            function getCurrentTheme() {
-                return htmlEl.getAttribute('data-bs-theme');
-            }
+    function setTheme(theme) {
+        htmlEl.setAttribute('data-bs-theme', theme);
+        localStorage.setItem(THEME_KEY, theme);
+        themeToggle.innerHTML = theme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>';
+    }
 
-            function loadThemePreference() {
-                const preference = localStorage.getItem(THEME_KEY);
-                // 默认 'dark'
-                const systemPreference = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-                htmlEl.setAttribute('data-bs-theme', preference || systemPreference);
-            }
+    const storedTheme = localStorage.getItem(THEME_KEY) || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    setTheme(storedTheme);
 
-            // 确保 theme-toggler 存在 (因为这个脚本在主逻辑前)
-            const toggler = document.getElementById('theme-toggler');
-            if (toggler) {
-                toggler.addEventListener('click', () => {
-                    const currentTheme = getCurrentTheme();
-                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                    htmlEl.setAttribute('data-bs-theme', newTheme);
-                    localStorage.setItem(THEME_KEY, newTheme);
-                });
-            }
-            
-            loadThemePreference();
-        });
-        // --- 结束 ---
-    </script>
-    
-    <script>
-    // --- (v11.x: 核心 JS 逻辑 - 保持不变) ---
-    // (唯一的修改是 renderTable 中为按钮添加了 .btn .btn-* class)
-    
+    themeToggle.addEventListener('click', () => {
+        setTheme(htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    fetch('/api/version_info').then(r=>r.json()).then(d=>{
+        const dbVer = document.getElementById('dashboard-version');
+        if(dbVer) dbVer.textContent = d.dashboard_version;
+        const genVer = document.getElementById('generator-version');
+        if(genVer) genVer.textContent = d.generator_version;
+    }).catch(e=>console.error("Ver info error:", e));
+    // --- 结束 ---
+
     let allAlphas = [];
     let currentSortKey = 'dashboard_score';
     let currentSortDir = 'desc';
@@ -304,407 +117,147 @@
     document.addEventListener('DOMContentLoaded', function() {
         fetchPendingAlphas();
         setupSortHeaders();
-        // --- [新功能] 绑定滚动按钮事件 ---
         setupScrollButtons();
-        // --- [新功能] 结束 ---
     });
 
     function fetchPendingAlphas() {
         const loadingDiv = document.getElementById('loading');
         const table = document.getElementById('alphaTable');
-        const summaryH2 = document.getElementById('summary');
+        const summarySpan = document.getElementById('summary');
 
-        loadingDiv.style.display = 'block';
-        table.style.display = 'none';
-        summaryH2.textContent = '总数: 0';
-
-        fetch('/api/get_pending_alphas')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                allAlphas = data.map(alpha => {
-                    const { pass, fail, pending } = parseChecksSummary(alpha.checks_summary);
-                    alpha.checks_summary_pass = pass;
-                    alpha.checks_summary_fail = fail;
-                    alpha.checks_summary_pending = pending;
-                    
-                    // --- [CRASH FIX v4] ---
-                    // 确保所有用于计算的性能值都是数字
-                    alpha.fitness = parseFloat(alpha.fitness) || -999;
-                    alpha.sharpe = parseFloat(alpha.sharpe) || -999;
-                    alpha.returns = parseFloat(alpha.returns) || 0;
-                    alpha.turnover = parseFloat(alpha.turnover) || 0;
-                    // --- 修复结束 ---
-                    
-                    return alpha;
-                });
-                
-                updateSummaryCount();
-                renderTable();
-                loadingDiv.style.display = 'none';
-                table.style.display = 'table';
-            })
-            .catch(error => {
-                console.error('Error fetching pending alphas:', error);
-                loadingDiv.textContent = `加载失败: ${error.message}。请检查后端服务是否运行，并查看控制台(F12)获取详细错误。`;
-                // 确保错误时表格也是隐藏的
-                table.style.display = 'none';
+        fetch('/api/get_pending_alphas').then(r=>r.json()).then(data => {
+            if(data.error) throw new Error(data.error);
+            allAlphas = data.map(alpha => {
+                const { pass, fail, pending } = parseChecksSummary(alpha.checks_summary);
+                alpha.checks_summary_pass = pass; alpha.checks_summary_fail = fail; alpha.checks_summary_pending = pending;
+                alpha.fitness = parseFloat(alpha.fitness)|| -999; alpha.sharpe = parseFloat(alpha.sharpe)|| -999;
+                alpha.returns = parseFloat(alpha.returns)||0; alpha.turnover = parseFloat(alpha.turnover)||0;
+                return alpha;
             });
+            updateSummaryCount(); renderTable();
+            loadingDiv.style.display = 'none'; table.style.display = 'table';
+        }).catch(err => {
+            loadingDiv.innerHTML = `<div class="text-danger">加载失败: ${err.message}</div>`;
+        });
     }
     
-    function updateSummaryCount() {
-        document.getElementById('summary').textContent = `总数: ${allAlphas.length}`;
-    }
+    function updateSummaryCount() { document.getElementById('summary').textContent = `总数: ${allAlphas.length}`; }
 
     function setupSortHeaders() {
         document.querySelectorAll('#alphaTable th[data-sort-key]').forEach(th => {
+            th.style.cursor = 'pointer';
             th.addEventListener('click', () => {
                 const sortKey = th.getAttribute('data-sort-key');
-                let sortDir = 'desc';
-                if (currentSortKey === sortKey) {
-                    // 修正一个小的拼写错误 (currentSortSorg -> currentSortDir)
-                    sortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
-                }
-                currentSortKey = sortKey;
-                currentSortDir = sortDir;
-                
-                updateSortIcons();
+                if (currentSortKey === sortKey) currentSortDir = currentSortDir === 'desc' ? 'asc' : 'desc';
+                else { currentSortKey = sortKey; currentSortDir = 'desc'; }
                 renderTable();
             });
         });
     }
 
-    function updateSortIcons() {
-        document.querySelectorAll('#alphaTable th .sort-icon').forEach(icon => {
-            icon.style.opacity = '0.3';
-            icon.className = 'sort-icon';
-        });
-        
-        const activeTh = document.querySelector(`#alphaTable th[data-sort-key="${currentSortKey}"]`);
-        if (activeTh) {
-            const icon = activeTh.querySelector('.sort-icon');
-            icon.style.opacity = '1';
-            icon.classList.add(currentSortDir);
-        }
-    }
-    
-    function parseChecksSummary(summaryStr) {
-        if (typeof summaryStr !== 'string') return { pass: 0, fail: 0, pending: 0 };
-        const pass = parseInt((summaryStr.match(/(\d+)\s+PASS/i) || [])[1] || 0, 10);
-        const fail = parseInt((summaryStr.match(/(\d+)\s+FAIL/i) || [])[1] || 0, 10);
-        const pending = parseInt((summaryStr.match(/(\d+)\s+PENDING/i) || [])[1] || 0, 10);
-        return { pass, fail, pending };
-    }
-    
-    function formatChecksSummary(alpha) {
-        const pass = alpha.checks_summary_pass;
-        const fail = alpha.checks_summary_fail;
-        const pending = alpha.checks_summary_pending;
-
-        let html = '';
-        if (pass > 0) html += `<span class="check-tag pass">${pass} PASS</span>`;
-        if (fail > 0) html += `<span class="check-tag fail">${fail} FAIL</span>`;
-        if (pending > 0) html += `<span class="check-tag pending">${pending} PENDING</span>`;
-        
-        if (html === '') {
-            html = `<span class="check-tag unknown">N/A</span>`;
-        }
-        return html;
+    function parseChecksSummary(str) {
+        if (typeof str !== 'string') return { pass: 0, fail: 0, pending: 0 };
+        const p = parseInt((str.match(/(\d+)\s+PASS/i)||[])[1]||0);
+        const f = parseInt((str.match(/(\d+)\s+FAIL/i)||[])[1]||0);
+        const pd = parseInt((str.match(/(\d+)\s+PENDING/i)||[])[1]||0);
+        return { pass: p, fail: f, pending: pd };
     }
 
     function renderTable() {
-        const tableBody = document.getElementById('alphaTableBody');
-        tableBody.innerHTML = ''; // Clear existing rows
-
-        // 1. Sort the data
-        const sortedAlphas = [...allAlphas].sort((a, b) => {
-            let valA = a[currentSortKey];
-            let valB = b[currentSortKey];
-
-            if (currentSortKey === 'expression' || currentSortKey === 'timestamp') {
-                valA = String(valA).toLowerCase();
-                valB = String(valB).toLowerCase();
-            } else {
-                valA = parseFloat(valA) || -Infinity;
-                valB = parseFloat(valB) || -Infinity;
-            }
-
-            if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
-            if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
-            return 0;
+        const tbody = document.getElementById('alphaTableBody');
+        tbody.innerHTML = '';
+        const sorted = [...allAlphas].sort((a, b) => {
+            let va = a[currentSortKey], vb = b[currentSortKey];
+            if (['expression','timestamp'].includes(currentSortKey)) { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+            else { va = parseFloat(va)||-Infinity; vb = parseFloat(vb)||-Infinity; }
+            return (va < vb ? -1 : 1) * (currentSortDir === 'asc' ? 1 : -1);
         });
 
-        // 2. Render rows
-        if (sortedAlphas.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">太棒了！所有待提交的 Alphas 都已处理。</td></tr>';
-            return;
-        }
+        if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">没有待处理的 Alphas</td></tr>'; return; }
 
-        sortedAlphas.forEach(alpha => {
+        sorted.forEach(a => {
             const row = document.createElement('tr');
-            row.setAttribute('data-expression', alpha.expression); // 方便JS定位
+            row.setAttribute('data-expression', a.expression);
             
-            // --- [CRASH FIX & COPY FIX] 格式化性能指标 ---
-            // (alpha.fitness 等已在 fetchPendingAlphas 中被确保为数字)
+            const fit = a.fitness.toFixed(4), sha = a.sharpe.toFixed(4);
+            const ret = (a.returns*100).toFixed(2), trn = (a.turnover*100).toFixed(2);
+            const timeStr = a.timestamp ? new Date(a.timestamp).toLocaleString() : 'N/A';
             
-            // 1. 定义显示值 (Display Values)
-            const fitness_display = alpha.fitness.toFixed(4);
-            const sharpe_display = alpha.sharpe.toFixed(4);
-            
-            // 2. 定义复制值 (Copy Values) - 统一为2位小数
-            const fitness_copy = alpha.fitness.toFixed(2);
-            const sharpe_copy = alpha.sharpe.toFixed(2);
-            // Returns/Turnover 复制百分比数值 (e.g., "7.34")
-            const returns_copy = (alpha.returns * 100).toFixed(2);
-            const turnover_copy = (alpha.turnover * 100).toFixed(2);
+            let checksHtml = '';
+            if(a.checks_summary_pass > 0) checksHtml += `<span class="check-tag pass">${a.checks_summary_pass} PASS</span>`;
+            if(a.checks_summary_fail > 0) checksHtml += `<span class="check-tag fail">${a.checks_summary_fail} FAIL</span>`;
+            if(a.checks_summary_pending > 0) checksHtml += `<span class="check-tag pending">${a.checks_summary_pending} PENDING</span>`;
+            if(!checksHtml) checksHtml = `<span class="check-tag unknown">N/A</span>`;
 
-            // 3. 定义 Returns/Turnover 的显示值 (e.g., "7.34%")
-            const returns_display = returns_copy + '%';
-            const turnover_display = turnover_copy + '%';
-            // --- 修复结束 ---
-            
-            // 格式化时间戳
-            let timestampDisplay = 'N/A';
-            if (alpha.timestamp) {
-                try {
-                    timestampDisplay = new Date(alpha.timestamp).toLocaleString();
-                } catch(e) { timestampDisplay = alpha.timestamp; }
-            }
-
-            // [v13.3.19] 升级到 Bootstrap 5 按钮
             row.innerHTML = `
-                <td class="actions-cell">
-                    <button class="btn btn-primary btn-sm btn-action submit" data-action="mark-submitted">标记提交</button>
-                    <button class="btn btn-danger btn-sm btn-action fail" data-action="mark-failed">标记失败</button>
-                </td>
-                
-                <td>${parseFloat(alpha.dashboard_score).toFixed(4)}</td>
-                
-                <td>
-                    <div class="alpha-expression" title="点击复制表达式"
-                         data-copy-value="${escapeHTML(alpha.expression)}">
-                        ${escapeHTML(alpha.expression)}
+                <td style="min-width:140px">
+                    <div class="d-grid gap-1">
+                        <button class="btn btn-outline-primary btn-sm btn-action" data-action="mark-submitted"><i class="bi bi-check-lg"></i> 提交</button>
+                        <button class="btn btn-outline-danger btn-sm btn-action" data-action="mark-failed"><i class="bi bi-x-lg"></i> 失败</button>
                     </div>
                 </td>
-                
+                <td class="fw-bold text-primary">${parseFloat(a.dashboard_score).toFixed(4)}</td>
+                <td><div class="alpha-expression" data-copy-value="${escapeHTML(a.expression)}">${escapeHTML(a.expression)}</div></td>
                 <td class="perf-cell">
-                    <div class="perf-item">
-                        <strong>Fitness:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${fitness_copy}" data-copy-value="${fitness_copy}">${fitness_display}</span>
-                    </div>
-                    <div class="perf-item">
-                        <strong>Sharpe:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${sharpe_copy}" data-copy-value="${sharpe_copy}">${sharpe_display}</span>
-                    </div>
-                    <div class="perf-item">
-                        <strong>Returns:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${returns_copy}" data-copy-value="${returns_copy}">${returns_display}</span>
-                    </div>
-                    <div class="perf-item">
-                        <strong>Turnover:</strong>
-                        <span class="perf-value-copy" title="点击复制 ${turnover_copy}" data-copy-value="${turnover_copy}">${turnover_display}</span>
-                    </div>
+                    <div class="perf-item"><strong>Fit:</strong><span class="perf-value-copy" data-copy-value="${a.fitness.toFixed(2)}">${fit}</span></div>
+                    <div class="perf-item"><strong>Shar:</strong><span class="perf-value-copy" data-copy-value="${a.sharpe.toFixed(2)}">${sha}</span></div>
+                    <div class="perf-item"><strong>Ret:</strong><span class="perf-value-copy" data-copy-value="${ret}">${ret}%</span></div>
+                    <div class="perf-item"><strong>Turn:</strong><span class="perf-value-copy" data-copy-value="${trn}">${trn}%</span></div>
                 </td>
-                
-                <td class="checks-cell">
-                    ${formatChecksSummary(alpha)}
-                </td>
-                
-                <td>${timestampDisplay}</td>
+                <td>${checksHtml}</td>
+                <td class="small text-muted">${timeStr}</td>
             `;
-            tableBody.appendChild(row);
+            tbody.appendChild(row);
         });
-        
-        // 3. 绑定所有交互事件
-        setupActionHandlers(tableBody);
+        setupActionHandlers(tbody);
     }
-    
-    /**
-     * 绑定所有点击事件 (操作按钮 + 复制)
-     */
+
     function setupActionHandlers(container) {
         container.addEventListener('click', function(e) {
-            const target = e.target;
-            
-            // --- [需求 1] 操作按钮 ---
-            if (target.classList.contains('btn-action')) {
-                const action = target.getAttribute('data-action');
-                const row = target.closest('tr');
-                const expression = row.getAttribute('data-expression');
-                
-                if (action === 'mark-submitted') {
-                    handleMarkSubmitted(expression, row);
-                } else if (action === 'mark-failed') {
-                    handleMarkFailed(expression, row);
-                }
+            const t = e.target.closest('.btn-action') || e.target;
+            if (t.classList.contains('btn-action')) {
+                const action = t.getAttribute('data-action');
+                const row = t.closest('tr');
+                const expr = row.getAttribute('data-expression');
+                if (action === 'mark-submitted') handleMarkSubmitted(expr, row);
+                else if (action === 'mark-failed') handleMarkFailed(expr, row);
             }
-            
-            // --- [需求 2 & 表达式] 复制功能 ---
-            if (target.matches('.alpha-expression') || target.matches('.perf-value-copy')) {
-                const textToCopy = target.getAttribute('data-copy-value');
-                copyToClipboard(textToCopy, target);
+            if (e.target.closest('.alpha-expression') || e.target.closest('.perf-value-copy')) {
+                const val = (e.target.closest('.alpha-expression')||e.target.closest('.perf-value-copy')).getAttribute('data-copy-value');
+                copyToClipboard(val);
             }
         });
     }
 
-    /**
-     * [需求 1] 处理标记提交
-     */
-    function handleMarkSubmitted(expression, rowElement) {
-        if (!confirm(`是否确认将以下 Alpha 标记为“已提交”？\n\n${expression}`)) return;
-        
-        callApi('/api/mark_submitted', { expression: expression })
-            .then(() => {
-                showToast('标记成功！已从列表移除。');
-                removeRowAndUpdate(rowElement);
-            })
-            .catch(err => showToast(`标记失败: ${err.message}`, 'error'));
+    function handleMarkSubmitted(expr, row) {
+        if (!confirm(`确认标记为“已提交”？\n${expr}`)) return;
+        callApi('/api/mark_submitted', {expression: expr}).then(()=>removeRow(row));
     }
-
-    /**
-     * [需求 1 & v11.0] 处理标记失败 (带原因)
-     */
-    function handleMarkFailed(expression, rowElement) {
-        const reason = prompt(`[v11.0 核心功能]\n请为 Alpha 标记失败原因 (例如: HIGH_SELF_CORR, LOW_PERF, WQ_REJECTED):\n\n${expression}`);
-        
-        if (!reason || reason.trim() === '') {
-            showToast('操作取消。未提供失败原因。', 'error');
-            return;
-        }
-
-        callApi('/api/mark_failed_on_wq', { expression: expression, reason: reason.trim() })
-            .then(() => {
-                showToast(`标记失败 (原因: ${reason})！已从列表移除。`);
-                removeRowAndUpdate(rowElement);
-            })
-            .catch(err => showToast(`标记失败: ${err.message}`, 'error'));
+    function handleMarkFailed(expr, row) {
+        const r = prompt(`请输入失败原因 (如: HIGH_CORR, LOW_FIT):\n${expr}`);
+        if(r) callApi('/api/mark_failed_on_wq', {expression: expr, reason: r}).then(()=>removeRow(row));
     }
-    
-    /**
-     * 标记成功后，从UI移除该行并更新总数
-     */
-    function removeRowAndUpdate(rowElement) {
-        const expression = rowElement.getAttribute('data-expression');
-        // 从DOM移除
-        rowElement.style.opacity = '0';
-        setTimeout(() => rowElement.remove(), 300);
-        // 从数据源移除
-        allAlphas = allAlphas.filter(a => a.expression !== expression);
-        // 更新总数
-        updateSummaryCount();
-        
-        // 如果清空了，显示提示
-        if (allAlphas.length === 0) {
-            renderTable();
-        }
+    function removeRow(row) {
+        allAlphas = allAlphas.filter(a => a.expression !== row.getAttribute('data-expression'));
+        row.remove(); updateSummaryCount(); if(!allAlphas.length) renderTable();
     }
-    
-    /**
-     * 通用的 API 调用函数
-     */
     async function callApi(url, body) {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        const data = await response.json();
-        if (!response.ok || data.status !== 'success') {
-            throw new Error(data.message || 'API 请求失败');
-        }
-        return data;
+        const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+        const d = await r.json(); if(d.status!=='success') alert(d.message);
     }
-
-    /**
-     * 复制到剪贴板 (带提示)
-     */
-    function copyToClipboard(text, buttonElement) {
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(() => {
-                if (buttonElement) {
-                    const originalTitle = buttonElement.title;
-                    buttonElement.title = '已复制!';
-                    setTimeout(() => {
-                        buttonElement.title = originalTitle;
-                    }, 1500);
-                }
-                showToast('已复制到剪贴板！');
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                showToast('复制失败！', 'error');
-            });
-        } else {
-            console.warn('Fallback copy (clipboard API not available)');
-            // Fallback for non-secure contexts (like http://)
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed'; textArea.style.top = 0; textArea.style.left = 0;
-            textArea.style.opacity = 0;
-            document.body.appendChild(textArea);
-            textArea.focus(); textArea.select();
-            try {
-                document.execCommand('copy');
-                showToast('已复制 (Fallback)！');
-            } catch (err) {
-                showToast('复制失败！', 'error');
-            }
-            document.body.removeChild(textArea);
-        }
+    function copyToClipboard(text) {
+        if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(()=>showToast('已复制'));
+        else { const t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); showToast('已复制'); }
     }
-
-    function escapeHTML(str) {
-        if (str === null || str === undefined) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+    function showToast(msg) {
+        const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+        setTimeout(()=>t.classList.remove('show'), 2000);
     }
-    
-    /**
-     * 显示一个提示消息
-     */
-    function showToast(message, type = 'success') {
-        const toast = document.getElementById('toast');
-        toast.textContent = message;
-        toast.className = type === 'error' ? 'error' : '';
-        
-        toast.classList.add('show');
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 3000);
-    }
-    
-    // --- [新功能] 滚动按钮功能 ---
+    function escapeHTML(str) { return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
     function setupScrollButtons() {
-        const toTopBtn = document.getElementById('scrollToTopBtn');
-        const toBottomBtn = document.getElementById('scrollToBottomBtn');
-
-        if (toTopBtn) {
-            toTopBtn.addEventListener('click', () => {
-                // 使用平滑滚动
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        }
-
-        if (toBottomBtn) {
-            toBottomBtn.addEventListener('click', () => {
-                // 使用平滑滚动
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            });
-        }
+        document.getElementById('scrollToTopBtn').onclick = ()=>window.scrollTo({top:0, behavior:'smooth'});
+        document.getElementById('scrollToBottomBtn').onclick = ()=>window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'});
     }
-    // --- [新功能] 结束 ---
 </script>
-
 </body>
 </html>

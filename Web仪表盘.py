@@ -516,7 +516,70 @@ def api_stats_timeseries():
                 logger.error(f"[API Timeseries] Error: {e}", exc_info=True)
                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
                 return jsonify({"error": "内部服务器错误。"}), 500
+def get_daily_submission_stats():
+    stats = { "timestamps": [], "submittable_count": [], "submitted_count": [], "failed_count": [] }
+    try:
+        # 1. 统计 Submitted (按 manual_timestamp 的日期)
+        submitted_data = load_submitted_alphas()
+        submitted_counter = Counter()
+        for item in submitted_data.values():
+            ts = item.get('manual_timestamp')
+            if ts and len(ts) >= 10:
+                date_str = ts[:10] # YYYY-MM-DD
+                submitted_counter[date_str] += 1
+        
+        # 2. 统计 Failed (按 timestamp 的日期)
+        failed_list = load_submission_failures()
+        failed_counter = Counter()
+        for item in failed_list:
+            if isinstance(item, dict):
+                ts = item.get('timestamp')
+                if ts and len(ts) >= 10:
+                    date_str = ts[:10]
+                    failed_counter[date_str] += 1
+        
+        # 3. 统计 Submittable (来自 Hopeful Pool，按生成日期)
+        # 注意：这里只统计目前还在池子里的。
+        alphas = utils.load_hopeful_alphas_safe()
+        submittable_counter = Counter()
+        
+        pass_pattern = re.compile(r'(\d+)\s+PASS')
+        fail_pattern = re.compile(r'(\d+)\s+FAIL')
+        
+        for alpha in alphas:
+            if not isinstance(alpha, dict): continue
+            
+            # 检查是否 Submittable
+            summary_str = alpha.get('checks_summary', '') or ''
+            
+            # 解析 Checks
+            fail_match = fail_pattern.search(summary_str)
+            has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
+            pass_match = pass_pattern.search(summary_str)
+            passed_count = int(pass_match.group(1)) if pass_match else 0
+            
+            is_submittable = (passed_count >= 7 and not has_fail)
+            
+            if is_submittable:
+                ts = alpha.get('timestamp') # e.g., "2023-01-01 12:00:00"
+                if ts and len(ts) >= 10:
+                    date_str = ts[:10]
+                    submittable_counter[date_str] += 1
 
+        # 4. 合并日期并排序
+        all_dates = set(submitted_counter.keys()) | set(failed_counter.keys()) | set(submittable_counter.keys())
+        sorted_dates = sorted([d for d in all_dates if re.match(r'^\d{4}-\d{2}-\d{2}$', d)])
+        
+        # 5. 组装数据
+        stats['timestamps'] = sorted_dates
+        stats['submitted_count'] = [submitted_counter[d] for d in sorted_dates]
+        stats['failed_count'] = [failed_counter[d] for d in sorted_dates]
+        stats['submittable_count'] = [submittable_counter[d] for d in sorted_dates]
+        
+    except Exception as e:
+        logger.error(f"[Daily Stats] Error: {e}", exc_info=True)
+    
+    return stats
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     global _submission_cache, _submission_cache_time

@@ -17,6 +17,12 @@ services:
       - ./tested_alphas_log.json:/app/tested_alphas_log.json
       - ./api_config.json:/app/api_config.json
       - ./system_config.json:/app/system_config.json
+      # 添加这行:
+      - ./hopeful_alphas.json.lock:/app/hopeful_alphas.json.lock
+      # 添加这行:
+      - ./system_config.json.lock:/app/system_config.json.lock
+      # 添加这行:
+      - ./invalid_functions.json.lock:/app/invalid_functions.json.lock
       
       # --- v13.1: 修复 failure_log.json 找不到的 Bug ---
       - ./submission_failure_log.json:/app/submission_failure_log.json

@@ -1,8 +1,9 @@
-# --- migrate_to_db.py (Fixed v2) ---
+# --- migrate_to_db.py (v15.1 Fixed Timestamps) ---
 import json
 import os
 import sys
-from database import init_db, get_db, Alpha, SystemConfig
+from datetime import datetime
+from database import init_db, get_db, Alpha
 
 def load_json(filepath):
     if not os.path.exists(filepath): return {}
@@ -11,35 +12,56 @@ def load_json(filepath):
             return json.load(f)
     except: return {}
 
+def parse_timestamp(ts_str):
+    """尝试解析多种格式的时间戳，失败则返回当前时间"""
+    if not ts_str: return datetime.utcnow()
+    try:
+        # 尝试 ISO 格式 (e.g., 2023-01-01T12:00:00)
+        return datetime.fromisoformat(ts_str)
+    except:
+        try:
+            # 尝试常见日志格式 (e.g., 2023-01-01 12:00:00)
+            return datetime.strptime(str(ts_str), "%Y-%m-%d %H:%M:%S")
+        except:
+            return datetime.utcnow()
+
 def migrate():
-    print("🚀 开始 v15.0 数据库迁移 (修复版)...")
+    print("🚀 开始 v15.1 数据库迁移 (时间戳修复版)...")
     
-    # 1. 初始化数据库
     init_db()
     
-    # 2. 读取所有 JSON 文件
-    print("📂 读取旧版 JSON 文件...")
+    print("📂 读取源数据...")
     hopeful_data = load_json("hopeful_alphas.json")
     submitted_data = load_json("submitted_alphas.json")
     failed_list = load_json("submission_failure_log.json")
     
-    # 转换数据结构
     hopeful_alphas = hopeful_data.get("alphas", []) if isinstance(hopeful_data, dict) else []
-    submitted_set = set(submitted_data.keys()) if isinstance(submitted_data, dict) else set()
+    
+    # 构建 submitted 映射 (timestamp)
+    submitted_map = {}
+    if isinstance(submitted_data, dict):
+        for expr, info in submitted_data.items():
+            if isinstance(info, dict):
+                submitted_map[expr] = info.get('manual_timestamp')
+            else:
+                submitted_map[expr] = None # 旧格式可能没有时间戳
+
+    # 构建 failed 映射 (reason & timestamp)
     failed_map = {}
     if isinstance(failed_list, list):
         for item in failed_list:
             if isinstance(item, dict) and "expression" in item:
-                failed_map[item["expression"]] = item.get("reason", "UNKNOWN")
+                failed_map[item["expression"]] = {
+                    "reason": item.get("reason", "UNKNOWN"),
+                    "timestamp": item.get("timestamp")
+                }
 
-    print(f"📊 统计: Hopeful池 {len(hopeful_alphas)} 条, 已提交 {len(submitted_set)} 条, 失败记录 {len(failed_map)} 条")
+    print(f"📊 统计: Hopeful {len(hopeful_alphas)}, Submitted {len(submitted_map)}, Failed {len(failed_map)}")
     
-    # 3. 写入数据库
     with get_db() as db:
-        # 关键修复: 使用内存集合跟踪本事务中已添加的表达式，防止重复添加
         processed_expressions = set()
         
-        # 先加载数据库里已有的（防止二次运行报错）
+        # 预加载防止重复
         existing = db.query(Alpha.expression).all()
         for (expr,) in existing:
             processed_expressions.add(expr)
@@ -47,27 +69,37 @@ def migrate():
         count = 0
         skipped = 0
         
-        # --- 第一轮: 处理 Hopeful Alphas (完整信息) ---
-        print("🔄 正在导入 Hopeful Alphas...")
+        # --- 1. 处理 Hopeful Alphas ---
+        print("🔄 正在导入 Hopeful Alphas (保留原始时间)...")
         for alpha in hopeful_alphas:
             expr = alpha.get('expression')
             if not expr: continue
-            
-            # 如果已经处理过，跳过
             if expr in processed_expressions:
                 skipped += 1
                 continue
             
-            # 解析数据
+            # 解析关键字段
             perf = alpha.get('performance', {})
             checks = alpha.get('checks_summary', '')
+            raw_ts = alpha.get('timestamp') # <--- 获取原始生成时间
+            created_at_dt = parse_timestamp(raw_ts)
+            
             import re
             p_match = re.search(r'(\d+)\s+PASS', checks)
             f_match = re.search(r'(\d+)\s+FAIL', checks)
             
-            is_sub = expr in submitted_set
+            # 状态判断
+            is_sub = expr in submitted_map
             is_fail = expr in failed_map
-            fail_reason = failed_map.get(expr)
+            
+            fail_info = failed_map.get(expr, {})
+            fail_reason = fail_info.get('reason')
+            
+            # 确定提交时间
+            sub_ts = None
+            if is_sub:
+                sub_ts_str = submitted_map.get(expr)
+                sub_ts = parse_timestamp(sub_ts_str) if sub_ts_str else created_at_dt
             
             new_alpha = Alpha(
                 expression=expr,
@@ -78,42 +110,40 @@ def migrate():
                 checks_summary=checks,
                 pass_count=int(p_match.group(1)) if p_match else 0,
                 fail_count=int(f_match.group(1)) if f_match else 0,
+                
                 is_submitted=is_sub,
+                submitted_timestamp=sub_ts, # <--- 写入提交时间
+                
                 is_failed_on_wq=is_fail,
                 failure_reason=fail_reason,
+                
+                created_at=created_at_dt,   # <--- 写入原始生成时间
                 raw_data=alpha
             )
             db.add(new_alpha)
-            processed_expressions.add(expr) # 标记为已处理
+            processed_expressions.add(expr)
             count += 1
-            
-            if count % 100 == 0:
-                print(f"   ...已入库 {count} 条")
         
-        # --- 第二轮: 处理 Orphan Alphas (submitted 但不在 hopeful 中) ---
-        print("🔍 正在检查并恢复孤儿策略...")
-        orphan_count = 0
-        for expr in submitted_set:
-            # 关键修复: 直接查内存集合，而不是查还没 commit 的数据库
-            if expr in processed_expressions:
-                continue 
+        # --- 2. 处理孤儿策略 ---
+        print("🔍 恢复孤儿策略...")
+        for expr, ts_str in submitted_map.items():
+            if expr in processed_expressions: continue
             
-            # 创建一个占位 Alpha
-            orphan = Alpha(expression=expr, is_submitted=True, raw_data={"source": "migration_orphan"})
+            orphan_ts = parse_timestamp(ts_str)
+            orphan = Alpha(
+                expression=expr, 
+                is_submitted=True, 
+                submitted_timestamp=orphan_ts, # <--- 孤儿也有提交时间
+                created_at=orphan_ts,          # 孤儿没有生成时间，暂用提交时间代替
+                raw_data={"source": "migration_orphan"}
+            )
             db.add(orphan)
-            processed_expressions.add(expr) # 标记为已处理
-            
+            processed_expressions.add(expr)
             count += 1
-            orphan_count += 1
-            # print(f"   [修复] 恢复孤儿策略: {expr[:30]}...") 
 
-        if orphan_count > 0:
-            print(f"   ✅ 成功恢复了 {orphan_count} 个孤儿策略。")
-
-        print("💾 正在提交事务 (这可能需要几秒钟)...")
+        print("💾 正在提交事务...")
         
-    print(f"✅ 迁移全部完成! 总计导入: {count}, 跳过重复: {skipped}")
-    print(f"🎉 数据库文件生成于: {os.path.abspath('wq_miner.db')}")
+    print(f"✅ 修复完成! 总计导入: {count}, 跳过重复: {skipped}")
 
 if __name__ == "__main__":
     migrate()

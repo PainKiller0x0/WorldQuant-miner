@@ -8,50 +8,60 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - .:/app
-
-    # --- [v13.3.20 修复] ---
-    # 所有的 $ 符号都必须转义为 $$，
-    # 否则 docker-compose 会在启动时尝试替换它们，导致变量为空。
-    command: >
+    # --- [v15.0 修正版: 增加国内源加速] ---
+    command: |
       sh -c '
         set -e
-        apk add --no-cache tzdata coreutils findutils >/dev/null
+        echo "[Backup] Switching to Aliyun mirrors..."
+        # 1. 替换为阿里云镜像源 (加速下载)
+        sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
+        
+        echo "[Backup] Installing tools (sqlite, zip)..."
+        # 2. 安装工具 (去掉 >/dev/null 以显示进度)
+        apk add --no-cache tzdata coreutils findutils sqlite zip
     
         mkdir -p /app/backups
         LOG_FILE="/app/backups/backup.log"
-        echo "[Backup Service] 启动成功 🧊 每 3 小时备份一次 hopeful_alphas.json" | tee -a "$$LOG_FILE"
-        echo "[Backup Service] 当前时区: $$TZ" | tee -a "$$LOG_FILE"
-    
-        CLEAN_INTERVAL_DAYS=30
-        SLEEP_SECONDS=10800
+        
+        CLEAN_INTERVAL_DAYS=7
+        SLEEP_SECONDS=3600
+        
+        echo "[Backup Service] Started. Backup every 1 hour." | tee -a "$$LOG_FILE"
     
         while true; do
           TIMESTAMP=$$(date +"%Y%m%d_%H%M%S")
-          SRC="/app/hopeful_alphas.json"
-          DEST="/app/backups/hopeful_alphas_$$TIMESTAMP.json"
-    
-          if [ -f "$$SRC" ]; then
-            cp "$$SRC" "$$DEST"
-            echo "[Backup Service] ✅ 已创建备份: $$(basename "$$DEST")" | tee -a "$$LOG_FILE"
-    
-            TODAY=$$(date +%Y%m%d)
-            FLAG_FILE="/app/backups/.last_clean"
-            LAST_CLEAN=$$(cat "$$FLAG_FILE" 2>/dev/null || echo "0")
-    
-            if [ "$$LAST_CLEAN" != "$$TODAY" ]; then
-              echo "$$TODAY" > "$$FLAG_FILE"
-              echo "[Backup Service] 🧹 开始清理 $$CLEAN_INTERVAL_DAYS 天前的旧备份..." | tee -a "$$LOG_FILE"
-              find /app/backups -name "hopeful_alphas_*.json" -mtime +$$CLEAN_INTERVAL_DAYS -delete
-              echo "[Backup Service] 🧹 清理完成。" | tee -a "$$LOG_FILE"
-            fi
+          
+          # --- 备份数据库 ---
+          if [ -f "/app/wq_miner.db" ]; then
+             echo "[Backup] Backing up DB..." | tee -a "$$LOG_FILE"
+             sqlite3 /app/wq_miner.db ".backup /app/backups/wq_miner_$$TIMESTAMP.db"
           else
-            echo "[Backup Service] ⚠️ 未找到 hopeful_alphas.json，跳过此次备份。" | tee -a "$$LOG_FILE"
+             echo "[Backup] ⚠️ wq_miner.db not found!" | tee -a "$$LOG_FILE"
+          fi
+
+          # --- 打包日志和JSON ---
+          ZIP_NAME="/app/backups/logs_data_$$TIMESTAMP.zip"
+          echo "[Backup] Zipping files..." | tee -a "$$LOG_FILE"
+          
+          # 尝试打包，忽略不存在的文件警告
+          zip -q -r "$$ZIP_NAME" /app/hopeful_alphas.json /app/submitted_alphas.json /app/submission_failure_log.json /app/logs || true
+          
+          echo "[Backup] ✅ Done: $$TIMESTAMP" | tee -a "$$LOG_FILE"
+    
+          # --- 清理旧文件 ---
+          TODAY=$$(date +%Y%m%d)
+          FLAG_FILE="/app/backups/.last_clean"
+          LAST_CLEAN=$$(cat "$$FLAG_FILE" 2>/dev/null || echo "0")
+    
+          if [ "$$LAST_CLEAN" != "$$TODAY" ]; then
+            echo "$$TODAY" > "$$FLAG_FILE"
+            echo "[Backup] Cleaning old files..." | tee -a "$$LOG_FILE"
+            find /app/backups -name "wq_miner_*.db" -mtime +$$CLEAN_INTERVAL_DAYS -delete
+            find /app/backups -name "logs_data_*.zip" -mtime +$$CLEAN_INTERVAL_DAYS -delete
           fi
     
-          echo "[Backup Service] 😴 休眠 3 小时..." | tee -a "$$LOG_FILE"
+          echo "[Backup] Sleeping..."
           sleep $$SLEEP_SECONDS
         done
       '
-    # --- 修复结束 ---
-
     restart: unless-stopped

@@ -319,7 +319,19 @@ def get_pending_alphas():
 @app.route('/download_logs/<log_filename>')
 def download_logs(log_filename):
     return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
+# === 在这里插入缺失的路由 ===
 
+@app.route('/api/v1/stats/submission_daily')
+def api_stats_submission_daily():
+    try:
+        # 直接调用已定义的统计函数
+        stats = get_daily_submission_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"[API Daily] Error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+# =========================
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
     # 简化的时间序列实现，直接查库

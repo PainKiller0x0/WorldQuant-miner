@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v15.0 (Database Edition) ---
+# --- Web仪表盘.py v15.1 (Fix HQ Chart & Daily Stats) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -12,9 +12,9 @@ from datetime import datetime, timezone, timedelta
 import utils
 import database
 from database import Alpha, get_db
-from sqlalchemy import func
+from sqlalchemy import func, case  # <--- 新增 case
 
-CURRENT_DASHBOARD_VERSION = "v15.0 (SQLite Database)"
+CURRENT_DASHBOARD_VERSION = "v15.1 (SQLite Database)"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
 GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
 
-# --- 核心数据接口 (重写为 SQL 查询) ---
+# --- 核心数据接口 (SQL 查询) ---
 
 def get_hopeful_alphas_stats():
     stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
@@ -60,15 +60,11 @@ def get_hopeful_alphas_stats():
             stats['total_submitted_count'] = stats['successfully_submitted_count'] + db.query(func.count(Alpha.id)).filter(Alpha.is_failed_on_wq == True).scalar()
 
             # 4. 获取所有列表 (用于前端表格)
-            # 限制返回 1000 条以保护前端，或者前端需要分页 (v15.0 暂全量返回但只查必要字段)
             all_alphas = db.query(Alpha).all()
             
             processed_list = []
             for a in all_alphas:
-                # 重新计算 Dashboard Score (数据库已有部分逻辑，这里保持一致)
                 score = a.calculate_score()
-                
-                # 判断状态
                 is_submittable = (a.pass_count >= 7 and a.fail_count == 0)
                 is_successfully_submitted = (a.is_submitted)
                 
@@ -98,32 +94,34 @@ def get_hopeful_alphas_stats():
         
     return stats
 
-def get_daily_submission_stats():
+# --- 替换 1: 修改 get_daily_submission_stats 支持时间过滤 ---
+def get_daily_submission_stats(start_dt=None):
     stats = { "timestamps": [], "submittable_count": [], "submitted_count": [], "failed_count": [] }
     try:
         with get_db() as db:
-            # 使用 SQL 进行按天聚合
-            # SQLite 的日期截断函数是 strftime('%Y-%m-%d', column)
-            
             # 1. Submitted
-            submitted = db.query(
+            q_sub = db.query(
                 func.strftime('%Y-%m-%d', Alpha.submitted_timestamp),
                 func.count(Alpha.id)
-            ).filter(Alpha.is_submitted == True).group_by(func.strftime('%Y-%m-%d', Alpha.submitted_timestamp)).all()
+            ).filter(Alpha.is_submitted == True)
+            if start_dt: q_sub = q_sub.filter(Alpha.submitted_timestamp >= start_dt)
+            submitted = q_sub.group_by(func.strftime('%Y-%m-%d', Alpha.submitted_timestamp)).all()
             
             # 2. Submittable (Created date)
-            submittable = db.query(
+            q_ok = db.query(
                 func.strftime('%Y-%m-%d', Alpha.created_at),
                 func.count(Alpha.id)
-            ).filter(Alpha.pass_count >= 7, Alpha.fail_count == 0).group_by(func.strftime('%Y-%m-%d', Alpha.created_at)).all()
+            ).filter(Alpha.pass_count >= 7, Alpha.fail_count == 0)
+            if start_dt: q_ok = q_ok.filter(Alpha.created_at >= start_dt)
+            submittable = q_ok.group_by(func.strftime('%Y-%m-%d', Alpha.created_at)).all()
             
-            # 3. Failed (使用 created_at 近似，因为 failed_timestamp 可能没存单独字段，或者用 submitted_timestamp)
-            # 注：database.py 里没专门的 failed_timestamp，通常复用 updated_at 或 submitted_timestamp
-            # v15.0 暂用 created_at 统计 Failed 产生日
-            failed = db.query(
+            # 3. Failed
+            q_fail = db.query(
                 func.strftime('%Y-%m-%d', Alpha.created_at),
                 func.count(Alpha.id)
-            ).filter(Alpha.is_failed_on_wq == True).group_by(func.strftime('%Y-%m-%d', Alpha.created_at)).all()
+            ).filter(Alpha.is_failed_on_wq == True)
+            if start_dt: q_fail = q_fail.filter(Alpha.created_at >= start_dt)
+            failed = q_fail.group_by(func.strftime('%Y-%m-%d', Alpha.created_at)).all()
             
             # 整理数据
             data_map = {}
@@ -190,18 +188,14 @@ def pending_page(): return render_template('pending.html')
 def status():
     try:
         config = utils.load_system_config()
-        
-        # 构建响应
         data = {
             "miner": get_service_status('miner.log'),
             "evolver": get_service_status('evolver.log'),
             "hopeful_alphas": get_hopeful_alphas_stats(),
         }
         
-        # 看门狗状态
         llm_budgets = config.get("llm_budgets", {})
         wq_limiter = config.get("wq_api_limiter", {})
-        
         miner_b = llm_budgets.get("miner", {})
         evolver_b = llm_budgets.get("evolver", {})
         
@@ -211,7 +205,7 @@ def status():
         cd_rem = max(0, round(cd_time - (now - last_fail))) if now - last_fail < cd_time else 0
         
         data["watchdog_status"] = {
-            "llm_budget_used": miner_b.get("used_today", 0), # 兼容
+            "llm_budget_used": miner_b.get("used_today", 0), 
             "llm_budget_limit": miner_b.get("daily_limit", 0),
             "miner_budget_used": miner_b.get("used_today", 0),
             "miner_budget_limit": miner_b.get("daily_limit", 0),
@@ -242,21 +236,13 @@ def get_settings():
 def save_settings():
     if not request.is_json: return jsonify(status='error', message='JSON required'), 400
     try:
-        # 复用 utils v15.0 的配置保存逻辑 (依然写文件)
-        # 逻辑与之前相同，从略，直接保存传入数据
-        # 这里为了简化代码，假设前端传来的数据结构已经适配 v14.2 的格式
         current = utils.load_system_config()
         new_data = request.json
-        
-        # 简单合并逻辑 (生产环境建议做更细致的校验)
         def update_recursive(d, u):
             for k, v in u.items():
-                if isinstance(v, dict):
-                    d[k] = update_recursive(d.get(k, {}), v)
-                else:
-                    d[k] = v
+                if isinstance(v, dict): d[k] = update_recursive(d.get(k, {}), v)
+                else: d[k] = v
             return d
-            
         update_recursive(current, new_data)
         utils.save_system_config(current)
         return jsonify(status='success', message='配置已保存')
@@ -268,23 +254,27 @@ def save_settings():
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_submitted():
     expr = request.json.get('expression')
-    if database.mark_alpha_submitted(expr):
-        return jsonify(status='success')
+    if database.mark_alpha_submitted(expr): return jsonify(status='success')
     return jsonify(status='error', message='Alpha not found'), 404
 
 @app.route('/api/mark_failed_on_wq', methods=['POST'])
 def mark_failed():
     data = request.json
-    expr = data.get('expression')
-    reason = data.get('reason', 'UNKNOWN')
-    if database.mark_alpha_failed(expr, reason):
-        return jsonify(status='success')
+    if database.mark_alpha_failed(data.get('expression'), data.get('reason', 'UNKNOWN')): return jsonify(status='success')
     return jsonify(status='error', message='Alpha not found'), 404
+
+@app.route('/api/unmark_submitted', methods=['POST'])
+def unmark_submitted():
+    # v15.0 暂不支持反向操作，或者需要 database.py 增加 unmark 函数
+    # 这是一个占位符，防止前端报错
+    return jsonify(status='error', message='Database mode: Unmark not yet supported'), 501
+
+@app.route('/api/unmark_failed_on_wq', methods=['POST'])
+def unmark_failed():
+    return jsonify(status='error', message='Database mode: Unmark not yet supported'), 501
 
 @app.route('/api/get_pending_alphas')
 def get_pending_alphas():
-    # 从 DB 获取并过滤
-    # 也可以直接写 SQL: filter(pass_count>=7, is_submitted=False, is_failed=False)
     try:
         with get_db() as db:
             pendings = db.query(Alpha).filter(
@@ -306,62 +296,76 @@ def get_pending_alphas():
                     "dashboard_score": a.calculate_score(),
                     "timestamp": a.created_at.isoformat() if a.created_at else "N/A"
                 })
-            
-            # 按分排序
             result.sort(key=lambda x: x['dashboard_score'], reverse=True)
             return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 剩下的 chart 接口 (timeseries) 可复用 get_daily_submission_stats 逻辑，这里暂略
-# v15.0 重点是保证核心流程跑通
+# --- 统计接口 (已修复 HQ 统计) ---
 
-@app.route('/download_logs/<log_filename>')
-def download_logs(log_filename):
-    return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
-# === 在这里插入缺失的路由 ===
-
+# --- 替换 2: 升级 api_stats_submission_daily ---
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     try:
-        # 直接调用已定义的统计函数
-        stats = get_daily_submission_stats()
+        days = request.args.get('days', default=0, type=int)
+        start_dt = None
+        if days > 0:
+            start_dt = datetime.now(timezone.utc) - timedelta(days=days)
+            
+        stats = get_daily_submission_stats(start_dt)
         return jsonify(stats)
     except Exception as e:
         logger.error(f"[API Daily] Error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-# =========================
+# --- 替换 3: 升级 api_stats_timeseries ---
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
-    # 简化的时间序列实现，直接查库
     try:
+        days = request.args.get('days', default=1, type=int) # 默认 1 天
+        start_dt = None
+        if days > 0:
+            start_dt = datetime.now(timezone.utc) - timedelta(days=days)
+
         with get_db() as db:
-            # 按小时聚合 created_at
-            # SQLite: strftime('%Y-%m-%d %H:00', created_at)
-            rows = db.query(
+            # 构建基础查询
+            query = db.query(
                 func.strftime('%m-%d %H:00', Alpha.created_at),
                 func.count(Alpha.id),
-                func.avg(Alpha.fitness)
-            ).group_by(func.strftime('%m-%d %H:00', Alpha.created_at)).all()
+                func.avg(Alpha.fitness),
+                func.sum(case(( (Alpha.fitness > 0.5) & (Alpha.pass_count >= 4), 1 ), else_=0))
+            )
+            
+            # 应用时间过滤
+            if start_dt:
+                query = query.filter(Alpha.created_at >= start_dt)
+                
+            rows = query.group_by(func.strftime('%m-%d %H:00', Alpha.created_at)).all()
             
             timestamps = []
             counts = []
             fitness = []
-            for ts, cnt, fit in rows:
+            hq_counts = []
+            
+            for ts, cnt, fit, hq in rows:
                 timestamps.append(ts)
                 counts.append(cnt)
                 fitness.append(round(fit, 4) if fit else 0)
+                hq_counts.append(hq or 0)
                 
             return jsonify({
                 "timestamps": timestamps,
                 "count": counts,
                 "mean_fitness": fitness,
-                "high_quality_count": counts # 暂且用总数代替
+                "high_quality_count": hq_counts
             })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/download_logs/<log_filename>')
+def download_logs(log_filename):
+    return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
+
 if __name__ == '__main__':
-    database.init_db() # 确保表存在
+    database.init_db() 
     app.run(host='0.0.0.0', port=8080, threaded=True)

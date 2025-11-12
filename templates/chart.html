@@ -35,6 +35,18 @@
 </nav>
 
 <div class="container-fluid px-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-bar-chart-line"></i> 挖掘数据分析</h4>
+        <div class="btn-group" role="group" aria-label="Time Range">
+            <button type="button" class="btn btn-outline-primary active" onclick="updateTimeRange(1, this)">24H</button>
+            <button type="button" class="btn btn-outline-primary" onclick="updateTimeRange(3, this)">3天</button>
+            <button type="button" class="btn btn-outline-primary" onclick="updateTimeRange(7, this)">7天</button>
+            <button type="button" class="btn btn-outline-primary" onclick="updateTimeRange(30, this)">30天</button>
+            <button type="button" class="btn btn-outline-primary" onclick="updateTimeRange(0, this)">全部</button>
+        </div>
+    </div>
+
     <div id="error-container" class="alert alert-danger" style="display: none;" role="alert">
         <i class="bi bi-exclamation-triangle-fill"></i> 
         <strong>加载图表数据失败:</strong> <span id="error-message"></span>
@@ -44,7 +56,7 @@
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-body-tertiary">
-                    <h5 class="mb-0">产出效率 (按小时) <small class="text-muted fs-6">(v13.3.14: 已合并无数据时段)</small></h5>
+                    <h5 class="mb-0">产出效率 (按小时)</h5>
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
@@ -59,7 +71,7 @@
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-body-tertiary">
-                    <h5 class="mb-0">每日概览 (按天) <small class="text-muted fs-6">(v13.3.14: 已合并无数据日期)</small></h5>
+                    <h5 class="mb-0">每日概览 (按天)</h5>
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
@@ -79,7 +91,8 @@
         const errorMessage = document.getElementById('error-message');
         let hourlyChart = null;
         let dailyChart = null;
-        
+        let currentDays = 1; // 默认 24H
+
         // --- 主题与版本号逻辑 ---
         const THEME_KEY = 'theme-preference';
         const htmlEl = document.documentElement;
@@ -108,7 +121,6 @@
             if (dailyChart) dailyChart.update();
         }
 
-        // 获取版本号
         fetch('/api/version_info').then(r=>r.json()).then(d=>{
             const dbVer = document.getElementById('dashboard-version');
             if(dbVer) dbVer.textContent = d.dashboard_version;
@@ -122,9 +134,22 @@
             errorContainer.style.display = 'block';
         }
 
+        // --- 全局时间筛选函数 ---
+        window.updateTimeRange = function(days, btnElement) {
+            currentDays = days;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+            
+            // 重新加载图表
+            loadHourlyChart();
+            loadDailyChart();
+        }
+
         // 加载时间序列图表 (产出效率)
         function loadHourlyChart() {
-            fetch('/api/v1/stats/timeseries', { cache: 'no-store' })
+            fetch(`/api/v1/stats/timeseries?days=${currentDays}`, { cache: 'no-store' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
@@ -157,7 +182,7 @@
 
         // 加载每日概览图表
         function loadDailyChart() {
-            fetch('/api/v1/stats/submission_daily', { cache: 'no-store' })
+            fetch(`/api/v1/stats/submission_daily?days=${currentDays}`, { cache: 'no-store' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
@@ -187,6 +212,7 @@
                 .catch(error => { console.error(error); showError(`[每日概览] ${error.message}`); });
         }
 
+        // 初始加载 (使用默认 currentDays=1)
         loadHourlyChart();
         loadDailyChart();
     });

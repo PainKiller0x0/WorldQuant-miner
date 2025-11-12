@@ -12,6 +12,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 import queue
+from filelock import FileLock # <--- v13.3.22: 新增导入
 
 # --- v13.3.5: 强制使用 utils 中的安全函数 ---
 # 导入我们 v13.3.5 版的、带保险的 utils
@@ -77,6 +78,10 @@ class AlphaGenerator:
         self.load_submission_failures() 
 
         self.invalid_functions_file = INVALID_FUNCTIONS_FILE
+        # --- v13.3.22: 跨进程文件锁 ---
+        self.invalid_functions_lock_file = "invalid_functions.json.lock"
+        self.blacklist_file_lock = FileLock(self.invalid_functions_lock_file, timeout=10)
+        # -----------------------------
         self.blacklist_counts = self.load_blacklist_counts()
         self.blacklist_max_strikes = BLACKLIST_MAX_STRIKES
         self.identifier_pattern = re.compile(r'\b([a-zA-Z_][a-zA-Z_0-9]*)\b')
@@ -187,41 +192,58 @@ class AlphaGenerator:
             except Exception as e:
                 logger.error(f"[Failure Log] 加载 {filepath} 时出错: {e}", exc_info=False)
 
+ # --- v13.3.22: 升级为进程安全的黑名单读写 ---
     def load_blacklist_counts(self):
-        with self.blacklist_lock:
-            if not os.path.exists(self.invalid_functions_file):
-                logger.info("无效标识符计数文件(invalid_functions.json)不存在，将创建新的。")
-                return {}
-            try:
-                with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    if not content: return {}
-                    data = json.loads(content)
-                    if not isinstance(data, dict):
-                        logger.warning(f"{self.invalid_functions_file} 格式不正确 (不是字典)，将重置。")
-                        return {}
-                    logger.info(f"成功加载 {len(data)} 个标识符的黑名单计数。")
-                    return data
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"加载 {self.invalid_functions_file} 出错: {e}, 将创建新的。")
-                return {}
+        # 使用 FileLock 防止 miner 和 evolver 同时读写导致冲突
+        try:
+            with self.blacklist_file_lock: 
+                if not os.path.exists(self.invalid_functions_file):
+                    return {}
+                
+                # 增加重试机制，防止读到空文件
+                for _ in range(3):
+                    try:
+                        with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            if not content: return {}
+                            return json.loads(content)
+                    except json.JSONDecodeError:
+                        time.sleep(0.1) # 短暂等待后重试
+                        continue
+                return {} # 重试失败返回空
+        except Exception as e:
+            logger.error(f"加载黑名单文件失败: {e}")
+            return {}
 
     def update_blacklist_count(self, identifier_name):
-        with self.blacklist_lock:
-            current_counts = self.load_blacklist_counts() 
-            current_count = current_counts.get(identifier_name, 0)
-            current_count += 1
-            current_counts[identifier_name] = current_count
-            try:
+        # 使用 FileLock 确保写入安全
+        try:
+            with self.blacklist_file_lock:
+                # 1. 先读最新 (必须在锁内读，确保原子性)
+                current_counts = {}
+                if os.path.exists(self.invalid_functions_file):
+                    try:
+                        with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            if content: current_counts = json.loads(content)
+                    except Exception: pass
+
+                # 2. 更新内存
+                current_count = current_counts.get(identifier_name, 0) + 1
+                current_counts[identifier_name] = current_count
+                self.blacklist_counts = current_counts # 更新内存缓存
+
+                # 3. 写入磁盘
                 with open(self.invalid_functions_file, 'w', encoding='utf-8') as f:
                     json.dump(current_counts, f, indent=4)
-                self.blacklist_counts = current_counts 
+                
                 if current_count < self.blacklist_max_strikes:
                     logger.warning(f"检测到无效标识符: '{identifier_name}'。计数: {current_count}/{self.blacklist_max_strikes}。")
                 else:
                     logger.critical(f"'{identifier_name}' 已达到 {current_count}/{self.blacklist_max_strikes} 次计数，将被永久拉黑。")
-            except IOError as e:
-                logger.error(f"保存黑名单计数文件时出错: {e}")
+        except Exception as e:
+            logger.error(f"保存黑名单计数文件时出错: {e}")
+    # --- v13.3.22 修复结束 ---
 
     def is_using_blacklisted_identifier(self, alpha_code: str) -> bool:
         # --- v13.3.18: 修复黑名单状态同步 Bug ---

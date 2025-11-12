@@ -271,17 +271,27 @@ class WorldQuant:
                      logger.error(f"An unexpected error occurred during the request to {url}: {general_e}")
                      raise general_e
 
-    # (get_data_fields 保持不变)
+# --- v13.3.21: 移除 buy_turnover/sell_turnover (毒井修复) ---
     def get_data_fields(self):
+        """
+        (v13.3.21) 进一步净化 safe_fields 列表。
+        日志显示 "buy_turnover" 也是 unknown variable。
+        """
         logger.info("正在使用筛选后的核心及高级数据字段列表...")
         safe_fields = [
             "open", "high", "low", "close", "volume", "vwap",
-            "cap", "returns", "turnover", "beta", "momentum",
+            "cap", "returns", 
+            # "turnover",  # (v13.3.20 移除)
+            "beta", 
+            # "momentum",  # (v13.3.20 移除)
             "adv20", 
-            "buy_turnover", "sell_turnover", "indneutral_beta"
+            # "buy_turnover", "sell_turnover", # (v13.3.21 移除: WQ API 不识别)
+            "indneutral_beta"
         ]
-        logger.info(f"成功加载 {len(safe_fields)} 个筛选后的数据字段。")
+        # 现在应该是 11 个字段
+        logger.info(f"成功加载 {len(safe_fields)} 个 (v13.3.21) 筛选后的数据字段。")
         return safe_fields
+    # --- v13.3.21 修复结束 ---
 
     # (get_operators 保持不变)
     def get_operators(self):

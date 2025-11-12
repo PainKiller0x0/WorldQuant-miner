@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WQ Alpha 舰队指挥中心 (v14.5)</title>
+    <title>WQ Alpha 舰队指挥中心 (v14.9)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -14,16 +14,31 @@
         .status-indicator { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         .log-box { font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace; font-size: 0.85rem; height: 150px; overflow-y: auto; background-color: #212529; color: #f8f9fa; border-radius: 4px; padding: 10px; white-space: pre-wrap; border: 1px solid #495057; }
         [data-bs-theme="light"] .log-box { background-color: #f8f9fa; color: #212529; border-color: #dee2e6; }
+        
+        /* 表达式样式 */
         .alpha-expr { font-family: monospace; cursor: pointer; display: block; max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .alpha-expr.expanded { white-space: pre-wrap; word-break: break-all; max-width: none; }
+        
+        /* 表格样式 */
         .table th { font-size: 0.9rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
         .table td { font-size: 0.9rem; vertical-align: middle; }
+        
+        /* 综合分链接 */
         .score-value { cursor: pointer; text-decoration: underline dotted; text-decoration-color: #0d6efd; }
+        
+        /* 进度条 */
         .progress { height: 10px; border-radius: 5px; background-color: #e9ecef; }
         [data-bs-theme="dark"] .progress { background-color: #343a40; }
-        .copy-feedback { position: relative; }
-        .copy-feedback::after { content: '已复制'; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); background: #198754; color: white; font-size: 10px; padding: 2px 4px; border-radius: 3px; animation: fadeOut 1s forwards; }
-        @keyframes fadeOut { 0% {opacity: 1;} 100% {opacity: 0;} }
+        
+        /* 可复制元素的样式 */
+        .copyable { cursor: copy; color: #adb5bd; text-decoration: underline dotted; text-decoration-color: #6c757d; transition: all 0.2s; }
+        .copyable:hover { color: #0d6efd; font-weight: bold; }
+        [data-bs-theme="light"] .copyable { color: #495057; }
+        
+        /* 复制成功提示 */
+        .copy-feedback { position: relative; color: #198754 !important; font-weight: bold; }
+        .copy-feedback::after { content: '已复制'; position: absolute; top: -25px; left: 50%; transform: translateX(-50%); background: #198754; color: white; font-size: 11px; padding: 3px 6px; border-radius: 3px; z-index: 100; animation: fadeOut 1s forwards; box-shadow: 0 2px 4px rgba(0,0,0,0.2); pointer-events: none; }
+        @keyframes fadeOut { 0% {opacity: 1; margin-top: 0;} 100% {opacity: 0; margin-top: -10px;} }
     </style>
 </head>
 <body>
@@ -41,7 +56,7 @@
       </ul>
       <div class="d-flex align-items-center gap-3">
         <span class="badge bg-secondary bg-opacity-25 text-body-secondary border border-secondary-subtle d-none d-md-inline">
-            Dash: <span id="dashboard-version">v14.5</span> | Gen: <span id="generator-version">...</span>
+            Dash: <span id="dashboard-version">v14.9</span> | Gen: <span id="generator-version">...</span>
         </span>
         <button class="btn btn-outline-secondary btn-sm rounded-circle" id="theme-toggle"><i class="bi bi-moon-stars-fill"></i></button>
       </div>
@@ -111,13 +126,38 @@
                 <span>平均 Fit: <strong id="alphas-avg-fitness" class="text-info">...</strong></span>
             </div>
         </div>
+        
+        <div class="card-body border-bottom bg-body-secondary bg-opacity-10 py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <label for="statusFilter" class="col-form-label col-form-label-sm fw-bold"><i class="bi bi-funnel"></i> 状态筛选:</label>
+                </div>
+                <div class="col-auto">
+                    <select id="statusFilter" class="form-select form-select-sm">
+                        <option value="all">全部显示</option>
+                        <option value="submittable">🔵 待提交 (Pending)</option>
+                        <option value="submitted-ok">🟢 已提交 (成功)</option>
+                        <option value="submitted-fail">🔴 已提交 (失败)</option>
+                        <option value="submitted-pending">🟡 已提交 (待确认)</option>
+                        <option value="not-submittable">⚪ 不可提交</option>
+                    </select>
+                </div>
+                <div class="col-auto ms-md-3">
+                    <label for="expressionFilter" class="col-form-label col-form-label-sm fw-bold"><i class="bi bi-search"></i> 搜索:</label>
+                </div>
+                <div class="col">
+                    <input type="text" id="expressionFilter" class="form-control form-control-sm" placeholder="搜索 Alpha 表达式...">
+                </div>
+            </div>
+        </div>
+
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover table-striped mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
                             <th class="ps-3" onclick="sortAlphas('dashboard_score')">综合分 <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                            <th>Expression</th>
+                            <th>Expression (点击展开/复制)</th>
                             <th onclick="sortAlphas('fitness')">Fit <i class="bi bi-arrow-down-up sort-icon"></i></th>
                             <th onclick="sortAlphas('sharpe')">Shar <i class="bi bi-arrow-down-up sort-icon"></i></th>
                             <th>Ret</th>
@@ -146,7 +186,6 @@
     let failureModalInstance = null, scoreModalInstance = null;
     let failureContext = { expression: null, checkboxId: null };
 
-    // 主题初始化
     const themeToggle = document.getElementById('theme-toggle');
     const html = document.documentElement;
     const storedTheme = localStorage.getItem('theme') || 'dark';
@@ -154,13 +193,11 @@
     themeToggle.addEventListener('click', function() { setTheme(html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'); });
     function setTheme(theme) { html.setAttribute('data-bs-theme', theme); localStorage.setItem('theme', theme); themeToggle.innerHTML = theme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>'; }
 
-    // 核心数据加载 (Safe ES5 Version)
     function fetchData() {
         fetch('/status')
             .then(function(r) { if(!r.ok) throw new Error(r.statusText); return r.json(); })
             .then(function(data) {
                 try {
-                    // 安全检查数据
                     var safeData = data || {};
                     var wd = safeData.watchdog_status || {};
                     var hopeful = safeData.hopeful_alphas || {};
@@ -200,6 +237,7 @@
         document.getElementById(name + '-budget-text').textContent = used + ' / ' + limit;
         var bar = document.getElementById(name + '-budget-bar');
         bar.style.width = pct + '%';
+        bar.className = `progress-bar progress-bar-striped progress-bar-animated bg-${pct>90?'danger':(pct>75?'warning text-dark':(name==='miner'?'primary':'success'))}`;
     }
 
     function updateWQ(wd) {
@@ -214,7 +252,6 @@
         document.getElementById('alphas-count').textContent = data.count || 0;
         document.getElementById('alphas-pending-submission').textContent = data.submittable_pending_count || 0;
         document.getElementById('alphas-max-fitness').textContent = parseFloat(data.max_fitness || 0).toFixed(3);
-        // v14.5: 修复了 alphas-avg-fitness 的元素 ID
         var avgEl = document.getElementById('alphas-avg-fitness');
         if(avgEl) avgEl.textContent = parseFloat(data.avg_fitness || 0).toFixed(3);
         
@@ -224,7 +261,23 @@
 
     function renderTable() {
         var tbody = document.getElementById('alphas-tbody');
-        globalAlphaData.sort(function(a, b) {
+        var statusFilter = document.getElementById('statusFilter').value;
+        var exprFilter = document.getElementById('expressionFilter').value.toLowerCase();
+
+        var filteredData = globalAlphaData.filter(function(a) {
+            var status = 'not-submittable';
+            if (a.is_failed_on_wq) status = 'submitted-fail';
+            else if (a.is_submittable) {
+                if (a.is_submitted) {
+                    status = a.is_successfully_submitted ? 'submitted-ok' : 'submitted-pending';
+                } else status = 'submittable';
+            }
+            var statusMatch = (statusFilter === 'all') || (status === statusFilter);
+            var exprMatch = (exprFilter === '') || (a.expression || '').toLowerCase().indexOf(exprFilter) !== -1;
+            return statusMatch && exprMatch;
+        });
+
+        filteredData.sort(function(a, b) {
             var va = a[currentSort.key];
             var vb = b[currentSort.key];
             if(['fitness','sharpe','returns','turnover'].indexOf(currentSort.key) !== -1) {
@@ -234,39 +287,63 @@
             return (va < vb ? -1 : 1) * (currentSort.direction === 'asc' ? 1 : -1);
         });
 
-        if(globalAlphaData.length === 0) { 
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">暂无策略</td></tr>'; 
+        if(filteredData.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">没有找到匹配的策略</td></tr>'; 
             return; 
         }
 
-        var html = globalAlphaData.map(function(a, idx) {
+        var html = filteredData.map(function(a, idx) {
             var p = a.performance || {};
             var expr = (a.expression || "").replace(/"/g, '&quot;').replace(/'/g, "\\'");
             
+            // v14.7 修复: formatChecks 加入 PENDING 支持
             var checksHtml = '<span class="badge bg-secondary">N/A</span>';
             if (a.checks_summary) {
                 var pass = (a.checks_summary.match(/(\d+)\s+PASS/) || [0,0])[1];
                 var fail = (a.checks_summary.match(/(\d+)\s+FAIL/) || [0,0])[1];
-                checksHtml = '<span class="badge bg-success">' + pass + '</span> <span class="badge bg-danger">' + fail + '</span>';
+                var pending = (a.checks_summary.match(/(\d+)\s+PENDING/) || [0,0])[1];
+                checksHtml = '<span class="badge bg-success" title="Pass">' + pass + '</span>';
+                if (parseInt(fail) > 0) checksHtml += ' <span class="badge bg-danger" title="Fail">' + fail + '</span>';
+                if (parseInt(pending) > 0) checksHtml += ' <span class="badge bg-warning text-dark" title="Pending">' + pending + '</span>';
             }
+
+            // v14.7 修复: 时间显示 MM-DD HH:MM
+            var timeStr = 'N/A';
+            var fullTimeStr = a.timestamp || 'N/A';
+            if (a.timestamp) {
+                try {
+                    var parts = a.timestamp.split(' '); // YYYY-MM-DD HH:MM:SS
+                    var datePart = parts[0].split('-').slice(1).join('-'); // MM-DD
+                    var timePart = parts[1].split(':').slice(0, 2).join(':'); // HH:MM
+                    timeStr = datePart + ' ' + timePart;
+                } catch(e) { timeStr = a.timestamp.split(' ')[1] || 'N/A'; }
+            }
+
+            // v14.9 修复: 精度两位小数 & 复制纯数值
+            var fitVal = parseFloat(p.fitness||0).toFixed(2);
+            var shaVal = parseFloat(p.sharpe||0).toFixed(2);
+            var retVal = (parseFloat(p.returns||0)*100).toFixed(2);
+            var trnVal = (parseFloat(p.turnover||0)*100).toFixed(2);
 
             var rowClass = a.is_successfully_submitted ? 'table-success' : (a.is_failed_on_wq ? 'table-danger' : '');
             
             return '<tr class="' + rowClass + '">' +
-                '<td class="ps-3"><span class="score-value fw-bold text-primary" onclick="showScore(' + idx + ')">' + parseFloat(a.dashboard_score || 0).toFixed(2) + '</span></td>' +
+                '<td class="ps-3"><span class="score-value fw-bold text-primary" onclick="showScoreByExpr(\'' + expr + '\')">' + parseFloat(a.dashboard_score || 0).toFixed(2) + '</span></td>' +
                 '<td><div class="alpha-expr" onclick="this.classList.toggle(\'expanded\')" title="' + expr + '">' + a.expression + '</div></td>' +
-                '<td>' + parseFloat(p.fitness || 0).toFixed(2) + '</td>' +
-                '<td>' + parseFloat(p.sharpe || 0).toFixed(2) + '</td>' +
-                '<td><span class="copyable" onclick="copyText(this, \'' + (parseFloat(p.returns || 0) * 100).toFixed(1) + '%\')">' + (parseFloat(p.returns || 0) * 100).toFixed(1) + '%</span></td>' +
-                '<td>' + (parseFloat(p.turnover || 0) * 100).toFixed(1) + '%</td>' +
+                
+                '<td><span class="copyable" title="点击复制" onclick="copyText(this, \'' + fitVal + '\')">' + fitVal + '</span></td>' +
+                '<td><span class="copyable" title="点击复制" onclick="copyText(this, \'' + shaVal + '\')">' + shaVal + '</span></td>' +
+                '<td><span class="copyable" title="点击复制" onclick="copyText(this, \'' + retVal + '\')">' + retVal + '%</span></td>' +
+                '<td><span class="copyable" title="点击复制" onclick="copyText(this, \'' + trnVal + '\')">' + trnVal + '%</span></td>' +
+                
                 '<td>' + checksHtml + '</td>' +
-                '<td class="small text-muted">' + (a.timestamp ? a.timestamp.split(' ')[1] : 'N/A') + '</td>' +
+                '<td class="small text-muted" title="' + fullTimeStr + '">' + timeStr + '</td>' +
                 '<td class="text-center">' +
                     '<div class="btn-group btn-group-sm">' +
                         '<input type="checkbox" class="btn-check" id="s-' + idx + '" ' + (a.is_submitted ? 'checked' : '') + ' onchange="handleAction(\'' + expr + '\', \'submitted\', this.checked)">' +
-                        '<label class="btn btn-outline-primary" for="s-' + idx + '"><i class="bi bi-cloud-upload"></i></label>' +
+                        '<label class="btn btn-outline-primary" for="s-' + idx + '" title="提交"><i class="bi bi-cloud-upload"></i></label>' +
                         '<input type="checkbox" class="btn-check" id="f-' + idx + '" ' + (a.is_failed_on_wq ? 'checked' : '') + ' onchange="handleAction(\'' + expr + '\', \'failed\', this.checked)">' +
-                        '<label class="btn btn-outline-danger" for="f-' + idx + '"><i class="bi bi-x-circle"></i></label>' +
+                        '<label class="btn btn-outline-danger" for="f-' + idx + '" title="失败"><i class="bi bi-x-circle"></i></label>' +
                         '<button class="btn btn-outline-secondary" onclick="copyText(this, \'' + expr + '\')"><i class="bi bi-clipboard"></i></button>' +
                     '</div>' +
                 '</td>' +
@@ -276,8 +353,8 @@
         tbody.innerHTML = html;
     }
 
-    window.showScore = function(index) {
-        var alpha = globalAlphaData[index];
+    window.showScoreByExpr = function(expr) {
+        var alpha = globalAlphaData.find(function(a){ return a.expression === expr; });
         if (!alpha) return;
         var perf = alpha.performance || {};
         var passed = (alpha.checks_summary && alpha.checks_summary.match(/(\d+)\s+PASS/)) ? parseInt(alpha.checks_summary.match(/(\d+)\s+PASS/)[1]) : 0;
@@ -299,8 +376,40 @@
         renderTable();
     }
 
+    // v14.8: 增强版复制功能 (防弹版)
     window.copyText = function(btn, text) {
-        navigator.clipboard.writeText(text);
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                showCopyFeedback(btn);
+            }).catch(function(err) {
+                console.error('Async Copy Failed, trying fallback:', err);
+                fallbackCopyText(btn, text);
+            });
+        } else {
+            fallbackCopyText(btn, text);
+        }
+    }
+
+    function fallbackCopyText(btn, text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed"; 
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            var successful = document.execCommand('copy');
+            if(successful) showCopyFeedback(btn);
+            else alert('复制失败，请手动复制');
+        } catch (err) {
+            console.error('Fallback Copy Failed:', err);
+            alert('浏览器不支持自动复制');
+        }
+        document.body.removeChild(textArea);
+    }
+
+    function showCopyFeedback(btn) {
         btn.classList.add('copy-feedback');
         setTimeout(function() { btn.classList.remove('copy-feedback'); }, 1000);
     }
@@ -331,11 +440,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('statusFilter').addEventListener('change', renderTable);
+        document.getElementById('expressionFilter').addEventListener('input', renderTable);
+
         fetchData();
         fetch('/api/version_info').then(function(r){return r.json()}).then(function(d){
             var dbVer = document.getElementById('dashboard-version');
             if(dbVer) dbVer.textContent = d.dashboard_version;
-            // v14.5 修复: 安全更新 generator-version
             var genVer = document.getElementById('generator-version');
             if(genVer) genVer.textContent = d.generator_version;
         });

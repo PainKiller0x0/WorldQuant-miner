@@ -91,11 +91,26 @@ def load_system_config():
         "evolver_concurrency": 1,
         "producer_queue_full_sleep": 10,
         "hopeful_pool_max_size": 200,
+        # --- v14.0: 双轨制预算默认值 ---
+        "llm_budgets": {
+            "miner": {
+                "daily_limit": 3000,
+                "used_today": 0,
+                "last_used_date_utc": "2024-01-01"
+            },
+            "evolver": {
+                "daily_limit": 1000,
+                "used_today": 0,
+                "last_used_date_utc": "2024-01-01"
+            }
+        },
+        # 兼容旧版 (可选保留，防止报错)
         "llm_budget": {
             "daily_budget_limit": 2000,
             "budget_used_today": 0,
             "budget_last_used_date_utc": "2024-01-01"
         },
+        # ---------------------------
         "wq_api_limiter": {
             "current_tpm_limit": 60,
             "min_tpm_limit": 15,

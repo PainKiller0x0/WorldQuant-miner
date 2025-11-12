@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v13.3.15 (修复 v13.3.14 致命拼写错误) ---
+# --- Web仪表盘.py v14.1 (适配 v14.0 双轨制预算) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -14,9 +14,9 @@ import time
 
 import utils
 
-# --- v13.3.15: 版本号 ---
-CURRENT_DASHBOARD_VERSION = "v13.3.15 (Stable)"
-# --- v13.3.15: 结束 ---
+# --- v14.1: 版本号 ---
+CURRENT_DASHBOARD_VERSION = "v14.1 (Dual Budget & Doubao Support)"
+# --- v14.1: 结束 ---
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -31,11 +31,10 @@ SUBMISSION_FAILURE_LOG_FILE = os.path.abspath(os.path.join(BASE_DIR, 'submission
 FAILED_SUBMISSIONS_FILE_OLD = os.path.abspath(os.path.join(BASE_DIR, 'failed_submissions.json')) 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 GENERATOR_FILE_PATH = os.path.join(BASE_DIR, "alpha_generator_ollama.py")
-DASHBOARD_FILE_PATH = os.path.join(BASE_DIR, "Web仪表盘.py")
 TESTED_ALPHAS_LOG_FILE = os.path.join(BASE_DIR, 'tested_alphas_log.json')
 
 HEARTBEAT_TIMEOUT = timedelta(minutes=10)
-CACHE_DURATION = timedelta(seconds=60) # v13.3.15: 缩短缓存为 1 分钟
+CACHE_DURATION = timedelta(seconds=60) 
 
 file_lock = threading.Lock()
 failure_log_lock = threading.Lock() 
@@ -49,7 +48,6 @@ _submission_cache = None
 _submission_cache_time = None
 _submission_cache_lock = threading.Lock()
 
-# (v13.3.7: 保持不变)
 def load_submitted_alphas():
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
@@ -83,7 +81,6 @@ def load_submitted_alphas():
             return final_dict
         except Exception as e: logger.error(f"[Submit Load] Error loading {filepath}: {e}", exc_info=False); return {}
 
-# (v13.3.7: 保持不变)
 def save_submitted_alphas(submitted_dict):
     with file_lock:
         filepath = SUBMITTED_ALPHAS_FILE
@@ -93,7 +90,6 @@ def save_submitted_alphas(submitted_dict):
             return True
         except Exception as e: logger.error(f"[Submit Save] Error saving {filepath}: {e}", exc_info=False); return False
 
-# (v13.3.7: 保持不变)
 def load_failed_submissions_old_format():
     filepath = FAILED_SUBMISSIONS_FILE_OLD
     if not (os.path.exists(filepath) and os.path.isfile(filepath)): return set()
@@ -104,7 +100,6 @@ def load_failed_submissions_old_format():
         else: return set()
     except Exception as e: logger.error(f"[Old Failed Load] Error loading {filepath}: {e}"); return set()
 
-# (v13.3.7: 保持不变)
 def load_submission_failures():
     with failure_log_lock:
         new_filepath = SUBMISSION_FAILURE_LOG_FILE; old_filepath = FAILED_SUBMISSIONS_FILE_OLD
@@ -147,7 +142,6 @@ def load_submission_failures():
             except Exception as save_e: logger.error(f"Failed to save migrated failure log (inline): {save_e}.")
         return current_failures_list
 
-# (v13.3.7: 保持不变)
 def save_submission_failures(failures_list):
     with failure_log_lock:
         filepath = SUBMISSION_FAILURE_LOG_FILE
@@ -157,7 +151,6 @@ def save_submission_failures(failures_list):
             return True
         except Exception as e: logger.error(f"[Failure Log Save] Error saving {filepath}: {e}", exc_info=False); return False
 
-# (v13.3.7: 保持不变)
 def load_failed_submissions():
     failures_list = load_submission_failures()
     failed_map = {}
@@ -167,7 +160,6 @@ def load_failed_submissions():
     failed_set = set(failed_map.keys())
     return failed_map, failed_set
 
-# (v13.3.7: 保持不变)
 def get_service_status(log_file):
     status = "UNKNOWN"; last_seen = "Never"; logs = "Log file not found."
     log_path = os.path.join(LOG_DIR, log_file)
@@ -183,8 +175,6 @@ def get_service_status(log_file):
     else: status = "NOT FOUND"
     return {"status": status, "last_seen": last_seen, "logs": logs}
 
-
-# --- v13.3.7: get_hopeful_alphas_stats (保持 v13.3.7 不变) ---
 def get_hopeful_alphas_stats():
     stats = { "count": 0, "max_fitness": 0.0, "max_sharpe": 0.0, "avg_fitness": 0.0,
               "submittable_pending_count": 0, "successfully_submitted_count": 0,
@@ -290,7 +280,6 @@ def get_hopeful_alphas_stats():
                   "submittable_pending_count": 0, "successfully_submitted_count": 0,
                   "total_submitted_count": 0, "all_alphas": [], "error": f"获取统计时出错: {e}" }
     return stats
-# --- v13.3.7: 结束 ---
 
 def get_version_from_file(file_path, version_regex_str):
     version_regex = re.compile(version_regex_str)
@@ -301,9 +290,12 @@ def get_version_from_file(file_path, version_regex_str):
         return match.group(1) if match else "unknown_format"
     except Exception as e: logger.error(f"[Version] Error reading {file_path}: {e}"); return "read_error"
 
+# --- v14.1: 修正首页渲染 ---
 @app.route('/')
 def dashboard():
-    return render_template('dashboard_v4_legacy.html', settings_page=True, chart_page=True)
+    # 强制使用新的 dashboard_v4.html，不再使用 legacy
+    return render_template('dashboard_v4.html', settings_page=True, chart_page=True)
+# --- v14.1 结束 ---
 
 @app.route('/settings')
 def settings_page():
@@ -336,6 +328,8 @@ def save_settings():
     try:
         current_config = utils.load_system_config()
         static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size']
+        
+        # v14.1: 暂时只支持修改旧 budget limit，高级预算需手动改文件
         llm_keys = ['daily_budget_limit']
         wq_keys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit']
         
@@ -373,19 +367,31 @@ def save_settings():
         logger.error(f"[API /api/save_settings] Error: {e}", exc_info=True)
         return jsonify(status='error', message="保存配置时发生内部错误。"), 500
 
+# --- v14.1: 适配双轨制预算的 Status 接口 ---
 @app.route('/status')
 def status():
     try:
-        data = { "miner": get_service_status('miner.log'),
-                 "evolver": get_service_status('evolver.log'),
-                 "hopeful_alphas": get_hopeful_alphas_stats() } 
+        data = { 
+            "miner": get_service_status('miner.log'),
+            "evolver": get_service_status('evolver.log'),
+            "hopeful_alphas": get_hopeful_alphas_stats() 
+        } 
                  
         try:
             config = utils.load_system_config()
-            llm_budget = config.get("llm_budget", {})
+            
+            # v14.1: 读取新的 llm_budgets 结构
+            llm_budgets = config.get("llm_budgets", {})
+            miner_budget = llm_budgets.get("miner", {})
+            evolver_budget = llm_budgets.get("evolver", {})
+            
+            # 兼容旧版
+            old_budget_style = miner_budget
+            
             wq_limiter = config.get("wq_api_limiter", {})
             
-            wq_cooldown_status = "OK"; wq_cooldown_remaining = 0
+            wq_cooldown_status = "OK"
+            wq_cooldown_remaining = 0
             last_failure = wq_limiter.get("last_failure_timestamp", 0)
             cooldown_period = wq_limiter.get("wq_429_cooldown_seconds", 60)
             now = time.time()
@@ -394,10 +400,19 @@ def status():
                 wq_cooldown_remaining = round(cooldown_period - (now - last_failure))
                 wq_cooldown_status = f"IN_COOLDOWN ({wq_cooldown_remaining}s)"
 
+            # v14.1: 返回更丰富的数据结构
             data["watchdog_status"] = {
-                "llm_budget_used": llm_budget.get("budget_used_today", 0),
-                "llm_budget_limit": llm_budget.get("daily_budget_limit", 2000),
-                "llm_budget_date_utc": llm_budget.get("budget_last_used_date_utc", "N/A"),
+                # 兼容字段
+                "llm_budget_used": old_budget_style.get("budget_used_today", 0),
+                "llm_budget_limit": old_budget_style.get("daily_limit", 2000),
+                "llm_budget_date_utc": old_budget_style.get("last_used_date_utc", "N/A"),
+                
+                # v14.1 新字段
+                "miner_budget_used": miner_budget.get("budget_used_today", 0),
+                "miner_budget_limit": miner_budget.get("daily_limit", 0),
+                "evolver_budget_used": evolver_budget.get("budget_used_today", 0),
+                "evolver_budget_limit": evolver_budget.get("daily_limit", 0),
+                
                 "wq_current_tpm_limit": wq_limiter.get("current_tpm_limit", "N/A"),
                 "wq_cooldown_status": wq_cooldown_status,
                 "wq_cooldown_remaining_sec": wq_cooldown_remaining
@@ -418,6 +433,7 @@ def status():
              "watchdog_status": {"error": f"获取状态时出错: {e}"} 
         }
         return jsonify(error_data), 500
+# --- v14.1 结束 ---
 
 @app.route('/api/version_info')
 def version_info():
@@ -426,14 +442,13 @@ def version_info():
     data = {"dashboard_version": dashboard_version, "generator_version": generator_version}
     response = make_response(jsonify(data)); response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'; return response
 
-# --- v13.3.14: 修复 api_stats_timeseries (图表间隙 Bug) ---
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
     global _timeseries_cache, _timeseries_cache_time
     with _cache_lock:
         now = datetime.now(timezone.utc)
         if _timeseries_cache and _timeseries_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
-            logger.debug("返回缓存的 /api/v1S/stats/timeseries")
+            logger.debug("返回缓存的 /api/v1/stats/timeseries")
             return jsonify(_timeseries_cache)
         
         with tested_log_lock:
@@ -488,113 +503,26 @@ def api_stats_timeseries():
                 logger.error(f"[API Timeseries] Error: {e}", exc_info=True)
                 with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
                 return jsonify({"error": "内部服务器错误。"}), 500
-# --- v13.3.14: 结束 ---
 
-# --- v13.3.14: 修复 get_daily_submission_stats (图表间隙 Bug) ---
-def get_daily_submission_stats():
-    daily_submitted_counter = Counter(); daily_failed_counter = Counter()
-    submitted_dict = load_submitted_alphas()
-    for item in submitted_dict.values():
-        reason = item.get("reason")
-        if isinstance(item, dict) and 'manual_timestamp' in item and reason == "MANUAL_ADD":
-            try:
-                ts_str = item['manual_timestamp']; dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
-                daily_submitted_counter[dt.date()] += 1
-            except (ValueError, TypeError): pass 
-    
-    failures_list = load_submission_failures()
-    for item in failures_list:
-        reason = item.get("reason")
-        if isinstance(item, dict) and 'timestamp' in item and reason != "MIGRATED_UNKNOWN":
-            try:
-                ts_str = item['timestamp']; dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
-                daily_failed_counter[dt.date()] += 1
-            except (ValueError, TypeError): pass 
-    
-    daily_submittable_counter = Counter() 
-    hopeful_list = utils.load_hopeful_alphas_safe()
-    pass_pattern = re.compile(r'(\d+)\s+PASS') 
-    fail_pattern = re.compile(r'(\d+)\s+FAIL') 
-
-    for item in hopeful_list:
-        if isinstance(item, dict) and 'timestamp' in item:
-            try:
-                summary_str = item.get('checks_summary', '') or ''
-                fail_match = fail_pattern.search(summary_str);
-                has_fail = bool(fail_match and int(fail_match.group(1)) > 0)
-                pass_match = pass_pattern.search(summary_str);
-                passed_count = int(pass_match.group(1)) if pass_match else 0
-                is_submittable = passed_count >= 7 and not has_fail
-                
-                if is_submittable:
-                    dt = datetime.strptime(item['timestamp'], '%Y-%m-%d %H:%M:%S')
-                    daily_submittable_counter[dt.date()] += 1 
-            except (ValueError, TypeError): pass 
-    
-    all_dates = sorted(list( set(daily_submitted_counter.keys()) | set(daily_failed_counter.keys()) | set(daily_submittable_counter.keys()) ))
-    
-    output = { "timestamps": [], "submitted_count": [], "failed_count": [], "submittable_count": [] }
-    
-    # v13.3.14: 确保 "今天" 总是存在
-    today_key = datetime.now(timezone.utc).date()
-    if not all_dates:
-        output["timestamps"].append(today_key.isoformat())
-        output["submitted_count"].append(0)
-        output["failed_count"].append(0)
-        output["submittable_count"].append(0)
-        return output
-        
-    has_today_data = False
-    for date_key in all_dates: 
-        submitted_count = daily_submitted_counter.get(date_key, 0)
-        failed_count = daily_failed_counter.get(date_key, 0)
-        submittable_count = daily_submittable_counter.get(date_key, 0)
-        
-        if date_key == today_key:
-            has_today_data = True
-        
-        # v13.3.14: 关键修复 - "全 0 过滤器"
-        if submitted_count > 0 or failed_count > 0 or submittable_count > 0:
-            output["timestamps"].append(date_key.isoformat())
-            output["submitted_count"].append(submitted_count)
-            output["failed_count"].append(failed_count)
-            output["submittable_count"].append(submittable_count)
-
-    # v13.3.14: 如果今天没有数据 (全0)，则手动添加
-    if not has_today_data:
-        output["timestamps"].append(today_key.isoformat())
-        output["submitted_count"].append(0)
-        output["failed_count"].append(0)
-        output["submittable_count"].append(0)
-    # --- v13.3.14: 结束 ---
-    return output
-# --- v13.3.14: 结束 ---
-
-# --- v13.3.15: 修复致命的拼写错误 ---
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     global _submission_cache, _submission_cache_time
     with _submission_cache_lock:
         now = datetime.now(timezone.utc)
         
-        # v13.3.15: 修复拼写错误
-        # 错误: if _submission_cache and _submission_cache_time and (now - _timeseries_cache_time < CACHE_DURATION):
-        # 正确:
         if _submission_cache and _submission_cache_time and (now - _submission_cache_time < CACHE_DURATION):
             logger.debug("返回缓存的 /api/v1/stats/submission_daily")
             return jsonify(_submission_cache)
         try:
             logger.info("重新生成 /api/v1/stats/submission_daily 缓存")
-            stats = get_daily_submission_stats() # (现在调用的是 v13.3.14 修复版)
+            stats = get_daily_submission_stats() 
             _submission_cache = stats; _submission_cache_time = now
             return jsonify(stats)
         except Exception as e:
             logger.error(f"[API Daily Stats] Error: {e}", exc_info=True)
             with _submission_cache_lock: _submission_cache = None; _submission_cache_time = None
             return jsonify({"error": "内部服务器错误。"}), 500
-# --- v13.3.15: 结束 ---
 
-# (v13.3.7: 保持不变)
 @app.route('/download_logs/<log_filename>')
 def download_logs(log_filename):
     allowed_files = ['miner.log', 'evolver.log', 'archaeologist.log', 'cron.log', 'miner_issues.log', 'evolver_issues.log']
@@ -602,7 +530,6 @@ def download_logs(log_filename):
     try: return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
     except Exception as e: logger.error(f"[API /download_logs] Error: {e}"); return "下载文件时出错", 500
 
-# (v13.3.7: 保持不变)
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_alpha_submitted():
     operation = "Mark";
@@ -616,7 +543,6 @@ def mark_alpha_submitted():
         else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
-# (v13.3.7: 保持不变)
 @app.route('/api/unmark_submitted', methods=['POST'])
 def unmark_alpha_submitted():
     operation = "Unmark";
@@ -630,7 +556,6 @@ def unmark_alpha_submitted():
         else: logger.error(f"[API /{operation.lower()}_submitted] Save failed."); return jsonify(status='error', message='保存状态失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}_submitted] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
-# (v13.3.7: 保持不变)
 @app.route('/api/mark_failed_on_wq', methods=['POST'])
 def mark_alpha_failed():
     operation = "MarkFailed"; logger.info(f"[API /{operation.lower()}]")
@@ -659,7 +584,6 @@ def mark_alpha_failed():
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
-# (v13.3.7: 保持不变)
 @app.route('/api/unmark_failed_on_wq', methods=['POST'])
 def unmark_alpha_failed():
     operation = "UnmarkFailed"; logger.info(f"[API /{operation.lower()}]")
@@ -675,13 +599,11 @@ def unmark_alpha_failed():
         else: logger.error(f"[API /{operation.lower()}] Save failed."); return jsonify(status='error', message='保存失败日志失败'), 500
     except Exception as e: logger.critical(f"[API /{operation.lower()}] Error: {e}", exc_info=True); return jsonify(status='error', message='服务器内部错误'), 500
 
-# (v13.3.7: 保持不变)
 @app.route('/pending')
 def pending_page():
     logger.info("[API /pending] Rendering pending alphas page.")
     return render_template('pending.html')
 
-# (v13.3.7: 保持不变)
 @app.route('/api/get_pending_alphas')
 def get_pending_alphas():
     try:
@@ -700,7 +622,6 @@ def get_pending_alphas():
         logger.critical(f"[API /api/get_pending_alphas] CRITICAL Error: {e}", exc_info=True)
         return jsonify({"error": f"Failed to get pending alphas: {e}"}), 500
 
-# (v13.3.7: 保持不变)
 LOG_DIR_FOR_VIEWER = "logs"
 LINES_TO_READ = 500 
 

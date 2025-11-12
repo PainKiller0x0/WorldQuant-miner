@@ -35,6 +35,7 @@ services:
       - ./system_config.json.lock:/app/system_config.json.lock
       # 添加这行:
       - ./invalid_functions.json.lock:/app/invalid_functions.json.lock
+      - ./wq_miner.db:/app/wq_miner.db  # <--- 新增数据库挂载
     command: >
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}

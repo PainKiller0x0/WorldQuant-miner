@@ -35,6 +35,7 @@ services:
       - ./wq_client.py:/app/wq_client.py:ro
       - ./llm_provider.py:/app/llm_provider.py:ro
       # --- v13.0 修复结束 ---
+      - ./wq_miner.db:/app/wq_miner.db  # <--- 新增数据库挂载
     command: >
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}

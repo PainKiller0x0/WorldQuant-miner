@@ -75,3 +75,7 @@ system_config.json
 
 # === v13.3.5: 忽略状态文件备份 ===
 backups/
+# Database
+*.db
+*.db-journal
+*.db-wal

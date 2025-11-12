@@ -320,31 +320,44 @@ def get_settings():
 
 @app.route('/api/save_settings', methods=['POST'])
 def save_settings():
-    logger.info("[API /api/save_settings] (v13.1)")
+    logger.info("[API /api/save_settings] (v14.2 Dual Budget Support)")
     if not request.is_json: return jsonify(status='error', message='请求必须是 JSON'), 400
     new_data = request.json
     if not isinstance(new_data, dict): return jsonify(status='error', message='无效的 JSON 格式'), 400
 
     try:
         current_config = utils.load_system_config()
-        static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size']
         
-        # v14.1: 暂时只支持修改旧 budget limit，高级预算需手动改文件
-        llm_keys = ['daily_budget_limit']
-        wq_keys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit']
-        
+        # 1. 处理顶级静态参数
+        static_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count']
         for key in static_keys:
             if key in new_data:
                 try: current_config[key] = int(new_data[key])
                 except (ValueError, TypeError): return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
         
-        if 'llm_budget' in new_data and isinstance(new_data['llm_budget'], dict):
-            if 'llm_budget' not in current_config: current_config['llm_budget'] = {}
-            for key in llm_keys:
-                if key in new_data['llm_budget']:
-                    try: current_config['llm_budget'][key] = int(new_data['llm_budget'][key])
-                    except (ValueError, TypeError): return jsonify(status='error', message=f"无效的 {key} (必须是整数)"), 400
+        # 2. 处理双轨制预算 (llm_budgets)
+        # 注意：这里只更新 limit，必须保留 used_today 和 dates
+        if 'llm_budgets' in new_data and isinstance(new_data['llm_budgets'], dict):
+            if 'llm_budgets' not in current_config: 
+                current_config['llm_budgets'] = {}
+            
+            for role in ['miner', 'evolver']:
+                if role in new_data['llm_budgets']:
+                    input_role_data = new_data['llm_budgets'][role]
+                    if 'daily_limit' in input_role_data:
+                        # 确保目标字典存在
+                        if role not in current_config['llm_budgets']:
+                            current_config['llm_budgets'][role] = {
+                                "daily_limit": 0, "used_today": 0, "last_used_date_utc": "1970-01-01"
+                            }
+                        # 仅更新限额
+                        try:
+                            current_config['llm_budgets'][role]['daily_limit'] = int(input_role_data['daily_limit'])
+                        except (ValueError, TypeError):
+                            return jsonify(status='error', message=f"无效的 {role} budget (必须是整数)"), 400
 
+        # 3. 处理 WQ 速率限制
+        wq_keys = ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit']
         if 'wq_api_limiter' in new_data and isinstance(new_data['wq_api_limiter'], dict):
             if 'wq_api_limiter' not in current_config: current_config['wq_api_limiter'] = {}
             for key in wq_keys:
@@ -356,12 +369,12 @@ def save_settings():
             current_config['evolver_search_space'] = new_data.get('evolver_search_space', current_config.get('evolver_search_space', {}))
 
         if utils.save_system_config(current_config):
-            logger.info(f"[API /api/save_settings] v13.1 配置已保存。")
+            logger.info(f"[API /api/save_settings] 配置已成功保存。")
             global _timeseries_cache, _timeseries_cache_time
             with _cache_lock: _timeseries_cache = None; _timeseries_cache_time = None;
             return jsonify(status='success', message='配置已保存')
         else:
-            logger.error(f"[API /api/save_settings] v13.1 保存失败。")
+            logger.error(f"[API /api/save_settings] 保存失败。")
             return jsonify(status='error', message='保存配置时发生内部错误。'), 500
     except Exception as e:
         logger.error(f"[API /api/save_settings] Error: {e}", exc_info=True)
@@ -403,14 +416,14 @@ def status():
             # v14.1: 返回更丰富的数据结构
             data["watchdog_status"] = {
                 # 兼容字段
-                "llm_budget_used": old_budget_style.get("budget_used_today", 0),
+                "llm_budget_used": old_budget_style.get("used_today", 0), # <--- 修正
                 "llm_budget_limit": old_budget_style.get("daily_limit", 2000),
                 "llm_budget_date_utc": old_budget_style.get("last_used_date_utc", "N/A"),
                 
                 # v14.1 新字段
-                "miner_budget_used": miner_budget.get("budget_used_today", 0),
+                "miner_budget_used": miner_budget.get("used_today", 0), # <--- 修正
                 "miner_budget_limit": miner_budget.get("daily_limit", 0),
-                "evolver_budget_used": evolver_budget.get("budget_used_today", 0),
+                "evolver_budget_used": evolver_budget.get("used_today", 0), # <--- 修正
                 "evolver_budget_limit": evolver_budget.get("daily_limit", 0),
                 
                 "wq_current_tpm_limit": wq_limiter.get("current_tpm_limit", "N/A"),

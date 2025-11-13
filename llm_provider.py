@@ -1,4 +1,4 @@
-# --- llm_provider.py v16.6 (Suffix-Based Billing Isolation) ---
+# --- llm_provider.py v17.0 (Active Node Tracking) ---
 import logging
 import json
 import re
@@ -53,26 +53,15 @@ class LLMProvider:
             logger.critical(f"初始化失败: {e}"); raise
 
     def _get_billing_date(self, client_key):
-        """
-        v16.6: 增加后缀以区分不同时区的账单周期，并强制解决过渡期不重置的 Bug
-        """
         model_name = self.models.get(client_key, "").lower()
         now_utc = datetime.now(timezone.utc)
-        
         if "gemini" in model_name:
-            # Gemini: UTC 08:00 (BJ 16:00) 换日
-            # 判定: 当前 UTC 时间 - 8小时
             billing_dt = now_utc - timedelta(hours=8)
             return billing_dt.strftime('%Y-%m-%d') + "_GEMINI"
-            
         elif any(x in model_name for x in ["doubao", "deepseek", "qwen", "glm", "yi-"]):
-            # 国产: UTC+8 00:00 (BJ 00:00) 换日
-            # 判定: 当前 UTC 时间 + 8小时 (即北京时间)
             billing_dt = now_utc + timedelta(hours=8)
             return billing_dt.strftime('%Y-%m-%d') + "_CN"
-            
         else:
-            # 默认 UTC 00:00
             return now_utc.strftime('%Y-%m-%d') + "_UTC"
 
     def _check_budget_availability(self, client_key):
@@ -90,12 +79,9 @@ class LLMProvider:
                 save_system_config(config)
 
             budget = config["llm_budgets"][client_key]
-            
-            # v16.6: 获取带后缀的新日期格式
             current_billing_date = self._get_billing_date(client_key)
             last_record_date = budget.get("last_used_date_utc", "1970-01-01")
 
-            # 每日重置逻辑 (旧日期无后缀 vs 新日期有后缀 -> 必定触发重置!)
             if current_billing_date != last_record_date:
                 budget["used_today"] = 0
                 budget["last_used_date_utc"] = current_billing_date
@@ -110,14 +96,25 @@ class LLMProvider:
             logger.error(f"[{client_key}] 预算检查错误: {e}")
             return False 
 
-    def _consume_budget(self, client_key):
+    def _consume_budget(self, client_key, role):
+        """ v17.0: 扣费并更新活跃节点记录 """
         try:
             config = load_system_config()
+            # 1. 扣费
             if "llm_budgets" in config and client_key in config["llm_budgets"]:
                 config["llm_budgets"][client_key]["used_today"] += 1
-                save_system_config(config)
+            
+            # 2. 记录谁是活跃的 (Active Node)
+            if "active_nodes" not in config: config["active_nodes"] = {}
+            
+            # 如果当前活跃节点变了，记录下来
+            if config["active_nodes"].get(role) != client_key:
+                config["active_nodes"][role] = client_key
+                logger.info(f"[{role}] 活跃节点已更新为: {client_key}")
+            
+            save_system_config(config)
         except Exception as e:
-            logger.error(f"[{client_key}] 扣费失败: {e}")
+            logger.error(f"[{client_key}] 扣费/状态更新失败: {e}")
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
@@ -131,7 +128,6 @@ class LLMProvider:
         candidates = [role] + self.backup_fleets.get(role, [])
         
         for client_key in candidates:
-            # 1. 熔断检查
             cb = self.circuit_breaker.get(client_key, {})
             if cb.get('fails', 0) >= self.CB_THRESHOLD:
                 if time.time() - cb.get('last_fail_time', 0) < self.CB_TIMEOUT:
@@ -140,16 +136,15 @@ class LLMProvider:
                 else:
                     cb['fails'] = 0
 
-            # 2. 预算检查
             if not self._check_budget_availability(client_key):
                 continue
 
-            # 3. 调用
             content, error = self._attempt_request(client_key, prompt, role)
             
             if content:
                 self.circuit_breaker[client_key]['fails'] = 0
-                self._consume_budget(client_key)
+                # v17.0: 传入 role 以便记录状态
+                self._consume_budget(client_key, role)
                 
                 if client_key != role:
                     model_used = self.models.get(client_key, "Unknown")
@@ -164,7 +159,7 @@ class LLMProvider:
                 self.circuit_breaker[client_key]['last_fail_time'] = time.time()
                 logger.warning(f"[{client_key}] 调用失败: {str(error)[:100]}")
 
-        logger.critical(f"[{role}] 🚨 舰队全灭 (或预算全耗尽)！休眠 60s...")
+        logger.critical(f"[{role}] 🚨 舰队全灭！休眠 60s...")
         time.sleep(60)
         return None
 

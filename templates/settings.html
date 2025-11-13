@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>全局设置 - WQ Alpha 舰队</title>
-    <link href="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css](https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css)" rel="stylesheet">
-    <link href="[https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css](https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css)" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { font-family: 'Segoe UI', Roboto, "Helvetica Neue", Arial, sans-serif; transition: background-color 0.3s; }
         [data-bs-theme="dark"] body { background-color: #212529; } [data-bs-theme="light"] body { background-color: #f8f9fa; }
+        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
@@ -35,82 +36,109 @@
 </nav>
 
 <div class="container-fluid px-4">
-    <div class="card border-0 shadow-sm mt-3">
+    <div class="card mb-4">
         <div class="card-header bg-body-tertiary">
-            <h5 class="mb-0">WQminer 控制面板 (Fleet Edition)</h5>
+            <h5 class="mb-0"><i class="bi bi-sliders"></i> 舰队指挥中心设置 (v16.6)</h5>
         </div>
         <div class="card-body">
             <form id="settings-form">
     
-                <h5 class="border-bottom pb-2 mb-3">看门狗 A (API 舰队预算)</h5>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label text-primary fw-bold"><i class="bi bi-minecart-loaded"></i> Miner 舰队</label>
-                        <div class="input-group mb-2">
-                            <span class="input-group-text">主力 (Main)</span>
-                            <input type="number" class="form-control" id="miner_daily_limit" name="miner_daily_limit" min="0">
+                <h5 class="border-bottom pb-2 mb-3 text-primary"><i class="bi bi-wallet2"></i> 看门狗 A：API 舰队预算 (次/天)</h5>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 bg-body-secondary bg-opacity-25">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary fw-bold mb-3"><i class="bi bi-minecart-loaded"></i> Miner 舰队</h6>
+                                <div class="mb-2">
+                                    <label class="form-label small">主力 (Miner)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-star-fill text-warning"></i></span>
+                                        <input type="number" class="form-control" id="miner_daily_limit" name="miner_daily_limit" min="0">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">备用 1 (Backup 1)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-shield-shaded"></i></span>
+                                        <input type="number" class="form-control" id="miner_backup_1_limit" name="miner_backup_1_limit" min="0" placeholder="默认 1000">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">备用 2 (Backup 2)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-shield"></i></span>
+                                        <input type="number" class="form-control" id="miner_backup_2_limit" name="miner_backup_2_limit" min="0" placeholder="未配置">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="input-group mb-2">
-                            <span class="input-group-text">备用 1 (Backup)</span>
-                            <input type="number" class="form-control" id="miner_backup_1_limit" name="miner_backup_1_limit" min="0" placeholder="默认 1000">
-                        </div>
-                        <div class="form-text">备用节点仅在主力熔断时消耗。</div>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label text-success fw-bold"><i class="bi bi-dna"></i> Evolver 舰队</label>
-                        <div class="input-group mb-2">
-                            <span class="input-group-text">主力 (Main)</span>
-                            <input type="number" class="form-control" id="evolver_daily_limit" name="evolver_daily_limit" min="0">
-                        </div>
-                        <div class="input-group mb-2">
-                            <span class="input-group-text">备用 1 (Backup)</span>
-                            <input type="number" class="form-control" id="evolver_backup_1_limit" name="evolver_backup_1_limit" min="0" placeholder="默认 1000">
+                    
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 bg-body-secondary bg-opacity-25">
+                            <div class="card-body">
+                                <h6 class="card-title text-success fw-bold mb-3"><i class="bi bi-dna"></i> Evolver 舰队</h6>
+                                <div class="mb-2">
+                                    <label class="form-label small">主力 (Evolver)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-star-fill text-warning"></i></span>
+                                        <input type="number" class="form-control" id="evolver_daily_limit" name="evolver_daily_limit" min="0">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small">备用 1 (Backup 1)</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-shield-shaded"></i></span>
+                                        <input type="number" class="form-control" id="evolver_backup_1_limit" name="evolver_backup_1_limit" min="0" placeholder="默认 1000">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <h5 class="border-bottom pb-2 mb-3 mt-4">看门狗 B (WQ API 动态令牌桶)</h5>
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label for="wq_429_cooldown_seconds" class="form-label">WQ 429 冷却 (秒)</label>
+                <h5 class="border-bottom pb-2 mb-3 mt-4 text-warning"><i class="bi bi-shield-lock"></i> 看门狗 B：WQ API 防护</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="wq_429_cooldown_seconds" class="form-label small">429 冷却时间 (秒)</label>
                         <input type="number" class="form-control" id="wq_429_cooldown_seconds" name="wq_429_cooldown_seconds" min="0">
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="max_tpm_limit" class="form-label">最大 TPM</label>
+                    <div class="col-md-4">
+                        <label for="max_tpm_limit" class="form-label small">最大 TPM 上限</label>
                         <input type="number" class="form-control" id="max_tpm_limit" name="max_tpm_limit" min="1">
                     </div>
-                     <div class="col-md-4 mb-3">
-                        <label for="min_tpm_limit" class="form-label">最小 TPM</label>
+                     <div class="col-md-4">
+                        <label for="min_tpm_limit" class="form-label small">最小 TPM 下限</label>
                         <input type="number" class="form-control" id="min_tpm_limit" name="min_tpm_limit" min="1">
                     </div>
                 </div>
 
-                <h5 class="border-bottom pb-2 mb-3 mt-4">服务参数 (需要重启)</h5>
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label for="miner_concurrency" class="form-label">Miner 并发</label>
+                <h5 class="border-bottom pb-2 mb-3 mt-4 text-info"><i class="bi bi-gear-wide-connected"></i> 核心服务参数 (需重启)</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="miner_concurrency" class="form-label small">Miner 并发线程</label>
                         <input type="number" class="form-control" id="miner_concurrency" name="miner_concurrency" min="0">
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="evolver_concurrency" class="form-label">Evolver 并发</label>
+                    <div class="col-md-4">
+                        <label for="evolver_concurrency" class="form-label small">Evolver 并发线程</label>
                         <input type="number" class="form-control" id="evolver_concurrency" name="evolver_concurrency" min="0">
                     </div>
-                     <div class="col-md-4 mb-3">
-                        <label for="producer_queue_full_sleep" class="form-label">队列已满暂停 (秒)</label>
+                     <div class="col-md-4">
+                        <label for="producer_queue_full_sleep" class="form-label small">队列满休眠 (秒)</label>
                         <input type="number" class="form-control" id="producer_queue_full_sleep" name="producer_queue_full_sleep" min="0">
                     </div>
-                     <div class="col-md-6 mb-3">
-                        <label for="hopeful_pool_max_size" class="form-label">精英池上限</label>
+                     <div class="col-md-6">
+                        <label for="hopeful_pool_max_size" class="form-label small">精英池上限 (个)</label>
                         <input type="number" class="form-control" id="hopeful_pool_max_size" name="hopeful_pool_max_size" min="10">
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="evolver_wildcard_count" class="form-label">Evolver 外卡池数量</label>
+                    <div class="col-md-6">
+                        <label for="evolver_wildcard_count" class="form-label small">Evolver 外卡池数量</label>
                         <input type="number" class="form-control" id="evolver_wildcard_count" name="evolver_wildcard_count" min="0">
                     </div>
                 </div>
                 
-                <div class="mt-4 d-flex gap-2">
-                     <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> 保存设置</button>
+                <div class="mt-4 pt-3 border-top d-flex gap-2">
+                     <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> 保存所有设置</button>
                      <button type="button" class="btn btn-outline-secondary" id="copy-restart-cmd"><i class="bi bi-clipboard"></i> 复制重启命令</button>
                 </div>
                 
@@ -120,8 +148,9 @@
     </div>
 </div>
 
-<script src="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js](https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js)"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // 主题逻辑
     const THEME_KEY = 'theme-preference'; const htmlEl = document.documentElement; const themeToggle = document.getElementById('theme-toggle');
     function setTheme(theme) { htmlEl.setAttribute('data-bs-theme', theme); localStorage.setItem(THEME_KEY, theme); themeToggle.innerHTML = theme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>'; }
     const storedTheme = localStorage.getItem(THEME_KEY) || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -136,37 +165,62 @@
         const form = document.getElementById('settings-form');
         const messageEl = document.getElementById('message');
         const copyButton = document.getElementById('copy-restart-cmd');
-        function showMessage(type, html) { messageEl.className = 'alert mt-3 ' + (type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-danger' : 'alert-warning')); messageEl.innerHTML = html; messageEl.style.display = 'block'; }
+        
+        function showMessage(type, html) {
+            messageEl.className = 'alert mt-3 ' + (type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-danger' : 'alert-warning'));
+            messageEl.innerHTML = html; messageEl.style.display = 'block';
+            setTimeout(() => messageEl.style.display = 'none', 5000);
+        }
 
-        // Load Settings
+        // 1. 加载配置
         fetch('/api/get_settings').then(r=>r.json()).then(data => {
-            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'].forEach(k => { if(form.elements[k]) form.elements[k].value = data[k]||0; });
-            if (data.wq_api_limiter) { ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'].forEach(k => { if(form.elements[k]) form.elements[k].value = data.wq_api_limiter[k]; }); }
-            
-            // v16.4: 加载双轨及备用预算
+            // 基础参数
+            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'].forEach(k => { 
+                if(form.elements[k]) form.elements[k].value = data[k]||0; 
+            });
+            // WQ 看门狗
+            if (data.wq_api_limiter) { 
+                ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'].forEach(k => { 
+                    if(form.elements[k]) form.elements[k].value = data.wq_api_limiter[k]; 
+                }); 
+            }
+            // API 舰队预算 (v16.6 适配)
             if (data.llm_budgets) {
+                // Miner Fleet
                 if(data.llm_budgets.miner) form.elements['miner_daily_limit'].value = data.llm_budgets.miner.daily_limit;
                 if(data.llm_budgets.miner_backup_1) form.elements['miner_backup_1_limit'].value = data.llm_budgets.miner_backup_1.daily_limit;
+                if(data.llm_budgets.miner_backup_2 && form.elements['miner_backup_2_limit']) 
+                    form.elements['miner_backup_2_limit'].value = data.llm_budgets.miner_backup_2.daily_limit;
                 
+                // Evolver Fleet
                 if(data.llm_budgets.evolver) form.elements['evolver_daily_limit'].value = data.llm_budgets.evolver.daily_limit;
                 if(data.llm_budgets.evolver_backup_1) form.elements['evolver_backup_1_limit'].value = data.llm_budgets.evolver_backup_1.daily_limit;
             }
         }).catch(err => showMessage('error', `加载错误: ${err}`));
 
-        // Save Settings
+        // 2. 保存配置
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             const data = { llm_budgets:{}, wq_api_limiter:{}, evolver_search_space:{} };
             
-            // v16.4: 保存主力及备用预算
-            data.llm_budgets.miner = { daily_limit: parseInt(form.elements['miner_daily_limit'].value) || 0 };
-            if(form.elements['miner_backup_1_limit'].value) 
-                data.llm_budgets.miner_backup_1 = { daily_limit: parseInt(form.elements['miner_backup_1_limit'].value) };
-                
-            data.llm_budgets.evolver = { daily_limit: parseInt(form.elements['evolver_daily_limit'].value) || 0 };
-            if(form.elements['evolver_backup_1_limit'].value) 
-                data.llm_budgets.evolver_backup_1 = { daily_limit: parseInt(form.elements['evolver_backup_1_limit'].value) };
+            // 辅助保存函数
+            const saveBudget = (role) => {
+                const val = parseInt(form.elements[role + '_limit'].value);
+                if (!isNaN(val)) data.llm_budgets[role] = { daily_limit: val };
+            };
 
+            // 保存所有已知的 Budget 字段
+            saveBudget('miner_daily'); // 注意前端ID转换: miner_daily_limit -> miner
+            saveBudget('miner_backup_1');
+            saveBudget('miner_backup_2');
+            saveBudget('evolver_daily'); // evolver_daily_limit -> evolver
+            saveBudget('evolver_backup_1');
+            
+            // 修正 ID 映射 (前端ID -> 后端Key)
+            if(data.llm_budgets.miner_daily) { data.llm_budgets.miner = data.llm_budgets.miner_daily; delete data.llm_budgets.miner_daily; }
+            if(data.llm_budgets.evolver_daily) { data.llm_budgets.evolver = data.llm_budgets.evolver_daily; delete data.llm_budgets.evolver_daily; }
+
+            // 保存其他参数
             ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'].forEach(k => data[k]=parseInt(form.elements[k].value));
             ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'].forEach(k => data.wq_api_limiter[k]=parseInt(form.elements[k].value));
             
@@ -178,6 +232,7 @@
                 }).catch(err => showMessage('error', err));
         });
 
+        // 3. 复制命令
         const cmd = 'docker compose -f docker-compose.yml -f docker-compose.evolver.yml -f docker-compose.dashboard.yml -f docker-compose.backup.yml up -d --build --force-recreate'; 
         copyButton.onclick = function() {
             const t=document.createElement('textarea'); t.value=cmd; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);

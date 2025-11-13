@@ -117,22 +117,29 @@ def load_hopeful_alphas_safe():
         logger.error(f"[Utils-DB] 加载 Alphas 失败: {e}")
         return []
 
+# --- 修改 utils.py 中的 save_hopeful_alphas_safe ---
+
 def save_hopeful_alphas_safe(alphas_list):
-    """
-    将 Alpha 列表保存到数据库。
-    Miner/Evolver 习惯传整个列表过来，我们这里做增量插入。
-    """
     if not isinstance(alphas_list, list): return False
     
     success_count = 0
     try:
+        # 1. 插入新策略
         for alpha_data in alphas_list:
-            # 调用 database.py 的去重插入逻辑
             if database.add_alpha(alpha_data):
                 success_count += 1
         
         if success_count > 0:
             logger.info(f"[Utils-DB] 新增入库 {success_count} 条策略。")
+            
+            # 2. [修复] 执行修剪 (读取配置中的上限)
+            config = load_system_config()
+            limit = config.get("hopeful_pool_max_size", 300)
+            
+            deleted = database.trim_alphas(limit)
+            if deleted > 0:
+                logger.info(f"[Utils-DB] 精英池超限，已修剪 {deleted} 个低分策略 (保留 Top {limit})。")
+                
         return True
     except Exception as e:
         logger.error(f"[Utils-DB] 保存 Alphas 失败: {e}")

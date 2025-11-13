@@ -1,10 +1,10 @@
-# --- llm_provider.py v14.0 (Model Fleet & Dual-Track Budget) ---
+# --- llm_provider.py v16.6 (Suffix-Based Billing Isolation) ---
 import logging
 import json
 import re
 import random
 from openai import OpenAI
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import time
 from utils import load_system_config, save_system_config
 
@@ -15,98 +15,200 @@ class LLMProvider:
         self.api_config_path = api_config_path
         self.clients = {} 
         self.models = {}
+        self.circuit_breaker = {} 
+        self.CB_THRESHOLD = 2       
+        self.CB_TIMEOUT = 600       
+        self.backup_fleets = {'miner': [], 'evolver': []}
         self._load_config()
 
     def _load_config(self):
         try:
             with open(self.api_config_path, 'r') as f: config = json.load(f)
             
-            # Miner 配置
-            m_conf = config.get('miner_config', config)
-            self.models['miner'] = m_conf.get('model_name', 'gemini-2.5-flash-lite')
-            self.clients['miner'] = OpenAI(api_key=m_conf.get('api_key'), base_url=m_conf.get('base_url'))
+            def load_role(role_key, config_key):
+                conf = config.get(config_key)
+                if not conf: return
+                self.models[role_key] = conf.get('model_name')
+                self.clients[role_key] = OpenAI(api_key=conf.get('api_key'), base_url=conf.get('base_url'))
+                self.circuit_breaker[role_key] = {'fails': 0, 'last_fail_time': 0}
+                logger.info(f"Loaded [{role_key}]: {self.models[role_key]}")
+
+            load_role('miner', 'miner_config')
+            load_role('evolver', 'evolver_config')
             
-            # Evolver 配置
-            e_conf = config.get('evolver_config', m_conf)
-            self.models['evolver'] = e_conf.get('model_name', 'gemini-2.5-flash')
-            self.clients['evolver'] = OpenAI(api_key=e_conf.get('api_key'), base_url=e_conf.get('base_url'))
-            
-            logger.info(f"Miner: {self.models['miner']} | Evolver: {self.models['evolver']}")
+            for role in ['miner', 'evolver']:
+                if config.get(f'{role}_config_backup'):
+                    backup_key = f"{role}_backup_1"
+                    load_role(backup_key, f'{role}_config_backup')
+                    self.backup_fleets[role].append(backup_key)
+                for i in range(2, 10):
+                    conf_key = f'{role}_config_backup_{i}'
+                    if config.get(conf_key):
+                        backup_key = f"{role}_backup_{i}"
+                        load_role(backup_key, conf_key)
+                        self.backup_fleets[role].append(backup_key)
+
+            logger.info(f"Fleet Status -> Miner Backups: {len(self.backup_fleets['miner'])} | Evolver Backups: {len(self.backup_fleets['evolver'])}")
         except Exception as e:
             logger.critical(f"初始化失败: {e}"); raise
 
-    def _check_budget(self, role):
+    def _get_billing_date(self, client_key):
+        """
+        v16.6: 增加后缀以区分不同时区的账单周期，并强制解决过渡期不重置的 Bug
+        """
+        model_name = self.models.get(client_key, "").lower()
+        now_utc = datetime.now(timezone.utc)
+        
+        if "gemini" in model_name:
+            # Gemini: UTC 08:00 (BJ 16:00) 换日
+            # 判定: 当前 UTC 时间 - 8小时
+            billing_dt = now_utc - timedelta(hours=8)
+            return billing_dt.strftime('%Y-%m-%d') + "_GEMINI"
+            
+        elif any(x in model_name for x in ["doubao", "deepseek", "qwen", "glm", "yi-"]):
+            # 国产: UTC+8 00:00 (BJ 00:00) 换日
+            # 判定: 当前 UTC 时间 + 8小时 (即北京时间)
+            billing_dt = now_utc + timedelta(hours=8)
+            return billing_dt.strftime('%Y-%m-%d') + "_CN"
+            
+        else:
+            # 默认 UTC 00:00
+            return now_utc.strftime('%Y-%m-%d') + "_UTC"
+
+    def _check_budget_availability(self, client_key):
         try:
-            # 1. 加载配置 (如果失败 utils.py 会抛异常，中断流程，保护数据不被重置)
             config = load_system_config()
+            if "llm_budgets" not in config: config["llm_budgets"] = {}
             
-            # 初始化结构
-            if "llm_budgets" not in config:
-                config["llm_budgets"] = {
-                    "miner": {"daily_limit": 3000, "used_today": 0, "last_used_date_utc": "2024-01-01"},
-                    "evolver": {"daily_limit": 1000, "used_today": 0, "last_used_date_utc": "2024-01-01"}
+            if client_key not in config["llm_budgets"]:
+                default_limit = 3000 if "miner" in client_key and "backup" not in client_key else 1000
+                config["llm_budgets"][client_key] = {
+                    "daily_limit": default_limit, 
+                    "used_today": 0, 
+                    "last_used_date_utc": "INIT"
                 }
+                save_system_config(config)
 
-            budget = config["llm_budgets"].get(role, config["llm_budgets"]["miner"])
-            today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            budget = config["llm_budgets"][client_key]
+            
+            # v16.6: 获取带后缀的新日期格式
+            current_billing_date = self._get_billing_date(client_key)
+            last_record_date = budget.get("last_used_date_utc", "1970-01-01")
 
-            # 每日重置
-            if today != budget.get("last_used_date_utc"):
+            # 每日重置逻辑 (旧日期无后缀 vs 新日期有后缀 -> 必定触发重置!)
+            if current_billing_date != last_record_date:
                 budget["used_today"] = 0
-                budget["last_used_date_utc"] = today
-                logger.info(f"[{role}] 新的一天，预算已重置。")
+                budget["last_used_date_utc"] = current_billing_date
+                save_system_config(config)
+                logger.info(f"[{client_key}] 新账单周期 ({current_billing_date})，预算已自动重置。")
 
-            if budget["used_today"] >= budget.get("daily_limit", 2000):
-                logger.warning(f"[{role}] 预算耗尽 ({budget['used_today']})")
-                return "BUDGET_EXHAUSTED"
-
-            # 扣费
-            budget["used_today"] += 1
+            if budget["used_today"] >= budget.get("daily_limit", 0):
+                return False 
             
-            # 保存
-            if not save_system_config(config):
-                logger.error("保存预算失败") # 就算保存失败，内存里也加了，下次读取只要成功就是对的
-            
-            return "OK"
+            return True
         except Exception as e:
-            logger.error(f"预算检查错误: {e}"); return "BUDGET_EXHAUSTED"
+            logger.error(f"[{client_key}] 预算检查错误: {e}")
+            return False 
+
+    def _consume_budget(self, client_key):
+        try:
+            config = load_system_config()
+            if "llm_budgets" in config and client_key in config["llm_budgets"]:
+                config["llm_budgets"][client_key]["used_today"] += 1
+                save_system_config(config)
+        except Exception as e:
+            logger.error(f"[{client_key}] 扣费失败: {e}")
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
-        role = 'miner'
-        if self._check_budget(role) != "OK": return "BUDGET_EXHAUSTED"
-        
-        # (简化的 Prompt 构建逻辑，与 v13.0 保持一致)
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
-        return self._call_llm(role, prompt)
+        return self._call_fleet('miner', prompt)
 
     def generate_evolved_alpha_idea(self, base_obj, guidance=None):
-        role = 'evolver'
-        if self._check_budget(role) != "OK": return "BUDGET_EXHAUSTED"
-        
         prompt = self._build_evolver_prompt(base_obj, guidance)
-        return self._call_llm(role, prompt, json_mode=True)
+        return self._call_fleet('evolver', prompt, json_mode=True)
 
-    def _call_llm(self, role, prompt, json_mode=False):
-        try:
-            resp = self.clients[role].chat.completions.create(
-                model=self.models[role],
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.9 if role == 'miner' else 0.7
-            )
-            content = resp.choices[0].message.content.strip()
+    def _call_fleet(self, role, prompt, json_mode=False):
+        candidates = [role] + self.backup_fleets.get(role, [])
+        
+        for client_key in candidates:
+            # 1. 熔断检查
+            cb = self.circuit_breaker.get(client_key, {})
+            if cb.get('fails', 0) >= self.CB_THRESHOLD:
+                if time.time() - cb.get('last_fail_time', 0) < self.CB_TIMEOUT:
+                    if client_key == role: logger.info(f"[{role}] 主力熔断中，跳过...")
+                    continue
+                else:
+                    cb['fails'] = 0
+
+            # 2. 预算检查
+            if not self._check_budget_availability(client_key):
+                continue
+
+            # 3. 调用
+            content, error = self._attempt_request(client_key, prompt, role)
             
-            if json_mode:
-                return self._parse_json(content)
+            if content:
+                self.circuit_breaker[client_key]['fails'] = 0
+                self._consume_budget(client_key)
+                
+                if client_key != role:
+                    model_used = self.models.get(client_key, "Unknown")
+                    logger.info(f"[{role}] 备用节点 {client_key} ({model_used}) 调用成功！")
+                
+                if json_mode: return self._parse_json(content)
+                else:
+                    idea = self._extract_expression(content)
+                    return {"expression": idea, "settings": {}} if idea else None
             else:
-                idea = content.replace('`', '').split(';')[0]
-                return {"expression": idea + ';', "settings": {}} if idea else None
+                self.circuit_breaker[client_key]['fails'] += 1
+                self.circuit_breaker[client_key]['last_fail_time'] = time.time()
+                logger.warning(f"[{client_key}] 调用失败: {str(error)[:100]}")
+
+        logger.critical(f"[{role}] 🚨 舰队全灭 (或预算全耗尽)！休眠 60s...")
+        time.sleep(60)
+        return None
+
+    def _attempt_request(self, client_key, prompt, role):
+        client = self.clients.get(client_key)
+        model_name = self.models.get(client_key)
+        if not client or not model_name: return None, "NO_CONFIG"
+        
+        extra_args = {}
+        if "deepseek" in model_name.lower():
+            extra_args['extra_body'] = {"enable_thinking": False}
+        
+        try:
+            resp = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1000,
+                temperature=0.9 if 'miner' in role else 0.7,
+                **extra_args
+            )
+            return resp.choices[0].message.content.strip(), None
         except Exception as e:
-            logger.error(f"LLM调用失败 ({role}): {e}")
-            return "RATE_LIMIT" if "429" in str(e) else None
+            return None, str(e)
+
+    def _extract_expression(self, text):
+        try:
+            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+            code_blocks = re.findall(r'```(?:python)?(.*?)```', text, re.DOTALL)
+            if code_blocks:
+                candidate = code_blocks[-1].strip()
+                if ";" in candidate: return candidate.split(';')[0].strip() + ';'
+                return candidate.strip() + ';'
+            if ";" in text:
+                pre = text.split(';')[0]
+                cand = pre.split('\n')[-1].strip()
+                cand = re.sub(r'^(?:\d+\.|Here is the code:|Code:|Expression:)\s*', '', cand, flags=re.IGNORECASE)
+                if "=" in cand: cand = cand.split("=")[-1].strip()
+                if "(" in cand and ")" in cand: return cand + ';'
+            return None
+        except: return None
 
     def _parse_json(self, text):
         try:
+            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
             if "```" in text: text = text.split("```json")[1].split("```")[0]
             data = json.loads(text)
             if 'expression' in data: 
@@ -116,11 +218,9 @@ class LLMProvider:
         except: pass
         return None
 
-    def _build_miner_prompt(self, fields, operators, guidance, failed):
-        # ... (这里省略 Prompt 字符串构建细节，与之前版本一致，重点是结构) ...
-        # 为了确保代码完整可运行，这里提供一个基础版本
-        op_str = ", ".join(operators[:20])
-        return f"Create a WorldQuant alpha using: {', '.join(fields)}. Ops: {op_str}. Output ONLY the expression ending with ;"
+    def _build_miner_prompt(self, fields, ops, guidance, failed):
+        op_str = ", ".join(ops[:20])
+        return f"Create a WorldQuant alpha using: {', '.join(fields)}. Ops: {op_str}. Output ONLY the expression code ending with ;. NO explanations."
 
     def _build_evolver_prompt(self, base, guidance):
-        return f"Evolve this alpha: {base.get('expression')}. Output JSON: {{'expression': '...', 'settings': {{}}}}"
+        return f"Evolve alpha: {base.get('expression')}. Output JSON."

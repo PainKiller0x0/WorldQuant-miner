@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v15.1 (Fix HQ Chart & Daily Stats) ---
+# --- Web仪表盘.py v15.2 (Full: SQLite, Fleet Budget & Time Filters) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -12,9 +12,9 @@ from datetime import datetime, timezone, timedelta
 import utils
 import database
 from database import Alpha, get_db
-from sqlalchemy import func, case  # <--- 新增 case
+from sqlalchemy import func, case
 
-CURRENT_DASHBOARD_VERSION = "v15.1 (SQLite Database)"
+CURRENT_DASHBOARD_VERSION = "v15.2 (SQLite & Fleet Budget)"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def get_hopeful_alphas_stats():
             total_count = db.query(func.count(Alpha.id)).scalar()
             stats['count'] = total_count
             
-            # 2. 聚合指标 (只统计 Fitness > 0 的)
+            # 2. 聚合指标 (只统计 Fitness > -900 的有效值)
             metrics = db.query(
                 func.max(Alpha.fitness),
                 func.avg(Alpha.fitness),
@@ -60,6 +60,7 @@ def get_hopeful_alphas_stats():
             stats['total_submitted_count'] = stats['successfully_submitted_count'] + db.query(func.count(Alpha.id)).filter(Alpha.is_failed_on_wq == True).scalar()
 
             # 4. 获取所有列表 (用于前端表格)
+            # 限制返回 1000 条以保护前端，或者前端需要分页 (v15.0 暂全量返回)
             all_alphas = db.query(Alpha).all()
             
             processed_list = []
@@ -68,10 +69,19 @@ def get_hopeful_alphas_stats():
                 is_submittable = (a.pass_count >= 7 and a.fail_count == 0)
                 is_successfully_submitted = (a.is_submitted)
                 
+                # 格式化时间戳
+                ts_str = "N/A"
+                if a.created_at:
+                    ts_str = a.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                
+                manual_ts_str = "N/A"
+                if a.submitted_timestamp:
+                    manual_ts_str = a.submitted_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+
                 processed_list.append({
                     "expression": a.expression,
-                    "timestamp": a.created_at.isoformat() if a.created_at else "N/A",
-                    "manual_timestamp": a.submitted_timestamp.isoformat() if a.submitted_timestamp else "N/A",
+                    "timestamp": ts_str,
+                    "manual_timestamp": manual_ts_str,
                     "checks_summary": a.checks_summary,
                     "is_submittable": is_submittable,
                     "is_submitted": a.is_submitted,
@@ -94,7 +104,6 @@ def get_hopeful_alphas_stats():
         
     return stats
 
-# --- 替换 1: 修改 get_daily_submission_stats 支持时间过滤 ---
 def get_daily_submission_stats(start_dt=None):
     stats = { "timestamps": [], "submittable_count": [], "submitted_count": [], "failed_count": [] }
     try:
@@ -188,6 +197,7 @@ def pending_page(): return render_template('pending.html')
 def status():
     try:
         config = utils.load_system_config()
+        
         data = {
             "miner": get_service_status('miner.log'),
             "evolver": get_service_status('evolver.log'),
@@ -196,8 +206,20 @@ def status():
         
         llm_budgets = config.get("llm_budgets", {})
         wq_limiter = config.get("wq_api_limiter", {})
-        miner_b = llm_budgets.get("miner", {})
-        evolver_b = llm_budgets.get("evolver", {})
+        
+        # --- v15.2: 舰队预算聚合逻辑 ---
+        def aggregate_budget(role_prefix):
+            total_used = 0
+            total_limit = 0
+            # 遍历所有 budget key，找到以 role_prefix 开头的 (例如 'miner', 'miner_backup_1')
+            for key, b_data in llm_budgets.items():
+                if key == role_prefix or key.startswith(f"{role_prefix}_backup"):
+                    total_used += b_data.get("used_today", 0)
+                    total_limit += b_data.get("daily_limit", 0)
+            return total_used, total_limit
+
+        miner_used, miner_limit = aggregate_budget("miner")
+        evolver_used, evolver_limit = aggregate_budget("evolver")
         
         now = time.time()
         last_fail = wq_limiter.get("last_failure_timestamp", 0)
@@ -205,12 +227,16 @@ def status():
         cd_rem = max(0, round(cd_time - (now - last_fail))) if now - last_fail < cd_time else 0
         
         data["watchdog_status"] = {
-            "llm_budget_used": miner_b.get("used_today", 0), 
-            "llm_budget_limit": miner_b.get("daily_limit", 0),
-            "miner_budget_used": miner_b.get("used_today", 0),
-            "miner_budget_limit": miner_b.get("daily_limit", 0),
-            "evolver_budget_used": evolver_b.get("used_today", 0),
-            "evolver_budget_limit": evolver_b.get("daily_limit", 0),
+            # 兼容旧版字段
+            "llm_budget_used": miner_used, 
+            "llm_budget_limit": miner_limit,
+            
+            # 聚合后的数据 (v15.2 新字段)
+            "miner_budget_used": miner_used,
+            "miner_budget_limit": miner_limit,
+            "evolver_budget_used": evolver_used,
+            "evolver_budget_limit": evolver_limit,
+            
             "wq_current_tpm_limit": wq_limiter.get("current_tpm_limit", "N/A"),
             "wq_cooldown_status": f"IN_COOLDOWN ({cd_rem}s)" if cd_rem > 0 else "OK",
             "wq_cooldown_remaining_sec": cd_rem
@@ -238,11 +264,16 @@ def save_settings():
     try:
         current = utils.load_system_config()
         new_data = request.json
+        
+        # 递归更新字典，支持任意深度的配置修改 (包括新加的 miner_backup_1_limit)
         def update_recursive(d, u):
             for k, v in u.items():
-                if isinstance(v, dict): d[k] = update_recursive(d.get(k, {}), v)
-                else: d[k] = v
+                if isinstance(v, dict): 
+                    d[k] = update_recursive(d.get(k, {}), v)
+                else: 
+                    d[k] = v
             return d
+            
         update_recursive(current, new_data)
         utils.save_system_config(current)
         return jsonify(status='success', message='配置已保存')
@@ -254,24 +285,18 @@ def save_settings():
 @app.route('/api/mark_submitted', methods=['POST'])
 def mark_submitted():
     expr = request.json.get('expression')
-    if database.mark_alpha_submitted(expr): return jsonify(status='success')
+    if database.mark_alpha_submitted(expr):
+        return jsonify(status='success')
     return jsonify(status='error', message='Alpha not found'), 404
 
 @app.route('/api/mark_failed_on_wq', methods=['POST'])
 def mark_failed():
     data = request.json
-    if database.mark_alpha_failed(data.get('expression'), data.get('reason', 'UNKNOWN')): return jsonify(status='success')
+    expr = data.get('expression')
+    reason = data.get('reason', 'UNKNOWN')
+    if database.mark_alpha_failed(expr, reason):
+        return jsonify(status='success')
     return jsonify(status='error', message='Alpha not found'), 404
-
-@app.route('/api/unmark_submitted', methods=['POST'])
-def unmark_submitted():
-    # v15.0 暂不支持反向操作，或者需要 database.py 增加 unmark 函数
-    # 这是一个占位符，防止前端报错
-    return jsonify(status='error', message='Database mode: Unmark not yet supported'), 501
-
-@app.route('/api/unmark_failed_on_wq', methods=['POST'])
-def unmark_failed():
-    return jsonify(status='error', message='Database mode: Unmark not yet supported'), 501
 
 @app.route('/api/get_pending_alphas')
 def get_pending_alphas():
@@ -294,16 +319,18 @@ def get_pending_alphas():
                     "turnover": a.turnover,
                     "checks_summary": a.checks_summary,
                     "dashboard_score": a.calculate_score(),
-                    "timestamp": a.created_at.isoformat() if a.created_at else "N/A"
+                    # 格式化时间
+                    "timestamp": a.created_at.strftime('%Y-%m-%d %H:%M:%S') if a.created_at else "N/A"
                 })
+            
+            # 按分排序
             result.sort(key=lambda x: x['dashboard_score'], reverse=True)
             return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- 统计接口 (已修复 HQ 统计) ---
+# --- 统计接口 (v15.1 支持时间过滤) ---
 
-# --- 替换 2: 升级 api_stats_submission_daily ---
 @app.route('/api/v1/stats/submission_daily')
 def api_stats_submission_daily():
     try:
@@ -318,7 +345,6 @@ def api_stats_submission_daily():
         logger.error(f"[API Daily] Error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-# --- 替换 3: 升级 api_stats_timeseries ---
 @app.route('/api/v1/stats/timeseries')
 def api_stats_timeseries():
     try:
@@ -328,7 +354,7 @@ def api_stats_timeseries():
             start_dt = datetime.now(timezone.utc) - timedelta(days=days)
 
         with get_db() as db:
-            # 构建基础查询
+            # v15.1: 使用 SQL case 语句统计 High Quality (Fitness > 0.5 AND Pass >= 4)
             query = db.query(
                 func.strftime('%m-%d %H:00', Alpha.created_at),
                 func.count(Alpha.id),
@@ -336,7 +362,6 @@ def api_stats_timeseries():
                 func.sum(case(( (Alpha.fitness > 0.5) & (Alpha.pass_count >= 4), 1 ), else_=0))
             )
             
-            # 应用时间过滤
             if start_dt:
                 query = query.filter(Alpha.created_at >= start_dt)
                 
@@ -367,5 +392,5 @@ def download_logs(log_filename):
     return send_from_directory(LOG_DIR, log_filename, as_attachment=True)
 
 if __name__ == '__main__':
-    database.init_db() 
+    database.init_db() # 确保表存在
     app.run(host='0.0.0.0', port=8080, threaded=True)

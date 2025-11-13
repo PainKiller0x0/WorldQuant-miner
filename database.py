@@ -153,7 +153,44 @@ def add_alpha(alpha_data):
         )
         db.add(new_alpha)
         return True
+# --- 在 database.py 末尾添加 ---
 
+def trim_alphas(limit=300):
+    """
+    修剪 Alpha 池，保留分数最高的 limit 个。
+    (注意：已提交的策略不应该被删除，即使分数低)
+    """
+    with get_db() as db:
+        # 1. 查询当前总数
+        total = db.query(func.count(Alpha.id)).filter(Alpha.is_submitted == False).scalar()
+        
+        if total <= limit:
+            return 0
+            
+        # 2. 找出需要删除的数量
+        to_delete_count = total - limit
+        
+        # 3. 找出分数最低的 N 个 ID (仅限未提交的)
+        # 使用 dashboard_score 逻辑的简化版: fitness
+        # (SQLite 不支持在 DELETE 中直接使用 LIMIT，所以分两步)
+        
+        subquery = db.query(Alpha.id).filter(Alpha.is_submitted == False)\
+            .order_by(Alpha.fitness.asc())\
+            .limit(to_delete_count)\
+            .all()
+            
+        ids_to_delete = [r[0] for r in subquery]
+        
+        if not ids_to_delete:
+            return 0
+            
+        # 4. 执行删除
+        # synchronizes_session=False 提高性能
+        db.query(Alpha).filter(Alpha.id.in_(ids_to_delete))\
+            .delete(synchronize_session=False)
+            
+        return len(ids_to_delete)
+    
 def mark_alpha_submitted(expr):
     with get_db() as db:
         alpha = db.query(Alpha).filter(Alpha.expression == expr).first()

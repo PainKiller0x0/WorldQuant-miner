@@ -20,7 +20,7 @@ import utils
 # --- v13.3.5: 结束 ---
 
 from wq_client import WorldQuant
-from llm_provider import LLMProvider
+from llm_provider import LLMProvider       # <--- 改成这样
 
 # --- v13.3.13: 版本号 ---
 CURRENT_GENERATOR_VERSION = "v13.3.13 (Producer I/O Storm Fix)"

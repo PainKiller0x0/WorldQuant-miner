@@ -38,7 +38,7 @@
 <div class="container-fluid px-4">
     <div class="card mb-4">
         <div class="card-header bg-body-tertiary">
-            <h5 class="mb-0"><i class="bi bi-sliders"></i> 舰队指挥中心设置 (v16.6)</h5>
+            <h5 class="mb-0"><i class="bi bi-sliders"></i> 舰队指挥中心设置 (v17.0)</h5>
         </div>
         <div class="card-body">
             <form id="settings-form">
@@ -127,12 +127,20 @@
                         <label for="producer_queue_full_sleep" class="form-label small">队列满休眠 (秒)</label>
                         <input type="number" class="form-control" id="producer_queue_full_sleep" name="producer_queue_full_sleep" min="0">
                     </div>
-                     <div class="col-md-6">
-                        <label for="hopeful_pool_max_size" class="form-label small">精英池上限 (个)</label>
-                        <input type="number" class="form-control" id="hopeful_pool_max_size" name="hopeful_pool_max_size" min="10">
+                    
+                    <div class="col-md-4">
+                        <label for="pool_limit_unsubmitted" class="form-label small text-primary fw-bold"><i class="bi bi-basket"></i> 潜力池上限 (未提交)</label>
+                        <input type="number" class="form-control" id="pool_limit_unsubmitted" name="pool_limit_unsubmitted" min="10" placeholder="默认 300">
+                        <div class="form-text" style="font-size: 0.75rem;">新生成的候选策略池大小。</div>
                     </div>
-                    <div class="col-md-6">
-                        <label for="evolver_wildcard_count" class="form-label small">Evolver 外卡池数量</label>
+                    <div class="col-md-4">
+                        <label for="pool_limit_submitted" class="form-label small text-success fw-bold"><i class="bi bi-archive"></i> 荣誉池上限 (已提交)</label>
+                        <input type="number" class="form-control" id="pool_limit_submitted" name="pool_limit_submitted" min="10" placeholder="默认 1000">
+                        <div class="form-text" style="font-size: 0.75rem;">保留已提交策略的历史记录数。</div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label for="evolver_wildcard_count" class="form-label small">Evolver 外卡数</label>
                         <input type="number" class="form-control" id="evolver_wildcard_count" name="evolver_wildcard_count" min="0">
                     </div>
                 </div>
@@ -174,25 +182,30 @@
 
         // 1. 加载配置
         fetch('/api/get_settings').then(r=>r.json()).then(data => {
-            // 基础参数
-            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'].forEach(k => { 
+            // 基础参数 (v17.0 新增双池参数)
+            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 
+             'pool_limit_unsubmitted', 'pool_limit_submitted', 'evolver_wildcard_count'].forEach(k => { 
                 if(form.elements[k]) form.elements[k].value = data[k]||0; 
             });
+            
+            // 兼容旧版配置: 如果 unsubmitted 未设置，回退到 hopeful_pool_max_size
+            if((!data.pool_limit_unsubmitted || data.pool_limit_unsubmitted == 0) && data.hopeful_pool_max_size) {
+                if(form.elements['pool_limit_unsubmitted']) form.elements['pool_limit_unsubmitted'].value = data.hopeful_pool_max_size;
+            }
+
             // WQ 看门狗
             if (data.wq_api_limiter) { 
                 ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'].forEach(k => { 
                     if(form.elements[k]) form.elements[k].value = data.wq_api_limiter[k]; 
                 }); 
             }
-            // API 舰队预算 (v16.6 适配)
+            // API 舰队预算
             if (data.llm_budgets) {
-                // Miner Fleet
                 if(data.llm_budgets.miner) form.elements['miner_daily_limit'].value = data.llm_budgets.miner.daily_limit;
                 if(data.llm_budgets.miner_backup_1) form.elements['miner_backup_1_limit'].value = data.llm_budgets.miner_backup_1.daily_limit;
                 if(data.llm_budgets.miner_backup_2 && form.elements['miner_backup_2_limit']) 
                     form.elements['miner_backup_2_limit'].value = data.llm_budgets.miner_backup_2.daily_limit;
                 
-                // Evolver Fleet
                 if(data.llm_budgets.evolver) form.elements['evolver_daily_limit'].value = data.llm_budgets.evolver.daily_limit;
                 if(data.llm_budgets.evolver_backup_1) form.elements['evolver_backup_1_limit'].value = data.llm_budgets.evolver_backup_1.daily_limit;
             }
@@ -203,31 +216,32 @@
             e.preventDefault();
             const data = { llm_budgets:{}, wq_api_limiter:{}, evolver_search_space:{} };
             
-            // 辅助保存函数
+            // 预算保存
             const saveBudget = (role) => {
                 const val = parseInt(form.elements[role + '_limit'].value);
                 if (!isNaN(val)) data.llm_budgets[role] = { daily_limit: val };
             };
-
-            // 保存所有已知的 Budget 字段
-            saveBudget('miner_daily'); // 注意前端ID转换: miner_daily_limit -> miner
-            saveBudget('miner_backup_1');
-            saveBudget('miner_backup_2');
-            saveBudget('evolver_daily'); // evolver_daily_limit -> evolver
-            saveBudget('evolver_backup_1');
+            saveBudget('miner_daily'); saveBudget('miner_backup_1'); saveBudget('miner_backup_2');
+            saveBudget('evolver_daily'); saveBudget('evolver_backup_1');
             
-            // 修正 ID 映射 (前端ID -> 后端Key)
+            // 修正 Key 映射
             if(data.llm_budgets.miner_daily) { data.llm_budgets.miner = data.llm_budgets.miner_daily; delete data.llm_budgets.miner_daily; }
             if(data.llm_budgets.evolver_daily) { data.llm_budgets.evolver = data.llm_budgets.evolver_daily; delete data.llm_budgets.evolver_daily; }
 
-            // 保存其他参数
-            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 'hopeful_pool_max_size', 'evolver_wildcard_count'].forEach(k => data[k]=parseInt(form.elements[k].value));
+            // 保存服务参数 (包括 v17.0 双池)
+            ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 
+             'pool_limit_unsubmitted', 'pool_limit_submitted', 'evolver_wildcard_count'].forEach(k => data[k]=parseInt(form.elements[k].value));
+            
+            // 兼容旧字段: 同步 pool_limit_unsubmitted 到 hopeful_pool_max_size 以防万一
+            data['hopeful_pool_max_size'] = data['pool_limit_unsubmitted'];
+
+            // WQ 参数
             ['wq_429_cooldown_seconds', 'max_tpm_limit', 'min_tpm_limit'].forEach(k => data.wq_api_limiter[k]=parseInt(form.elements[k].value));
             
             showMessage('warning', '正在保存...');
             fetch('/api/save_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
                 .then(r=>r.json()).then(res => {
-                    if(res.status==='success') showMessage('success', '配置已保存！预算参数即时生效。');
+                    if(res.status==='success') showMessage('success', '配置已保存！部分参数需重启生效。');
                     else showMessage('error', res.message);
                 }).catch(err => showMessage('error', err));
         });

@@ -12,6 +12,7 @@ services:
     environment:
       - WQ_USER_ID=${WQ_USER_ID}
       - WQ_API_KEY=${WQ_API_KEY}
+      - PYTHONDONTWRITEBYTECODE=1
     volumes:
       - ./logs:/app/logs
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
@@ -24,11 +25,11 @@ services:
       # --- v13.1: 修复 failure_log.json 找不到的 Bug ---
       - ./submission_failure_log.json:/app/submission_failure_log.json
       # --- v13.1: 修复结束 ---
-      
+      - ./llm_debug.py:/app/llm_debug.py:ro
       # --- v9.0 模块化修复 (已存在, v13.0 依赖此配置) ---
       - ./utils.py:/app/utils.py:ro
       - ./wq_client.py:/app/wq_client.py:ro
-      - ./llm_provider.py:/app/llm_provider.py:ro
+      - ./llm_fix.py:/app/llm_fix.py:ro
       # 添加这行:
       - ./hopeful_alphas.json.lock:/app/hopeful_alphas.json.lock
       # 添加这行:
@@ -37,7 +38,7 @@ services:
       - ./invalid_functions.json.lock:/app/invalid_functions.json.lock
       - ./wq_miner.db:/app/wq_miner.db  # <--- 新增数据库挂载
     command: >
-      sh -c "python -u alpha_generator_ollama.py
+      sh -c "rm -rf /app/__pycache__ && find . -name '*.pyc' -delete && python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}
       --api-key ${WQ_API_KEY}
       --batch-size 3

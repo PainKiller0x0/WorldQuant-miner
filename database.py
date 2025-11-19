@@ -1,4 +1,4 @@
-# --- database.py v15.0 (Database Core) ---
+# --- database.py v17.0 (Dual Pool & Auto-Clean) ---
 import os
 import json
 import logging
@@ -11,20 +11,16 @@ from contextlib import contextmanager
 DB_FILE = "wq_miner.db"
 DB_URL = f"sqlite:///{DB_FILE}"
 
-# 初始化
 logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 # --- 数据模型定义 ---
 
 class Alpha(Base):
-    """
-    存储所有生成的 Alpha (对应 hopeful_alphas.json)
-    """
     __tablename__ = 'alphas'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    expression = Column(Text, unique=True, nullable=False, index=True) # 表达式 (唯一)
+    expression = Column(Text, unique=True, nullable=False, index=True)
     
     # 性能指标
     fitness = Column(Float, default=0.0, index=True)
@@ -34,37 +30,21 @@ class Alpha(Base):
     margin = Column(Float, default=0.0)
     
     # 检查状态
-    checks_summary = Column(String(100)) # e.g., "10 PASS, 0 FAIL"
+    checks_summary = Column(String(100))
     pass_count = Column(Integer, default=0)
     fail_count = Column(Integer, default=0)
     
     # 状态标志
-    is_submitted = Column(Boolean, default=False, index=True)      # 是否已提交
-    is_failed_on_wq = Column(Boolean, default=False, index=True)   # 是否被标记为失败
-    failure_reason = Column(String(255), nullable=True)            # 失败原因
-    submitted_timestamp = Column(DateTime, nullable=True)          # 提交时间
+    is_submitted = Column(Boolean, default=False, index=True)
+    is_failed_on_wq = Column(Boolean, default=False, index=True)
+    failure_reason = Column(String(255), nullable=True)
+    submitted_timestamp = Column(DateTime, nullable=True)
     
     # 元数据
     created_at = Column(DateTime, default=datetime.utcnow)
-    raw_data = Column(JSON) # 存储原始的完整 JSON 数据 (备份用)
-
-    def to_dict(self):
-        return {
-            "expression": self.expression,
-            "fitness": self.fitness,
-            "sharpe": self.sharpe,
-            "returns": self.returns,
-            "turnover": self.turnover,
-            "checks_summary": self.checks_summary,
-            "timestamp": self.created_at.isoformat() if self.created_at else None,
-            "is_submitted": self.is_submitted,
-            "is_failed_on_wq": self.is_failed_on_wq,
-            "failure_reason": self.failure_reason,
-            "dashboard_score": self.calculate_score()
-        }
+    raw_data = Column(JSON)
 
     def calculate_score(self):
-        # 移植 Dashboard 的评分逻辑
         fit = self.fitness or 0
         sha = self.sharpe or 0
         trn = self.turnover or 0
@@ -72,12 +52,9 @@ class Alpha(Base):
         return fit + (pas * 0.2) + (abs(sha) * 0.3) - (trn * 0.1)
 
 class SystemConfig(Base):
-    """
-    存储系统配置 (替代 system_config.json)
-    """
     __tablename__ = 'system_config'
     
-    key = Column(String(50), primary_key=True) # e.g., "global_config"
+    key = Column(String(50), primary_key=True)
     value = Column(JSON, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -85,26 +62,17 @@ class SystemConfig(Base):
 
 engine = create_engine(
     DB_URL, 
-    echo=False, # Set True for debug SQL
-    connect_args={'check_same_thread': False} # SQLite specific for multithreading
+    echo=False, 
+    connect_args={'check_same_thread': False}
 )
 
-# 线程安全的 Session 工厂
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
 def init_db():
-    """初始化数据库表"""
     Base.metadata.create_all(bind=engine)
-    logger.info(f"Database initialized at {DB_FILE}")
 
 @contextmanager
 def get_db():
-    """
-    上下文管理器，用于安全地获取和关闭 Session
-    使用方法:
-    with get_db() as db:
-        db.query(...)
-    """
     session = SessionLocal()
     try:
         yield session
@@ -116,14 +84,12 @@ def get_db():
     finally:
         session.close()
 
-# --- 便捷操作函数 (供 utils.py 调用) ---
+# --- 操作函数 ---
 
 def add_alpha(alpha_data):
-    """插入一个新的 Alpha，如果存在则忽略或更新"""
     expr = alpha_data.get('expression')
     if not expr: return False
     
-    # 解析 checks
     checks = alpha_data.get('checks_summary', '')
     import re
     p_match = re.search(r'(\d+)\s+PASS', checks)
@@ -134,10 +100,9 @@ def add_alpha(alpha_data):
     perf = alpha_data.get('performance', {})
     
     with get_db() as db:
-        # Check exist
         existing = db.query(Alpha).filter(Alpha.expression == expr).first()
         if existing:
-            return False # 已存在
+            return False 
             
         new_alpha = Alpha(
             expression=expr,
@@ -153,44 +118,7 @@ def add_alpha(alpha_data):
         )
         db.add(new_alpha)
         return True
-# --- 在 database.py 末尾添加 ---
 
-def trim_alphas(limit=300):
-    """
-    修剪 Alpha 池，保留分数最高的 limit 个。
-    (注意：已提交的策略不应该被删除，即使分数低)
-    """
-    with get_db() as db:
-        # 1. 查询当前总数
-        total = db.query(func.count(Alpha.id)).filter(Alpha.is_submitted == False).scalar()
-        
-        if total <= limit:
-            return 0
-            
-        # 2. 找出需要删除的数量
-        to_delete_count = total - limit
-        
-        # 3. 找出分数最低的 N 个 ID (仅限未提交的)
-        # 使用 dashboard_score 逻辑的简化版: fitness
-        # (SQLite 不支持在 DELETE 中直接使用 LIMIT，所以分两步)
-        
-        subquery = db.query(Alpha.id).filter(Alpha.is_submitted == False)\
-            .order_by(Alpha.fitness.asc())\
-            .limit(to_delete_count)\
-            .all()
-            
-        ids_to_delete = [r[0] for r in subquery]
-        
-        if not ids_to_delete:
-            return 0
-            
-        # 4. 执行删除
-        # synchronizes_session=False 提高性能
-        db.query(Alpha).filter(Alpha.id.in_(ids_to_delete))\
-            .delete(synchronize_session=False)
-            
-        return len(ids_to_delete)
-    
 def mark_alpha_submitted(expr):
     with get_db() as db:
         alpha = db.query(Alpha).filter(Alpha.expression == expr).first()
@@ -209,7 +137,58 @@ def mark_alpha_failed(expr, reason):
             return True
         return False
 
+def trim_alphas(limit_unsubmitted=300, limit_submitted=1000):
+    """
+    v17.0: 双池修剪逻辑
+    1. 优先彻底清洗 'is_failed_on_wq' (提交失败) 的垃圾策略。
+    2. 分别检查 '未提交池' 和 '已提交池' 是否超标。
+    3. 超标则分别进行末位淘汰 (删除分数最低的)。
+    """
+    total_deleted = 0
+    with get_db() as db:
+        # 1. 自动清洗失败品 (Auto-Clean)
+        deleted_failed = db.query(Alpha).filter(Alpha.is_failed_on_wq == True).delete()
+        if deleted_failed > 0:
+            logger.info(f"[DB] 已自动清洗 {deleted_failed} 个提交失败的策略。")
+        total_deleted += deleted_failed
+        
+        # 2. 修剪 [未提交池] (Potential Pool)
+        count_unsub = db.query(func.count(Alpha.id)).filter(
+            Alpha.is_submitted == False, 
+            Alpha.is_failed_on_wq == False
+        ).scalar()
+        
+        if count_unsub > limit_unsubmitted:
+            to_del = count_unsub - limit_unsubmitted
+            # 找出最低分的 N 个
+            subquery = db.query(Alpha.id)\
+                .filter(Alpha.is_submitted == False)\
+                .filter(Alpha.is_failed_on_wq == False)\
+                .order_by(Alpha.fitness.asc())\
+                .limit(to_del)\
+                .all()
+            ids = [r[0] for r in subquery]
+            if ids:
+                db.query(Alpha).filter(Alpha.id.in_(ids)).delete(synchronize_session=False)
+                total_deleted += len(ids)
+
+        # 3. 修剪 [已提交池] (Honor Pool)
+        count_sub = db.query(func.count(Alpha.id)).filter(Alpha.is_submitted == True).scalar()
+        
+        if count_sub > limit_submitted:
+            to_del = count_sub - limit_submitted
+            subquery = db.query(Alpha.id)\
+                .filter(Alpha.is_submitted == True)\
+                .order_by(Alpha.fitness.asc())\
+                .limit(to_del)\
+                .all()
+            ids = [r[0] for r in subquery]
+            if ids:
+                db.query(Alpha).filter(Alpha.id.in_(ids)).delete(synchronize_session=False)
+                total_deleted += len(ids)
+                
+    return total_deleted
+
 if __name__ == "__main__":
-    # 测试初始化
     logging.basicConfig(level=logging.INFO)
     init_db()

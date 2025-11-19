@@ -1,4 +1,4 @@
-# --- utils.py v15.0 (Database Edition) ---
+# --- utils.py v17.0 (Dual Pool Config & DB Adapter) ---
 import logging
 import logging.handlers 
 import json
@@ -70,7 +70,15 @@ def _get_default_config():
         "miner_concurrency": 1,
         "evolver_concurrency": 1,
         "producer_queue_full_sleep": 10,
-        "hopeful_pool_max_size": 200,
+        
+        # v17.0: 双池上限默认值
+        "pool_limit_unsubmitted": 300,  # 潜力池 (未提交)
+        "pool_limit_submitted": 1000,   # 荣誉池 (已提交)
+        "evolver_wildcard_count": 50,   # 外卡池大小
+        
+        # 兼容旧字段 (作为未提交池的后备默认值)
+        "hopeful_pool_max_size": 300, 
+        
         "llm_budgets": {
             "miner": {"daily_limit": 3000, "used_today": 0, "last_used_date_utc": "2024-01-01"},
             "evolver": {"daily_limit": 1000, "used_today": 0, "last_used_date_utc": "2024-01-01"}
@@ -87,22 +95,19 @@ def _get_default_config():
         "evolver_search_space": {}
     }
 
-# --- Database Adapters (核心修改) ---
+# --- Database Adapters ---
 
 def load_hopeful_alphas_safe():
     """
     从 SQLite 数据库加载所有 Alphas。
-    为了兼容旧代码，这里返回一个 list of dicts。
     """
     try:
         with database.get_db() as db:
-            # 查询所有 Alpha 对象
             alphas = db.query(Alpha).all()
-            # 转换为旧代码习惯的 dict 格式，并还原 raw_data 中的额外字段
             result = []
             for a in alphas:
                 data = a.raw_data.copy() if a.raw_data else {}
-                # 确保关键字段从数据库列同步回来 (以防 raw_data 过期)
+                # 同步关键字段
                 data['expression'] = a.expression
                 data['checks_summary'] = a.checks_summary
                 if 'performance' not in data: data['performance'] = {}
@@ -117,14 +122,15 @@ def load_hopeful_alphas_safe():
         logger.error(f"[Utils-DB] 加载 Alphas 失败: {e}")
         return []
 
-# --- 修改 utils.py 中的 save_hopeful_alphas_safe ---
-
 def save_hopeful_alphas_safe(alphas_list):
+    """
+    v17.0: 增量入库 + 双池修剪
+    """
     if not isinstance(alphas_list, list): return False
     
     success_count = 0
     try:
-        # 1. 插入新策略
+        # 1. 入库
         for alpha_data in alphas_list:
             if database.add_alpha(alpha_data):
                 success_count += 1
@@ -132,13 +138,18 @@ def save_hopeful_alphas_safe(alphas_list):
         if success_count > 0:
             logger.info(f"[Utils-DB] 新增入库 {success_count} 条策略。")
             
-            # 2. [修复] 执行修剪 (读取配置中的上限)
+            # 2. 读取配置中的双池上限
             config = load_system_config()
-            limit = config.get("hopeful_pool_max_size", 300)
             
-            deleted = database.trim_alphas(limit)
+            # 优先用新字段，没有则回退到旧字段
+            limit_unsub = config.get("pool_limit_unsubmitted", config.get("hopeful_pool_max_size", 300))
+            limit_sub = config.get("pool_limit_submitted", 1000)
+            
+            # 3. 执行数据库修剪
+            deleted = database.trim_alphas(limit_unsub, limit_sub)
+            
             if deleted > 0:
-                logger.info(f"[Utils-DB] 精英池超限，已修剪 {deleted} 个低分策略 (保留 Top {limit})。")
+                logger.info(f"[Utils-DB] 双池整理完成，已清洗/修剪 {deleted} 条策略。")
                 
         return True
     except Exception as e:
@@ -162,4 +173,4 @@ def setup_logging(log_file):
     issue_handler = logging.handlers.TimedRotatingFileHandler(issue_log_path, when='D', interval=1, backupCount=30, encoding='utf-8')
     issue_handler.setLevel(logging.WARNING); issue_handler.setFormatter(log_formatter)
     logging.getLogger('').addHandler(issue_handler)
-    logger.info(f"日志系统初始化完成 (v15.0 DB-Edition)。")
+    logger.info(f"日志系统初始化完成 (v17.0 DB-Edition)。")

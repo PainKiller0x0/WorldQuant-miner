@@ -1,4 +1,4 @@
-# --- llm_provider.py v17.2.1.0 (Fix: Desperate Extraction Logic) ---
+# --- llm_provider.py v17.2.1.2 (Fix: Expanded Desperate Keywords for Miner) ---
 import logging
 import json
 import re
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class LLMProvider:
     def __init__(self, api_config_path):
-        logger.critical("🔥 [v17.2.1.0 DESPERATE] LLMProvider 升级：绝望提取模式已激活 (无视Markdown/分号，强行抓取公式)")
+        logger.critical("🔥 [v17.2.1.2 DESPERATE+] LLMProvider 升级：绝望词库已扩充 (覆盖 Miner 冷门算子)")
         
         self.api_config_path = api_config_path
         self.invalid_functions_file = "invalid_functions.json" 
@@ -183,6 +183,7 @@ class LLMProvider:
                             result_data = {"expression": idea, "settings": {}}
                     else:
                          logger.warning(f"[{client_key}] 无法提取代码，视为 Soft Failure")
+                         # [v17.2.1.2] 确保这里打印失败原文，方便调试
                          logger.warning(f"[{client_key}] 失败原文片段: {content[:100].replace(chr(10), ' ')}...")
                          soft_failure = True
             elif error is None:
@@ -240,9 +241,6 @@ class LLMProvider:
         except Exception as e:
             return None, str(e)
 
-# --- llm_provider.py v17.2.1.1 (Enhancement: Log Full Alpha in Desperate Mode) ---
-
-    # --- [v17.2.1.1] 优化日志打印的绝望模式 ---
     def _extract_expression(self, text):
         try:
             # 0. 移除思维链
@@ -287,8 +285,18 @@ class LLMProvider:
                 candidate = "\n".join(buffer)
                 return self._finalize_expression(candidate)
 
-            # 4. [v17.2.1.0] 绝望回溯 (Desperate Fallback)
-            wq_keywords = ['rank(', 'ts_', 'multiply(', 'divide(', 'add(', 'subtract(', 'correlation(', 'decay_linear(']
+            # 4. [v17.2.1.2] 绝望回溯 (Desperate Fallback + Expanded Dictionary)
+            # 扩充词库，覆盖 Miner 可能用到的冷门操作符
+            wq_keywords = [
+                # 核心
+                'rank(', 'ts_', 'multiply(', 'divide(', 'add(', 'subtract(', 'correlation(', 'decay_linear(',
+                # 统计/基础
+                'std_dev(', 'mean(', 'sum(', 'product(', 'max(', 'min(', 'abs(', 'sign(', 'power(', 'log(', 'zscore(',
+                # 逻辑/条件
+                'if_else(', 'signed_power(', 'sigmoid(', 'tanh(',
+                # 分组/行业
+                'group_', 'industry_', 'sector_'
+            ]
             
             first_kw_idx = len(text)
             found_any = False
@@ -306,7 +314,6 @@ class LLMProvider:
                     candidate = candidate[:last_paren+1]
                 
                 final_alpha = self._finalize_expression(candidate)
-                # [v17.2.1.1] 打印完整 Alpha，不再截断
                 logger.warning(f"🔥 触发绝望提取模式，成功抢救 Alpha:\n{final_alpha}")
                 return final_alpha
 
@@ -316,31 +323,16 @@ class LLMProvider:
             return None
 
     def _finalize_expression(self, code):
-        """清理提取出的代码片段"""
         code = code.strip()
-        
-        # 移除 "x =" 赋值形式
         if "=" in code:
             code = re.sub(r'^(?:alpha|expression|res|code)\s*=\s*', '', code, flags=re.IGNORECASE)
-        
-        # 移除列表编号 "1. "
         code = re.sub(r'^\d+\.\s*', '', code, flags=re.MULTILINE)
         
-        # [v17.2.1.0] 强制补分号 (最关键的一步)
         if not code.endswith(';'):
-            if ';' in code:
-                 # 如果中间有分号（可能是多行代码），截取到最后一个分号
-                 # 但如果是 Desperate 模式，这可能截断逻辑，所以仅当看起来像是结束时才截断
-                 pass 
-            # 无论如何，如果结尾不是分号，就补一个
             code += ';'
         
-        # 移除可能残留的反引号
         code = code.replace('`', '')
-        
-        # 压缩换行，变成单行
         code = " ".join(code.split())
-        
         return code
 
     def _parse_json(self, text):

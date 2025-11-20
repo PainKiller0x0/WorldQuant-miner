@@ -1,8 +1,9 @@
-# --- llm_provider.py v17.0.1.0 (Fix: Evolver Text Mode & Anti-Spin) ---
+# --- llm_provider.py v17.0.1.1 (Fix: Dynamic Blacklist Injection) ---
 import logging
 import json
 import re
 import random
+import os
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
 import time
@@ -12,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 class LLMProvider:
     def __init__(self, api_config_path):
+        logger.critical("🚑 [v17.0.1.1 PATCHED] 黑名单联动已修复：Prompt将包含动态禁词")
+        
         self.api_config_path = api_config_path
+        self.invalid_functions_file = "invalid_functions.json" # 指向黑名单文件
         self.clients = {} 
         self.models = {}
         self.circuit_breaker = {} 
@@ -20,8 +24,8 @@ class LLMProvider:
         self.CB_TIMEOUT = 600       
         self.backup_fleets = {'miner': [], 'evolver': []}
         
-        # [v17.0.1.0] 定义违禁词
-        self.FORBIDDEN_KEYWORDS = {
+        # 基础硬编码违禁词
+        self.BASE_FORBIDDEN = {
             'beta', 'indneutral_beta', 'cap', 'industry', 'sector', 'group', 
             'market', 'estu', 'fnd', 'sest', 'sf', 'mkt', 'sec'
         }
@@ -32,7 +36,7 @@ class LLMProvider:
             with open(self.api_config_path, 'r') as f: config = json.load(f)
             
             def load_role(role_key, config_key):
-                conf = config.get(config_key, config) # 兼容旧配置
+                conf = config.get(config_key, config) 
                 if not conf or 'api_key' not in conf: return
                 self.models[role_key] = conf.get('model_name')
                 self.clients[role_key] = OpenAI(api_key=conf.get('api_key'), base_url=conf.get('base_url'))
@@ -58,6 +62,25 @@ class LLMProvider:
         except Exception as e:
             logger.critical(f"初始化失败: {e}"); raise
 
+    def _get_dynamic_forbidden_keywords(self):
+        """
+        [v17.0.1.1] 动态读取黑名单文件
+        """
+        forbidden = self.BASE_FORBIDDEN.copy()
+        try:
+            if os.path.exists(self.invalid_functions_file):
+                with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content:
+                        data = json.loads(content)
+                        # 只要计数 >= 2 就加入警告列表，提前预防
+                        for func_name, count in data.items():
+                            if count >= 2: 
+                                forbidden.add(func_name)
+        except Exception:
+            pass 
+        return forbidden
+
     def _get_billing_date(self, client_key):
         model_name = self.models.get(client_key, "").lower()
         now_utc = datetime.now(timezone.utc)
@@ -66,7 +89,7 @@ class LLMProvider:
         elif any(x in model_name for x in ["doubao", "deepseek", "qwen", "glm", "yi-"]):
             return (now_utc + timedelta(hours=8)).strftime('%Y-%m-%d') + "_CN"
         else:
-            return (now_utc).strftime('%Y-%m-%d') + "_UTC"
+            return now_utc.strftime('%Y-%m-%d') + "_UTC"
 
     def _check_budget_availability(self, client_key):
         try:
@@ -84,18 +107,14 @@ class LLMProvider:
 
             budget = config["llm_budgets"][client_key]
             current_billing_date = self._get_billing_date(client_key)
-            last_record_date = budget.get("last_used_date_utc", "1970-01-01")
-
-            if current_billing_date != last_record_date:
+            
+            if current_billing_date != budget.get("last_used_date_utc", "1970-01-01"):
                 budget["used_today"] = 0
                 budget["last_used_date_utc"] = current_billing_date
                 save_system_config(config)
                 logger.info(f"[{client_key}] 新账单周期 ({current_billing_date})，预算已自动重置。")
 
-            if budget["used_today"] >= budget.get("daily_limit", 0):
-                return False 
-            
-            return True
+            return budget["used_today"] < budget.get("daily_limit", 0)
         except Exception as e:
             logger.error(f"[{client_key}] 预算检查错误: {e}")
             return False 
@@ -117,12 +136,10 @@ class LLMProvider:
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
-        # Miner 使用文本模式 (json_mode=False)
         return self._call_fleet('miner', prompt, json_mode=False)
 
     def generate_evolved_alpha_idea(self, base_obj, guidance=None):
         prompt = self._build_evolver_prompt(base_obj, guidance)
-        # [v17.0.1.0 改动] Evolver 改用文本模式，与 Miner 保持一致，避免 JSON 解析问题
         return self._call_fleet('evolver', prompt, json_mode=False)
 
     def _call_fleet(self, role, prompt, json_mode=False):
@@ -134,14 +151,12 @@ class LLMProvider:
             last_fail_time = cb.get('last_fail_time', 0)
             is_primary_node = (client_key == role)
 
-            # [v17.0.1.0] 熔断探测逻辑
             if fails >= self.CB_THRESHOLD:
                 if time.time() - last_fail_time < self.CB_TIMEOUT:
                     if is_primary_node: 
                         logger.info(f"[{role}] 主力熔断中，切换备用...")
                     continue
                 else:
-                    # 冷却结束，允许探测一次
                     pass 
 
             if not self._check_budget_availability(client_key):
@@ -153,15 +168,17 @@ class LLMProvider:
             soft_failure = False
 
             if content:
-                # [v17.0.1.0] 统一使用文本提取，兼容性更好
                 if json_mode:
                     result_data = self._parse_json(content)
                     if not result_data: soft_failure = True
                 else:
                     idea = self._extract_expression(content)
                     if idea:
-                        if self._contains_forbidden_keywords(idea):
-                            logger.warning(f"[{client_key}] ❌ 包含违禁词，视为 Soft Failure")
+                        # [v17.0.1.1] 本地二次检查动态黑名单
+                        dynamic_forbidden = self._get_dynamic_forbidden_keywords()
+                        tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', idea)
+                        if not set(tokens).isdisjoint(dynamic_forbidden):
+                            logger.warning(f"[{client_key}] ❌ 包含违禁词(本地拦截)，视为 Soft Failure")
                             soft_failure = True
                         else:
                             result_data = {"expression": idea, "settings": {}}
@@ -181,7 +198,6 @@ class LLMProvider:
                 return result_data
             
             else:
-                # [v17.0.1.0] 防死磕逻辑
                 if is_primary_node and soft_failure:
                     logger.warning(f"[{role}] 主力节点 Soft Failure，不计入熔断。😴 休眠 10s...")
                     time.sleep(10)
@@ -203,19 +219,12 @@ class LLMProvider:
         time.sleep(60)
         return None
 
-    def _contains_forbidden_keywords(self, code):
-        if not code: return False
-        # 使用集合交集检查
-        tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', code)
-        return not set(tokens).isdisjoint(self.FORBIDDEN_KEYWORDS)
-
     def _attempt_request(self, client_key, prompt, role):
         client = self.clients.get(client_key)
         model_name = self.models.get(client_key)
         if not client or not model_name: return None, "NO_CONFIG"
         
         extra_args = {}
-        # [v17.0.1.0] 移除 DeepSeek 特有参数，防止 400 错误
         
         try:
             resp = client.chat.completions.create(
@@ -233,25 +242,19 @@ class LLMProvider:
 
     def _extract_expression(self, text):
         try:
-            # 1. 移除思维链
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-            
-            # 2. 尝试提取 Markdown 代码块
             code_blocks = re.findall(r'```(?:python|c\+\+|code)?(.*?)```', text, re.DOTALL | re.IGNORECASE)
             if code_blocks:
                 candidate = code_blocks[-1].strip()
-                # 移除行号等杂质
                 candidate = re.sub(r'^\d+\.\s*', '', candidate, flags=re.MULTILINE) 
                 if ";" in candidate: return candidate.split(';')[0].strip() + ';'
                 return candidate.strip() + ';'
             
-            # 3. 尝试直接寻找分号行
             if ";" in text:
                 lines = text.split('\n')
                 for line in reversed(lines):
                     if ';' in line and len(line) > 5: 
                         cand = line.strip()
-                        # 移除前缀
                         cand = re.sub(r'^(?:Alpha|Expression|Code|Here)\s*[:=]\s*', '', cand, flags=re.IGNORECASE)
                         if "=" in cand: cand = cand.split("=")[-1].strip()
                         return cand.split(';')[0].strip() + ';'
@@ -259,7 +262,6 @@ class LLMProvider:
         except: return None
 
     def _parse_json(self, text):
-        # 保留此方法但不推荐使用
         try:
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
             if "```" in text: 
@@ -275,15 +277,18 @@ class LLMProvider:
 
     def _build_miner_prompt(self, fields, ops, guidance, failed):
         op_str = ", ".join(ops[:20])
-        forbidden_str = ", ".join(sorted(list(self.FORBIDDEN_KEYWORDS)))
+        # [v17.0.1.1] 动态获取最新违禁词
+        dynamic_forbidden = self._get_dynamic_forbidden_keywords()
+        forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
         return (f"Create a WorldQuant alpha using: {', '.join(fields)}. Ops: {op_str}. "
                 f"Output ONLY the expression code ending with ;. NO explanations. "
                 f"DO NOT USE: {forbidden_str}.")
 
     def _build_evolver_prompt(self, base_obj, guidance):
-        # [v17.0.1.0] Prompt 简化：不再要求 JSON，只要求代码
         base_expression = base_obj.get('expression')
-        forbidden_str = ", ".join(sorted(list(self.FORBIDDEN_KEYWORDS)))
+        # [v17.0.1.1] 动态获取最新违禁词
+        dynamic_forbidden = self._get_dynamic_forbidden_keywords()
+        forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
         
         prompt = (
             f"Role: WorldQuant Alpha Evolver.\n"
@@ -292,7 +297,7 @@ class LLMProvider:
             f"Instructions:\n"
             f"1. Output ONLY the new alpha expression code ending with ';'.\n"
             f"2. Do NOT output JSON. Do NOT output explanations.\n"
-            f"3. ❌ FORBIDDEN VARS: {forbidden_str}.\n"
+            f"3. ❌ STRICTLY FORBIDDEN: {forbidden_str}.\n"
             f"4. Try to introduce new operators or logic.\n"
         )
         return prompt

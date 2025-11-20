@@ -1,4 +1,4 @@
-# --- utils.py v17.0 (Dual Pool Config & DB Adapter) ---
+# --- utils.py v17.0.1.3 (Fix: Add Delete Capability) ---
 import logging
 import logging.handlers 
 import json
@@ -155,6 +155,31 @@ def save_hopeful_alphas_safe(alphas_list):
     except Exception as e:
         logger.error(f"[Utils-DB] 保存 Alphas 失败: {e}")
         return False
+
+def delete_alphas_safe(expressions):
+    """
+    [v17.0.1.3] 显式删除指定表达式的策略 (用于清洗垃圾/末位淘汰)
+    """
+    if not expressions or not isinstance(expressions, list):
+        return 0
+    
+    try:
+        with database.get_db() as db:
+            # 分批删除以防 SQL 语句过长 (虽然 SQLite 限制较高，但保险起见)
+            batch_size = 100
+            total_deleted = 0
+            for i in range(0, len(expressions), batch_size):
+                batch = expressions[i:i + batch_size]
+                # 使用 in_ 操作符批量删除
+                deleted = db.query(Alpha).filter(Alpha.expression.in_(batch)).delete(synchronize_session=False)
+                total_deleted += deleted
+            
+            if total_deleted > 0:
+                logger.info(f"[Utils-DB] 已从数据库物理删除 {total_deleted} 条策略。")
+            return total_deleted
+    except Exception as e:
+        logger.error(f"[Utils-DB] 删除 Alphas 失败: {e}")
+        return 0
 
 def setup_logging(log_file):
     log_dir = "logs"

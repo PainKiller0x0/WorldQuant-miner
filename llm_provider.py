@@ -1,4 +1,4 @@
-# --- llm_provider.py v17.0.1.1 (Fix: Dynamic Blacklist Injection) ---
+# --- llm_provider.py v17.1.0.0 (Feature: Restore Prompt Intelligence) ---
 import logging
 import json
 import re
@@ -7,16 +7,19 @@ import os
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
 import time
+from filelock import FileLock # [v17.0.1.2] 保持锁机制
 from utils import load_system_config, save_system_config
 
 logger = logging.getLogger(__name__)
 
 class LLMProvider:
     def __init__(self, api_config_path):
-        logger.critical("🚑 [v17.0.1.1 PATCHED] 黑名单联动已修复：Prompt将包含动态禁词")
+        logger.critical("🧠 [v17.1.0.0 INTELLIGENT] LLMProvider 升级：Prompt 智能增强 (反馈循环/战略指导) 已激活")
         
         self.api_config_path = api_config_path
-        self.invalid_functions_file = "invalid_functions.json" # 指向黑名单文件
+        self.invalid_functions_file = "invalid_functions.json" 
+        self.invalid_functions_lock_file = "invalid_functions.json.lock" # [v17.0.1.2] 锁文件
+        
         self.clients = {} 
         self.models = {}
         self.circuit_breaker = {} 
@@ -64,19 +67,20 @@ class LLMProvider:
 
     def _get_dynamic_forbidden_keywords(self):
         """
-        [v17.0.1.1] 动态读取黑名单文件
+        [v17.0.1.2] 动态读取黑名单文件 (带锁安全读取)
         """
         forbidden = self.BASE_FORBIDDEN.copy()
         try:
             if os.path.exists(self.invalid_functions_file):
-                with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    if content:
-                        data = json.loads(content)
-                        # 只要计数 >= 2 就加入警告列表，提前预防
-                        for func_name, count in data.items():
-                            if count >= 2: 
-                                forbidden.add(func_name)
+                lock = FileLock(self.invalid_functions_lock_file, timeout=5)
+                with lock:
+                    with open(self.invalid_functions_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if content:
+                            data = json.loads(content)
+                            for func_name, count in data.items():
+                                if count >= 2: 
+                                    forbidden.add(func_name)
         except Exception:
             pass 
         return forbidden
@@ -135,10 +139,12 @@ class LLMProvider:
             logger.error(f"[{client_key}] 扣费/状态更新失败: {e}")
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
+        # [v17.1.0.0] 恢复智能 Prompt 构建
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
         return self._call_fleet('miner', prompt, json_mode=False)
 
     def generate_evolved_alpha_idea(self, base_obj, guidance=None):
+        # [v17.1.0.0] 恢复智能 Prompt 构建
         prompt = self._build_evolver_prompt(base_obj, guidance)
         return self._call_fleet('evolver', prompt, json_mode=False)
 
@@ -174,7 +180,7 @@ class LLMProvider:
                 else:
                     idea = self._extract_expression(content)
                     if idea:
-                        # [v17.0.1.1] 本地二次检查动态黑名单
+                        # [v17.0.1.2] 本地二次检查动态黑名单
                         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
                         tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', idea)
                         if not set(tokens).isdisjoint(dynamic_forbidden):
@@ -275,29 +281,68 @@ class LLMProvider:
         except: pass
         return None
 
+    # --- [v17.1.0.0] 核心升级区域 开始 ---
+
     def _build_miner_prompt(self, fields, ops, guidance, failed):
-        op_str = ", ".join(ops[:20])
-        # [v17.0.1.1] 动态获取最新违禁词
+        op_str = ", ".join(ops[:25]) # 稍微增加展示的操作符数量
         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
         forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
-        return (f"Create a WorldQuant alpha using: {', '.join(fields)}. Ops: {op_str}. "
-                f"Output ONLY the expression code ending with ;. NO explanations. "
-                f"DO NOT USE: {forbidden_str}.")
+        
+        prompt = (
+            f"Role: WorldQuant Alpha Miner.\n"
+            f"Task: Generate a valid alpha expression using available data.\n"
+            f"Inputs: {', '.join(fields)}\n"
+            f"Operators: {op_str}...\n"
+        )
+        
+        # 1. 注入失败案例 (Feedback Loop)
+        if failed and isinstance(failed, list) and len(failed) > 0:
+            samples = random.sample(failed, min(3, len(failed)))
+            prompt += f"\n🚫 AVOID these failed patterns (Overfitting/High Correlation):\n"
+            for i, s in enumerate(samples):
+                prompt += f"   - {s}\n"
+
+        # 2. 注入战略指导 (Strategic Guidance)
+        if guidance and isinstance(guidance, list) and len(guidance) > 0:
+            prompt += f"\n💡 Strategy Tip: Try incorporating high-performing operators like: {', '.join(guidance)}.\n"
+
+        prompt += (
+            f"\nConstraints:\n"
+            f"1. Output ONLY the expression code ending with ';'.\n"
+            f"2. NO explanations. NO markdown wrapping needed, just the code.\n"
+            f"3. ❌ STRICTLY FORBIDDEN: {forbidden_str}.\n"
+            f"4. Make it mathematically diverse.\n"
+        )
+        return prompt
 
     def _build_evolver_prompt(self, base_obj, guidance):
         base_expression = base_obj.get('expression')
-        # [v17.0.1.1] 动态获取最新违禁词
         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
         forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
+        
+        # 1. 获取特殊指令 (来自 alpha_generator 的 High Self-Corr 警告)
+        special_instruction = base_obj.get('_special_guidance_high_corr', "")
         
         prompt = (
             f"Role: WorldQuant Alpha Evolver.\n"
             f"Task: Mutate the following alpha to improve performance.\n"
             f"Original Alpha: {base_expression}\n"
-            f"Instructions:\n"
+        )
+        
+        if special_instruction:
+            prompt += f"\n🔥 CRITICAL INSTRUCTION: {special_instruction}\n"
+        
+        # 2. 注入战略指导 (Strategic Guidance)
+        if guidance and isinstance(guidance, list) and len(guidance) > 0:
+            prompt += f"\n💡 Evolution Hint: Try introducing patterns like {', '.join(guidance)} to diversify logic.\n"
+        
+        prompt += (
+            f"\nInstructions:\n"
             f"1. Output ONLY the new alpha expression code ending with ';'.\n"
             f"2. Do NOT output JSON. Do NOT output explanations.\n"
             f"3. ❌ STRICTLY FORBIDDEN: {forbidden_str}.\n"
             f"4. Try to introduce new operators or logic.\n"
         )
         return prompt
+    
+    # --- [v17.1.0.0] 核心升级区域 结束 ---

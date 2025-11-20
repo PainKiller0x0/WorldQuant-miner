@@ -1,4 +1,4 @@
-# --- llm_provider.py v17.1.0.0 (Feature: Restore Prompt Intelligence) ---
+# --- llm_provider.py v17.2.1.0 (Fix: Desperate Extraction Logic) ---
 import logging
 import json
 import re
@@ -7,18 +7,18 @@ import os
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
 import time
-from filelock import FileLock # [v17.0.1.2] 保持锁机制
+from filelock import FileLock
 from utils import load_system_config, save_system_config
 
 logger = logging.getLogger(__name__)
 
 class LLMProvider:
     def __init__(self, api_config_path):
-        logger.critical("🧠 [v17.1.0.0 INTELLIGENT] LLMProvider 升级：Prompt 智能增强 (反馈循环/战略指导) 已激活")
+        logger.critical("🔥 [v17.2.1.0 DESPERATE] LLMProvider 升级：绝望提取模式已激活 (无视Markdown/分号，强行抓取公式)")
         
         self.api_config_path = api_config_path
         self.invalid_functions_file = "invalid_functions.json" 
-        self.invalid_functions_lock_file = "invalid_functions.json.lock" # [v17.0.1.2] 锁文件
+        self.invalid_functions_lock_file = "invalid_functions.json.lock"
         
         self.clients = {} 
         self.models = {}
@@ -27,7 +27,6 @@ class LLMProvider:
         self.CB_TIMEOUT = 600       
         self.backup_fleets = {'miner': [], 'evolver': []}
         
-        # 基础硬编码违禁词
         self.BASE_FORBIDDEN = {
             'beta', 'indneutral_beta', 'cap', 'industry', 'sector', 'group', 
             'market', 'estu', 'fnd', 'sest', 'sf', 'mkt', 'sec'
@@ -66,9 +65,6 @@ class LLMProvider:
             logger.critical(f"初始化失败: {e}"); raise
 
     def _get_dynamic_forbidden_keywords(self):
-        """
-        [v17.0.1.2] 动态读取黑名单文件 (带锁安全读取)
-        """
         forbidden = self.BASE_FORBIDDEN.copy()
         try:
             if os.path.exists(self.invalid_functions_file):
@@ -139,12 +135,10 @@ class LLMProvider:
             logger.error(f"[{client_key}] 扣费/状态更新失败: {e}")
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
-        # [v17.1.0.0] 恢复智能 Prompt 构建
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
         return self._call_fleet('miner', prompt, json_mode=False)
 
     def generate_evolved_alpha_idea(self, base_obj, guidance=None):
-        # [v17.1.0.0] 恢复智能 Prompt 构建
         prompt = self._build_evolver_prompt(base_obj, guidance)
         return self._call_fleet('evolver', prompt, json_mode=False)
 
@@ -180,7 +174,6 @@ class LLMProvider:
                 else:
                     idea = self._extract_expression(content)
                     if idea:
-                        # [v17.0.1.2] 本地二次检查动态黑名单
                         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
                         tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', idea)
                         if not set(tokens).isdisjoint(dynamic_forbidden):
@@ -190,6 +183,7 @@ class LLMProvider:
                             result_data = {"expression": idea, "settings": {}}
                     else:
                          logger.warning(f"[{client_key}] 无法提取代码，视为 Soft Failure")
+                         logger.warning(f"[{client_key}] 失败原文片段: {content[:100].replace(chr(10), ' ')}...")
                          soft_failure = True
             elif error is None:
                 logger.warning(f"[{client_key}] ❌ 空响应 (Empty Response)，视为 Soft Failure")
@@ -246,26 +240,108 @@ class LLMProvider:
         except Exception as e:
             return None, str(e)
 
+# --- llm_provider.py v17.2.1.1 (Enhancement: Log Full Alpha in Desperate Mode) ---
+
+    # --- [v17.2.1.1] 优化日志打印的绝望模式 ---
     def _extract_expression(self, text):
         try:
+            # 0. 移除思维链
             text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-            code_blocks = re.findall(r'```(?:python|c\+\+|code)?(.*?)```', text, re.DOTALL | re.IGNORECASE)
-            if code_blocks:
-                candidate = code_blocks[-1].strip()
-                candidate = re.sub(r'^\d+\.\s*', '', candidate, flags=re.MULTILINE) 
-                if ";" in candidate: return candidate.split(';')[0].strip() + ';'
-                return candidate.strip() + ';'
             
+            # 1. 标准 Markdown
+            code_blocks = re.findall(r'```(?:python|c\+\+|code|params)?(.*?)```', text, re.DOTALL | re.IGNORECASE)
+            if code_blocks:
+                return self._finalize_expression(code_blocks[-1])
+
+            # 2. 内联代码
+            inline_code = re.findall(r'`([^`]+)`', text)
+            if inline_code:
+                candidates = [c for c in inline_code if '(' in c and ')' in c]
+                if candidates:
+                    return self._finalize_expression(candidates[-1])
+
+            # 3. 分号回溯 (Golden Retriever)
             if ";" in text:
-                lines = text.split('\n')
+                last_semi_idx = text.rfind(';')
+                potential_raw = text[:last_semi_idx+1]
+                lines = potential_raw.split('\n')
+                buffer = []
+                stop_patterns = [
+                    r'alpha\s*[:=]', r'code\s*[:=]', r'expression\s*[:=]', 
+                    r'here\s*is', r'output\s*[:=]', r'formula\s*[:=]', r'result\s*[:=]'
+                ]
                 for line in reversed(lines):
-                    if ';' in line and len(line) > 5: 
-                        cand = line.strip()
-                        cand = re.sub(r'^(?:Alpha|Expression|Code|Here)\s*[:=]\s*', '', cand, flags=re.IGNORECASE)
-                        if "=" in cand: cand = cand.split("=")[-1].strip()
-                        return cand.split(';')[0].strip() + ';'
+                    hit_stop = False
+                    cleaned_line = line
+                    for pat in stop_patterns:
+                        match = re.search(pat, line, re.IGNORECASE)
+                        if match:
+                            cleaned_line = line[match.end():].strip()
+                            hit_stop = True
+                            break
+                    if hit_stop:
+                        if cleaned_line: buffer.insert(0, cleaned_line)
+                        break 
+                    buffer.insert(0, line)
+                    if len(buffer) > 20: break
+                candidate = "\n".join(buffer)
+                return self._finalize_expression(candidate)
+
+            # 4. [v17.2.1.0] 绝望回溯 (Desperate Fallback)
+            wq_keywords = ['rank(', 'ts_', 'multiply(', 'divide(', 'add(', 'subtract(', 'correlation(', 'decay_linear(']
+            
+            first_kw_idx = len(text)
+            found_any = False
+            for kw in wq_keywords:
+                idx = text.find(kw)
+                if idx != -1:
+                    found_any = True
+                    if idx < first_kw_idx:
+                        first_kw_idx = idx
+            
+            if found_any and first_kw_idx < len(text):
+                candidate = text[first_kw_idx:]
+                last_paren = candidate.rfind(')')
+                if last_paren != -1:
+                    candidate = candidate[:last_paren+1]
+                
+                final_alpha = self._finalize_expression(candidate)
+                # [v17.2.1.1] 打印完整 Alpha，不再截断
+                logger.warning(f"🔥 触发绝望提取模式，成功抢救 Alpha:\n{final_alpha}")
+                return final_alpha
+
             return None
-        except: return None
+        except Exception as e:
+            logger.warning(f"Extraction error: {e}")
+            return None
+
+    def _finalize_expression(self, code):
+        """清理提取出的代码片段"""
+        code = code.strip()
+        
+        # 移除 "x =" 赋值形式
+        if "=" in code:
+            code = re.sub(r'^(?:alpha|expression|res|code)\s*=\s*', '', code, flags=re.IGNORECASE)
+        
+        # 移除列表编号 "1. "
+        code = re.sub(r'^\d+\.\s*', '', code, flags=re.MULTILINE)
+        
+        # [v17.2.1.0] 强制补分号 (最关键的一步)
+        if not code.endswith(';'):
+            if ';' in code:
+                 # 如果中间有分号（可能是多行代码），截取到最后一个分号
+                 # 但如果是 Desperate 模式，这可能截断逻辑，所以仅当看起来像是结束时才截断
+                 pass 
+            # 无论如何，如果结尾不是分号，就补一个
+            code += ';'
+        
+        # 移除可能残留的反引号
+        code = code.replace('`', '')
+        
+        # 压缩换行，变成单行
+        code = " ".join(code.split())
+        
+        return code
 
     def _parse_json(self, text):
         try:
@@ -281,10 +357,8 @@ class LLMProvider:
         except: pass
         return None
 
-    # --- [v17.1.0.0] 核心升级区域 开始 ---
-
     def _build_miner_prompt(self, fields, ops, guidance, failed):
-        op_str = ", ".join(ops[:25]) # 稍微增加展示的操作符数量
+        op_str = ", ".join(ops[:25]) 
         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
         forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
         
@@ -295,14 +369,12 @@ class LLMProvider:
             f"Operators: {op_str}...\n"
         )
         
-        # 1. 注入失败案例 (Feedback Loop)
         if failed and isinstance(failed, list) and len(failed) > 0:
             samples = random.sample(failed, min(3, len(failed)))
             prompt += f"\n🚫 AVOID these failed patterns (Overfitting/High Correlation):\n"
             for i, s in enumerate(samples):
                 prompt += f"   - {s}\n"
 
-        # 2. 注入战略指导 (Strategic Guidance)
         if guidance and isinstance(guidance, list) and len(guidance) > 0:
             prompt += f"\n💡 Strategy Tip: Try incorporating high-performing operators like: {', '.join(guidance)}.\n"
 
@@ -320,7 +392,6 @@ class LLMProvider:
         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
         forbidden_str = ", ".join(sorted(list(dynamic_forbidden)))
         
-        # 1. 获取特殊指令 (来自 alpha_generator 的 High Self-Corr 警告)
         special_instruction = base_obj.get('_special_guidance_high_corr', "")
         
         prompt = (
@@ -332,7 +403,6 @@ class LLMProvider:
         if special_instruction:
             prompt += f"\n🔥 CRITICAL INSTRUCTION: {special_instruction}\n"
         
-        # 2. 注入战略指导 (Strategic Guidance)
         if guidance and isinstance(guidance, list) and len(guidance) > 0:
             prompt += f"\n💡 Evolution Hint: Try introducing patterns like {', '.join(guidance)} to diversify logic.\n"
         
@@ -344,5 +414,3 @@ class LLMProvider:
             f"4. Try to introduce new operators or logic.\n"
         )
         return prompt
-    
-    # --- [v17.1.0.0] 核心升级区域 结束 ---

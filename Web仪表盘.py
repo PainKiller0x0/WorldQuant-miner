@@ -1,4 +1,4 @@
-# --- Web仪表盘.py v17.0 (Dual Pool Support & Full Features) ---
+# --- Web仪表盘.py v17.1 (Fix: Pagination & Config Fallback) ---
 from flask import Flask, render_template, jsonify, send_from_directory, request, make_response
 import json
 import os
@@ -12,9 +12,9 @@ from datetime import datetime, timezone, timedelta
 import utils
 import database
 from database import Alpha, get_db
-from sqlalchemy import func, case
+from sqlalchemy import func, case, desc
 
-CURRENT_DASHBOARD_VERSION = "v17.0 (Dual Pool Architecture)"
+CURRENT_DASHBOARD_VERSION = "v17.1 (Display Optimization)"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ def get_hopeful_alphas_stats():
               "total_submitted_count": 0, "all_alphas": [] }
     try:
         with get_db() as db:
+            # 1. 基础统计 (针对全量数据)
             total_count = db.query(func.count(Alpha.id)).scalar()
             stats['count'] = total_count
             
@@ -56,8 +57,10 @@ def get_hopeful_alphas_stats():
             stats['successfully_submitted_count'] = db.query(func.count(Alpha.id)).filter(Alpha.is_submitted == True).scalar()
             stats['total_submitted_count'] = stats['successfully_submitted_count'] + db.query(func.count(Alpha.id)).filter(Alpha.is_failed_on_wq == True).scalar()
 
-            # 获取列表 (暂全量返回)
-            all_alphas = db.query(Alpha).all()
+            # 2. 列表获取 (限制返回数量，防止前端卡死)
+            # [v17.1] 优化：只返回 Fitness 最高的 300 条
+            limit_count = 300 
+            all_alphas = db.query(Alpha).order_by(desc(Alpha.fitness)).limit(limit_count).all()
             
             processed_list = []
             for a in all_alphas:
@@ -89,6 +92,9 @@ def get_hopeful_alphas_stats():
                 })
             
             stats['all_alphas'] = processed_list
+            # 告诉前端这只是部分数据
+            if total_count > limit_count:
+                logger.info(f"[Dashboard] DB包含 {total_count} 条策略，仅展示 Top {limit_count}。")
 
     except Exception as e:
         logger.error(f"[Stats] DB Error: {e}", exc_info=True)
@@ -198,7 +204,6 @@ def status():
         active_nodes = config.get("active_nodes", {}) 
         wq_limiter = config.get("wq_api_limiter", {})
         
-        # 智能获取当前活跃节点的预算
         def get_active_budget(role_prefix):
             active_key = active_nodes.get(role_prefix, role_prefix)
             budget_data = llm_budgets.get(active_key, {})
@@ -214,6 +219,11 @@ def status():
         cd_time = wq_limiter.get("wq_429_cooldown_seconds", 60)
         cd_rem = max(0, round(cd_time - (now - last_fail))) if now - last_fail < cd_time else 0
         
+        # [v17.1] 修复 N/A 显示问题
+        tpm_limit = wq_limiter.get("current_tpm_limit")
+        if tpm_limit is None:
+             tpm_limit = 60 
+        
         data["watchdog_status"] = {
             "llm_budget_used": miner_used, 
             "llm_budget_limit": miner_limit,
@@ -223,7 +233,7 @@ def status():
             "evolver_budget_used": evolver_used,
             "evolver_budget_limit": evolver_limit,
             "evolver_active_node": evolver_key,
-            "wq_current_tpm_limit": wq_limiter.get("current_tpm_limit", "N/A"),
+            "wq_current_tpm_limit": tpm_limit,
             "wq_cooldown_status": f"IN_COOLDOWN ({cd_rem}s)" if cd_rem > 0 else "OK",
             "wq_cooldown_remaining_sec": cd_rem
         }
@@ -247,27 +257,20 @@ def save_settings():
     try:
         current = utils.load_system_config()
         new_data = request.json
-        
-        # v17.0: 支持新的整型参数
         int_keys = ['miner_concurrency', 'evolver_concurrency', 'producer_queue_full_sleep', 
                     'pool_limit_unsubmitted', 'pool_limit_submitted', 'evolver_wildcard_count',
                     'hopeful_pool_max_size']
-        
         for k in int_keys:
             if k in new_data:
                 try: current[k] = int(new_data[k])
                 except: pass
-
-        # 递归更新其他字段 (budgets 等)
         def update_recursive(d, u):
             for k, v in u.items():
                 if isinstance(v, dict): 
-                    # v17.0 修复: 如果目标不存在，先初始化为空字典
                     if k not in d: d[k] = {}
                     d[k] = update_recursive(d.get(k, {}), v)
                 else: d[k] = v
             return d
-            
         update_recursive(current, new_data)
         utils.save_system_config(current)
         return jsonify(status='success', message='配置已保存')
@@ -288,12 +291,13 @@ def mark_failed():
 def get_pending_alphas():
     try:
         with get_db() as db:
+            # [v17.1] Pending 页面也做限制，防止未提交的太多
             pendings = db.query(Alpha).filter(
                 Alpha.pass_count >= 7,
                 Alpha.fail_count == 0,
                 Alpha.is_submitted == False,
                 Alpha.is_failed_on_wq == False
-            ).all()
+            ).limit(500).all()
             result = []
             for a in pendings:
                 ts_str = (a.created_at + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S') if a.created_at else "N/A"

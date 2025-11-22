@@ -1,4 +1,4 @@
-# --- alpha_generator_ollama.py v13.3.16 (Dynamic Sampling) ---
+# --- alpha_generator_ollama.py v18.1 (Debug Import) ---
 import argparse
 import logging
 import json
@@ -15,10 +15,24 @@ import queue
 from filelock import FileLock 
 import utils 
 from wq_client import WorldQuant
-from llm_provider import LLMProvider       
+from llm_provider import LLMProvider
 
-CURRENT_GENERATOR_VERSION = "v13.3.16 (Dynamic Sampling)"
 logger = logging.getLogger(__name__)
+
+# [v18.1] 增强调试信息的导入逻辑
+LOCAL_LLM_AVAILABLE = False
+try:
+    import torch 
+    from llm_local import LocalLLM
+    LOCAL_LLM_AVAILABLE = True
+    logger.info("✅ [Import] 成功导入 llm_local 模块。")
+except ImportError as e:
+    logger.critical(f"❌ [Import] 无法导入本地模型模块: {e}")
+    logger.warning("⚠️ 系统将回退到仅使用在线 API 模式。")
+except Exception as e:
+    logger.critical(f"❌ [Import] 发生意外错误: {e}")
+
+CURRENT_GENERATOR_VERSION = "v18.1 (Miner-Zero Debug)"
 INVALID_FUNCTIONS_FILE = "invalid_functions.json"
 BLACKLIST_MAX_STRIKES = 3 
 SUBMISSION_FAILURE_LOG_FILE = "submission_failure_log.json"
@@ -29,7 +43,6 @@ def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
     if match:
         params = match.group(2).split(',')
         if len(params) == 1 and not params[0].strip().isdigit():
-            logger.warning(f"本地预检失败: Alpha '{alpha_code}' 中的函数 '{match.group(0)}' 可能缺少 lookback 参数。已拒绝。")
             return True
     return False
 
@@ -40,6 +53,22 @@ class AlphaGenerator:
         try:
             self.llm = LLMProvider(api_config_path=api_config_path)
         except Exception as e: logger.critical(f"初始化 LLMProvider 失败: {e}"); raise
+        
+        self.local_llm = None
+        if LOCAL_LLM_AVAILABLE:
+            logger.info("[Init] 检测到 llm_local 模块，尝试加载本地模型...")
+            if os.path.exists("./local_model/miner_zero.pth"):
+                try:
+                    self.local_llm = LocalLLM("./local_model")
+                    if self.local_llm.model is None:
+                        logger.warning("[Init] 本地模型加载失败 (Model is None)，回退在线 API。")
+                        self.local_llm = None
+                except Exception as e:
+                    logger.error(f"[Init] 本地模型初始化异常: {e}", exc_info=True)
+                    self.local_llm = None
+            else:
+                logger.warning("[Init] 未找到 ./local_model/miner_zero.pth，跳过本地模型加载。")
+        
         self.tested_alphas_logfile = "tested_alphas_log.json"
         self.purged_alphas_archive_file = "purged_alphas_archive.json"
         self.submission_failure_log_file = SUBMISSION_FAILURE_LOG_FILE
@@ -92,7 +121,11 @@ class AlphaGenerator:
                     content = f.read()
                     if not content: return set()
                     data = json.loads(content)
-                    return set(item.get('expression') for item in data if item.get('expression'))
+                    # [Fix] 确保返回 set
+                    return set(item.get('expression') for item in data if isinstance(item, dict) and item.get('expression'))
+            except (json.JSONDecodeError, IOError): return set()
+            try:
+                with open(self.tested_alphas_logfile, 'r', encoding='utf-8') as f: content = f.read(); return json.loads(content) if content else set()
             except (json.JSONDecodeError, IOError) as e: return set()
 
     def load_submission_failures(self):
@@ -257,7 +290,7 @@ class AlphaGenerator:
             k_remaining = min(remaining_needed, len(remaining_pool))
             if k_remaining > 0: evolution_seeds.extend(random.sample(remaining_pool, k_remaining))
         logger.info(f"策略导师将从 {len(self.hopeful_alphas_cache)} 个精英策略中学习模式。")
-        logger.info(f"已抽取 {len(evolution_seeds)} 个种子 (目标: {elite_count} 精英, {wild_card_count} 外卡 => 实际: {k_elite} 精英, {k_wild} 外卡) 作为本轮进化父本。")
+        logger.info(f"已抽取 {len(evolution_seeds)} 个种子作为本轮进化父本。")
         return evolution_seeds
 
     def analyze_successful_patterns(self, top_k_pool=100, sample_size=7):
@@ -278,10 +311,27 @@ class AlphaGenerator:
             selected_guidance.append(chosen_op)
             try: idx = temp_ops.index(chosen_op); temp_ops.pop(idx); temp_weights.pop(idx)
             except ValueError: break
-        logger.info(f"策略导师分析完成: 从 Top {len(operators)} 模式池中，加权随机抽取 {len(selected_guidance)} 个 *唯一* 指导: {selected_guidance}")
+        logger.info(f"策略导师分析完成: 加权随机抽取 {len(selected_guidance)} 个 *唯一* 指导: {selected_guidance}")
         return selected_guidance
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
+        # [v18] 优先使用本地模型 (如果配置开启且模型可用)
+        config = utils.load_system_config()
+        use_local = config.get("miner_use_local_model", True)
+        
+        if use_local and self.local_llm:
+            prompt_templates = [
+                "Generate a WorldQuant alpha expression.",
+                "Write a valid alpha factor using standard operators.",
+                "Create a financial trading signal expression."
+            ]
+            prompt = random.choice(prompt_templates)
+            alpha_code = self.local_llm.generate(prompt, temp=1.2)
+            if alpha_code:
+                return {"expression": alpha_code, "settings": {}}
+            else:
+                logger.warning("[Miner] 本地模型生成失败，回退到在线 API。")
+
         result = self.llm.generate_alpha_idea(fields, operators, guidance, failed_examples)
         if result == "BUDGET_EXHAUSTED": logger.warning("[AlphaGenerator] BUDGET_EXHAUSTED (Discover)。"); return "BUDGET_EXHAUSTED"
         if result == "RATE_LIMIT": logger.warning("[AlphaGenerator] RATE_LIMIT (Discover)。"); return "RATE_LIMIT"
@@ -346,8 +396,8 @@ class AlphaGenerator:
 
     def save_hopeful_reports(self, new_hopeful_reports, max_pool_size=None):
         if max_pool_size is None:
-            try: config = utils.load_system_config(); max_pool_size = int(config.get("hopeful_pool_max_size", 20000)) 
-            except Exception as e: logger.error(f"[Hopeful Save] 配置读取失败: {e}"); max_pool_size = 20000 
+            try: config = utils.load_system_config(); max_pool_size = int(config.get("hopeful_pool_max_size", 200)) 
+            except Exception as e: logger.error(f"[Hopeful Save] 配置读取失败: {e}"); max_pool_size = 200 
         existing_reports = utils.load_hopeful_alphas_safe()
         combined_reports = existing_reports + new_hopeful_reports
         purged_reports = []; archived_reports = []; unique_reports_map = {}
@@ -453,11 +503,9 @@ class AlphaGenerator:
 
                 self.load_submission_failures()
                 if mode == 'evolve':
-                    # [v17.4.0] 动态读取采样参数
                     sample_size = config.get("evolver_sample_size", 50)
                     wild_count = config.get("evolver_wildcard_size", 10)
                     pool_size = config.get("evolver_guidance_pool_size", 100)
-                    
                     evolution_seeds = self.load_evolution_seeds(total_sample_size=sample_size, wild_card_count=wild_count)
                     if not evolution_seeds: mode = 'discover'; logger.warning("无进化种子，切换至 Discover 模式。")
                     else: strategic_guidance = self.analyze_successful_patterns(top_k_pool=pool_size)
@@ -487,7 +535,7 @@ class AlphaGenerator:
             except Exception as e: logger.critical(f"生产者错误: {e}", exc_info=True); time.sleep(60)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Alpha Generator v13.3.16 (Dynamic Sampling)') 
+    parser = argparse.ArgumentParser(description='Alpha Generator v18.1 (Miner-Zero Debug)') 
     parser.add_argument('--user-id', type=str, required=True); parser.add_argument('--api-key', type=str, required=True)
     parser.add_argument('--batch-size', type=int, default=5); parser.add_argument('--api-config-path', type=str, default="api_config.json")
     parser.add_argument('--mode', type=str, default='discover', choices=['discover', 'evolve']); parser.add_argument('--log-file', type=str, default='alpha_generator.log')

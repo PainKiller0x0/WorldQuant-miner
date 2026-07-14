@@ -1,6 +1,10 @@
+use crate::domain::AlphaMetrics;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use reqwest::{header::LOCATION, Client, StatusCode};
+use reqwest::{
+    header::{LOCATION, RETRY_AFTER},
+    Client, StatusCode, Url,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -18,6 +22,9 @@ pub struct SimulationResult {
 pub trait WorldQuantGateway: Send + Sync {
     async fn operators(&self) -> Result<Vec<String>>;
     async fn simulate(&self, expression: &str, settings: Value) -> Result<SimulationResult>;
+    async fn find_unsubmitted(&self, metrics: &AlphaMetrics) -> Result<Vec<Value>>;
+    async fn alpha(&self, alpha_id: &str) -> Result<Value>;
+    async fn check_submission(&self, alpha_id: &str) -> Result<Value>;
     async fn submit(&self, alpha_id: &str) -> Result<Value>;
 }
 
@@ -41,6 +48,11 @@ struct TokenBucket {
 
 impl LiveWorldQuant {
     pub fn new(user_id: String, api_key: String) -> Result<Self> {
+        let tpm = std::env::var("WQ_TPM")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(15)
+            .clamp(1, 60);
         Ok(Self {
             client: Client::builder()
                 .cookie_store(true)
@@ -54,7 +66,7 @@ impl LiveWorldQuant {
             request_lock: Arc::new(Mutex::new(())),
             limiter: Arc::new(Mutex::new(TokenBucket {
                 timestamps: Vec::new(),
-                tpm: 60,
+                tpm,
                 last_429: None,
             })),
         })
@@ -111,7 +123,7 @@ impl LiveWorldQuant {
         }
     }
 
-    async fn request(
+    async fn request_unchecked(
         &self,
         method: reqwest::Method,
         url: String,
@@ -131,7 +143,19 @@ impl LiveWorldQuant {
         if response.status() == StatusCode::TOO_MANY_REQUESTS {
             self.limiter.lock().await.last_429 = Some(Instant::now());
         }
-        Ok(response.error_for_status()?)
+        Ok(response)
+    }
+
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        url: String,
+        body: Option<Value>,
+    ) -> Result<reqwest::Response> {
+        Ok(self
+            .request_unchecked(method, url, body)
+            .await?
+            .error_for_status()?)
     }
 }
 
@@ -236,18 +260,144 @@ impl WorldQuantGateway for LiveWorldQuant {
         }
     }
 
-    async fn submit(&self, alpha_id: &str) -> Result<Value> {
-        let value = self
-            .request(
-                reqwest::Method::POST,
-                format!("{}/alphas/{}/submit", self.base_url, alpha_id),
-                None,
-            )
+    async fn find_unsubmitted(&self, metrics: &AlphaMetrics) -> Result<Vec<Value>> {
+        let mut url = Url::parse(&format!("{}/users/self/alphas", self.base_url))?;
+        url.query_pairs_mut()
+            .append_pair("limit", "20")
+            .append_pair("offset", "0")
+            .append_pair("status", "UNSUBMITTED")
+            .append_pair("order", "-dateCreated")
+            .append_pair("is.sharpe", &metrics.sharpe.to_string())
+            .append_pair("is.returns", &metrics.returns.to_string())
+            .append_pair("is.turnover", &metrics.turnover.to_string());
+        let value: Value = self
+            .request(reqwest::Method::GET, url.to_string(), None)
             .await?
             .json()
-            .await?;
-        Ok(value)
+            .await
+            .context("parse unsubmitted alpha lookup")?;
+        Ok(value
+            .get("results")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default())
     }
+
+    async fn alpha(&self, alpha_id: &str) -> Result<Value> {
+        self.request(
+            reqwest::Method::GET,
+            format!("{}/alphas/{}", self.base_url, alpha_id),
+            None,
+        )
+        .await?
+        .json()
+        .await
+        .context("parse alpha detail")
+    }
+
+    async fn check_submission(&self, alpha_id: &str) -> Result<Value> {
+        let url = format!("{}/alphas/{}/check", self.base_url, alpha_id);
+        let started = Instant::now();
+        loop {
+            if started.elapsed() > Duration::from_secs(120) {
+                return Err(anyhow!("submission check timed out for {alpha_id}"));
+            }
+            let response = self
+                .request_unchecked(reqwest::Method::GET, url.clone(), None)
+                .await?;
+            if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                tokio::time::sleep(retry_after(&response, 60)).await;
+                continue;
+            }
+            let response = response.error_for_status()?;
+            let retry = response
+                .headers()
+                .get(RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<f64>().ok())
+                .map(Duration::from_secs_f64);
+            let bytes = response.bytes().await?;
+            let value = if bytes.is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_slice(&bytes).context("parse submission check response")?
+            };
+            if let Some(wait) = retry {
+                tokio::time::sleep(wait.max(Duration::from_secs(1))).await;
+                continue;
+            }
+            let detail = self.alpha(alpha_id).await?;
+            if has_pending_checks(&detail) {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
+            return Ok(if detail.is_null() { value } else { detail });
+        }
+    }
+
+    async fn submit(&self, alpha_id: &str) -> Result<Value> {
+        let url = format!("{}/alphas/{}/submit", self.base_url, alpha_id);
+        let response = self
+            .request_unchecked(reqwest::Method::POST, url.clone(), None)
+            .await?;
+        if response.status() == StatusCode::CONFLICT {
+            return Ok(json!({"status":"already_submitted","alpha_id":alpha_id}));
+        }
+        if !response.status().is_success() {
+            return Err(anyhow!("alpha submit returned {}", response.status()));
+        }
+
+        let started = Instant::now();
+        loop {
+            if started.elapsed() > Duration::from_secs(1200) {
+                return Err(anyhow!("submission timed out for {alpha_id}"));
+            }
+            let response = self
+                .request_unchecked(reqwest::Method::GET, url.clone(), None)
+                .await?;
+            if response.status() == StatusCode::NOT_FOUND {
+                return Ok(json!({"status":"submitted","alpha_id":alpha_id}));
+            }
+            if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                tokio::time::sleep(retry_after(&response, 60)).await;
+                continue;
+            }
+            let response = response.error_for_status()?;
+            let bytes = response.bytes().await?;
+            if bytes.is_empty() {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
+            let value: Value =
+                serde_json::from_slice(&bytes).context("parse submission response")?;
+            return Ok(value);
+        }
+    }
+}
+
+fn retry_after(response: &reqwest::Response, default_seconds: u64) -> Duration {
+    response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<f64>().ok())
+        .map(Duration::from_secs_f64)
+        .unwrap_or_else(|| Duration::from_secs(default_seconds))
+        .max(Duration::from_secs(1))
+}
+
+fn has_pending_checks(detail: &Value) -> bool {
+    detail
+        .get("is")
+        .and_then(|value| value.get("checks"))
+        .or_else(|| detail.get("checks"))
+        .and_then(Value::as_array)
+        .map(|checks| {
+            checks
+                .iter()
+                .any(|check| check.get("result").and_then(Value::as_str) == Some("PENDING"))
+        })
+        .unwrap_or(true)
 }
 
 #[derive(Default)]
@@ -265,7 +415,32 @@ impl WorldQuantGateway for FakeWorldQuant {
             data: json!({"regular":{"code":expression},"fake":true}),
         })
     }
+    async fn find_unsubmitted(&self, _metrics: &AlphaMetrics) -> Result<Vec<Value>> {
+        Ok(Vec::new())
+    }
+    async fn alpha(&self, alpha_id: &str) -> Result<Value> {
+        Ok(json!({"id":alpha_id,"status":"UNSUBMITTED"}))
+    }
+    async fn check_submission(&self, alpha_id: &str) -> Result<Value> {
+        Ok(json!({"status":"checked","alpha_id":alpha_id}))
+    }
     async fn submit(&self, alpha_id: &str) -> Result<Value> {
         Ok(json!({"status":"submitted","alpha_id":alpha_id}))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_pending_checks;
+    use serde_json::json;
+
+    #[test]
+    fn pending_check_detection_reads_is_checks() {
+        assert!(has_pending_checks(&json!({
+            "is":{"checks":[{"name":"SELF_CORRELATION","result":"PENDING"}]}
+        })));
+        assert!(!has_pending_checks(&json!({
+            "is":{"checks":[{"name":"SELF_CORRELATION","result":"PASS"}]}
+        })));
     }
 }

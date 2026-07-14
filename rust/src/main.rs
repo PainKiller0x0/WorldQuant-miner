@@ -40,6 +40,12 @@ enum Command {
     Submit {
         #[arg(long, default_value_t = 10)]
         limit: i64,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        auto_submit: bool,
+        #[arg(long, default_value_t = 4)]
+        daily_limit: i64,
     },
 }
 
@@ -117,15 +123,28 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Command::Submit { limit } => {
+        Command::Submit {
+            limit,
+            dry_run,
+            auto_submit,
+            daily_limit,
+        } => {
             let worldquant: Arc<dyn WorldQuantGateway> =
                 if std::env::var("WQ_FAKE").ok().as_deref() == Some("1") {
                     Arc::new(FakeWorldQuant)
                 } else {
                     Arc::new(LiveWorldQuant::new(config.wq_user_id, config.wq_api_key)?)
                 };
-            let submitted = workflow::submit_pending(store, worldquant, limit).await?;
-            println!("{}", serde_json::json!({"submitted":submitted}));
+            let result = workflow::process_submissions(
+                store,
+                worldquant,
+                limit.max(1),
+                dry_run,
+                auto_submit,
+                daily_limit.max(0),
+            )
+            .await?;
+            println!("{}", serde_json::to_string(&result)?);
         }
     }
     Ok(())

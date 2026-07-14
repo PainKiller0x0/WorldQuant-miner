@@ -8,6 +8,7 @@ Type=simple
 WorkingDirectory=/root/worldquant-miner
 EnvironmentFile=/root/worldquant-miner/.env
 Environment=WQ_ROOT=/root/worldquant-miner
+Environment=WQ_TPM=10
 ExecStart=/usr/local/bin/worldquant-miner-rs run both --interval-secs 60
 Restart=on-failure
 RestartSec=10

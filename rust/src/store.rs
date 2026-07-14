@@ -87,14 +87,54 @@ impl AlphaStore {
         .context("database simulation state task")?
     }
 
-    pub async fn get_unsubmitted(&self, limit: i64) -> Result<Vec<AlphaRecord>> {
+    pub async fn get_submission_candidates(
+        &self,
+        limit: i64,
+        include_ready: bool,
+        linked: Option<bool>,
+    ) -> Result<Vec<AlphaRecord>> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
-            let mut stmt = conn.prepare("SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas WHERE COALESCE(is_submitted, 0)=0 AND COALESCE(is_failed_on_wq, 0)=0 ORDER BY created_at DESC LIMIT ?1")?;
-            let rows = stmt.query_map([limit], alpha_from_row)?;
+            let linked_filter = match linked {
+                Some(true) => " AND raw_data LIKE '%\"wq_alpha_id\"%'",
+                Some(false) => " AND raw_data NOT LIKE '%\"wq_alpha_id\"%'",
+                None => "",
+            };
+            let sql = format!(
+                "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+                 FROM alphas
+                 WHERE pass_count>=7
+                   AND COALESCE(fail_count, 0)=0
+                   AND COALESCE(is_submitted, 0)=0
+                   AND COALESCE(is_failed_on_wq, 0)=0
+                   AND (?1=1 OR pass_count<8)
+                   {linked_filter}
+                 ORDER BY fitness DESC, created_at ASC
+                 LIMIT ?2"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(params![include_ready as i64, limit], alpha_from_row)?;
             Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-        }).await.context("database pending task")?
+        })
+        .await
+        .context("database submission candidates task")?
+    }
+
+    pub async fn submitted_today(&self) -> Result<i64> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            Ok::<_, anyhow::Error>(conn.query_row(
+                "SELECT COUNT(*) FROM alphas
+                 WHERE COALESCE(is_submitted, 0)=1
+                   AND submitted_timestamp>=datetime('now','-24 hours')",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .await
+        .context("database daily submitted count task")?
     }
 
     pub async fn mark_failed(&self, expression: String, reason: String) -> Result<bool> {
@@ -151,6 +191,10 @@ impl AlphaStore {
                 [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )?;
             let pending: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE pass_count>=7 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0", [], |row| row.get(0))?;
+            let legacy_submission_backlog: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE pass_count>=7 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0 AND raw_data NOT LIKE '%\"wq_alpha_id\"%'", [], |row| row.get(0))?;
+            let linked_check_pending: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE pass_count=7 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0 AND raw_data LIKE '%\"wq_alpha_id\"%'", [], |row| row.get(0))?;
+            let ready_to_submit: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE pass_count>=8 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0 AND raw_data LIKE '%\"wq_alpha_id\"%'", [], |row| row.get(0))?;
+            let submitted_today: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_submitted=1 AND submitted_timestamp>=datetime('now','-24 hours')", [], |row| row.get(0))?;
             let submitted: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_submitted=1", [], |row| row.get(0))?;
             let failed: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_failed_on_wq=1", [], |row| row.get(0))?;
             let mut stmt = conn.prepare("SELECT expression, datetime(created_at,'+8 hours'), datetime(submitted_timestamp,'+8 hours'), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq FROM alphas ORDER BY fitness DESC LIMIT ?1")?;
@@ -160,6 +204,10 @@ impl AlphaStore {
                 "count": count, "max_fitness": max_fitness.unwrap_or_default(),
                 "avg_fitness": avg_fitness.unwrap_or_default(), "max_sharpe": max_sharpe.unwrap_or_default(),
                 "submittable_pending_count": pending, "successfully_submitted_count": submitted,
+                "legacy_submission_backlog": legacy_submission_backlog,
+                "linked_check_pending": linked_check_pending,
+                "ready_to_submit": ready_to_submit,
+                "submitted_today": submitted_today,
                 "total_submitted_count": submitted + failed, "all_alphas": all_alphas
             }))
         }).await.context("dashboard summary task")?
@@ -345,7 +393,21 @@ mod tests {
         conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);") .unwrap();
         conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data) VALUES ('a','rank(close);',1.0,1.2,0.1,0.2,7,0,0,0,'{}')", []).unwrap();
         drop(conn);
-        assert_eq!(AlphaStore::new(&path).health().await.unwrap(), 1);
+        let store = AlphaStore::new(&path);
+        assert_eq!(store.health().await.unwrap(), 1);
+        assert_eq!(
+            store
+                .get_submission_candidates(10, false, None)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(store.submitted_today().await.unwrap(), 0);
+        let summary = store.dashboard_summary(10).await.unwrap();
+        assert_eq!(summary["legacy_submission_backlog"], 1);
+        assert_eq!(summary["linked_check_pending"], 0);
+        assert_eq!(summary["ready_to_submit"], 0);
         let _ = std::fs::remove_file(path);
     }
 }

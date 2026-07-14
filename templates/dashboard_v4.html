@@ -122,6 +122,10 @@
             <div class="d-flex gap-3 text-muted small">
                 <span>总数: <strong id="alphas-count">...</strong></span>
                 <span>待提交: <strong id="alphas-pending-submission" class="text-primary">...</strong></span>
+                <span>待重跑: <strong id="alphas-legacy-backlog" class="text-warning">...</strong></span>
+                <span>检查中: <strong id="alphas-check-pending" class="text-info">...</strong></span>
+                <span>8 PASS: <strong id="alphas-ready-submit" class="text-success">...</strong></span>
+                <span>近24h提交: <strong id="alphas-submitted-today">...</strong></span>
                 <span>最高 Fit: <strong id="alphas-max-fitness" class="text-success">...</strong></span>
                 <span>平均 Fit: <strong id="alphas-avg-fitness" class="text-info">...</strong></span>
             </div>
@@ -269,6 +273,10 @@
         data = data || {};
         document.getElementById('alphas-count').textContent = data.count || 0;
         document.getElementById('alphas-pending-submission').textContent = data.submittable_pending_count || 0;
+        document.getElementById('alphas-legacy-backlog').textContent = data.legacy_submission_backlog || 0;
+        document.getElementById('alphas-check-pending').textContent = data.linked_check_pending || 0;
+        document.getElementById('alphas-ready-submit').textContent = data.ready_to_submit || 0;
+        document.getElementById('alphas-submitted-today').textContent = data.submitted_today || 0;
         document.getElementById('alphas-max-fitness').textContent = parseFloat(data.max_fitness || 0).toFixed(3);
         var avgEl = document.getElementById('alphas-avg-fitness');
         if(avgEl) avgEl.textContent = parseFloat(data.avg_fitness || 0).toFixed(3);

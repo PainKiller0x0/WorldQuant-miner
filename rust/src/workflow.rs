@@ -3,6 +3,7 @@ use crate::gateway::{SimulationResult, WorldQuantGateway};
 use crate::llm::{default_policy, extract_expressions, ModelGateway};
 use crate::store::AlphaStore;
 use anyhow::{Context, Result};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
@@ -102,48 +103,270 @@ async fn retry_pending(
     Ok(())
 }
 
-pub async fn submit_pending(
+#[derive(Debug, Default, Serialize)]
+pub struct SubmissionBatchResult {
+    pub processed: usize,
+    pub matched: usize,
+    pub stale: usize,
+    pub resimulated: usize,
+    pub checked: usize,
+    pub ready: usize,
+    pub submitted: usize,
+    pub rejected: usize,
+    pub skipped: usize,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SubmissionState {
+    Stale,
+    Failed(Vec<String>),
+    CheckPending,
+    Ready,
+    Waiting,
+}
+
+pub async fn process_submissions(
     store: Arc<AlphaStore>,
     worldquant: Arc<dyn WorldQuantGateway>,
     limit: i64,
-) -> Result<usize> {
-    let candidates = store.get_unsubmitted(limit).await?;
-    let mut submitted = 0;
+    dry_run: bool,
+    auto_submit: bool,
+    daily_limit: i64,
+) -> Result<SubmissionBatchResult> {
+    let include_ready = dry_run || auto_submit;
+    let mut candidates = store
+        .get_submission_candidates(1, include_ready, Some(true))
+        .await?;
+    let remaining = limit.saturating_sub(candidates.len() as i64);
+    if remaining > 0 {
+        candidates.extend(
+            store
+                .get_submission_candidates(remaining, include_ready, Some(false))
+                .await?,
+        );
+    }
+    let already_submitted = store.submitted_today().await?;
+    let mut submit_slots = daily_limit.saturating_sub(already_submitted).max(0);
+    let mut result = SubmissionBatchResult::default();
+
     for candidate in candidates {
-        let Some(alpha_id) = candidate
+        result.processed += 1;
+        let linked_id = candidate
             .raw_data
             .get("wq_alpha_id")
             .and_then(Value::as_str)
-        else {
-            warn!(id=%candidate.id, "candidate has no WorldQuant alpha id; skipping submit");
-            continue;
+            .map(str::to_owned);
+
+        let (mut alpha_id, mut detail) = if let Some(alpha_id) = linked_id {
+            let detail = worldquant.alpha(&alpha_id).await?;
+            (alpha_id, detail)
+        } else {
+            let matches = worldquant.find_unsubmitted(&candidate.metrics).await?;
+            let exact = select_exact_alpha(&candidate.expression, &matches);
+            let Some(exact) = exact else {
+                result.skipped += 1;
+                warn!(id=%candidate.id, "no exact unsubmitted WorldQuant alpha match");
+                continue;
+            };
+            let Some(alpha_id) = exact.get("id").and_then(Value::as_str).map(str::to_owned) else {
+                result.skipped += 1;
+                warn!(id=%candidate.id, "matched WorldQuant alpha has no id");
+                continue;
+            };
+            result.matched += 1;
+            let detail = worldquant.alpha(&alpha_id).await?;
+            (alpha_id, detail)
         };
-        if has_failed_check(&candidate.raw_data) {
-            info!(id=%candidate.id, alpha_id, "alpha has failed checks; skipping submit");
-            continue;
+
+        let mut state = classify_submission(&detail);
+        if state == SubmissionState::Stale {
+            result.stale += 1;
+            if dry_run {
+                info!(id=%candidate.id, alpha_id, "dry-run: stale simulation requires rerun");
+                continue;
+            }
+            let settings = detail
+                .get("settings")
+                .cloned()
+                .unwrap_or_else(default_settings);
+            let simulation = worldquant
+                .simulate(&candidate.expression, settings)
+                .await
+                .context("resimulate stale alpha")?;
+            let Some(new_alpha_id) = simulation.alpha_id.clone() else {
+                result.skipped += 1;
+                let (metrics, raw, reason) = simulation_data(&simulation);
+                store
+                    .update_result(candidate.id.clone(), metrics, raw, true, reason)
+                    .await?;
+                continue;
+            };
+            alpha_id = new_alpha_id;
+            detail = simulation.data;
+            state = classify_submission(&detail);
+            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+            result.resimulated += 1;
+            info!(id=%candidate.id, alpha_id, ?state, "stale alpha resimulated");
         }
-        match worldquant.submit(alpha_id).await {
-            Ok(_) => {
+
+        if matches!(state, SubmissionState::CheckPending) {
+            if dry_run {
+                info!(id=%candidate.id, alpha_id, "dry-run: submission check required");
+                continue;
+            }
+            let checked_detail = match worldquant.check_submission(&alpha_id).await {
+                Ok(detail) => detail,
+                Err(error) => {
+                    result.skipped += 1;
+                    warn!(?error, id=%candidate.id, alpha_id, "submission check remains pending");
+                    continue;
+                }
+            };
+            detail = if checked_detail.get("is").is_some() {
+                checked_detail
+            } else {
+                worldquant.alpha(&alpha_id).await?
+            };
+            state = classify_submission(&detail);
+            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+            result.checked += 1;
+            info!(id=%candidate.id, alpha_id, ?state, "submission check complete");
+        }
+
+        match state {
+            SubmissionState::Ready => {
+                result.ready += 1;
+                if !dry_run {
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                }
+                if !auto_submit || dry_run || submit_slots == 0 {
+                    info!(
+                        id=%candidate.id,
+                        alpha_id,
+                        auto_submit,
+                        submit_slots,
+                        "alpha ready for submission"
+                    );
+                    continue;
+                }
+                worldquant.submit(&alpha_id).await?;
                 store.mark_submitted(candidate.expression.clone()).await?;
-                submitted += 1;
+                result.submitted += 1;
+                submit_slots -= 1;
                 info!(id=%candidate.id, alpha_id, "alpha submitted");
             }
-            Err(error) => warn!(?error, alpha_id, "alpha submission failed"),
+            SubmissionState::Failed(ref reasons) => {
+                result.rejected += 1;
+                if !dry_run {
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                }
+                info!(id=%candidate.id, alpha_id, ?reasons, "alpha rejected by submission checks");
+            }
+            SubmissionState::Stale => {
+                result.skipped += 1;
+                warn!(id=%candidate.id, alpha_id, "fresh simulation is still marked old");
+            }
+            SubmissionState::CheckPending | SubmissionState::Waiting => {
+                result.skipped += 1;
+                if !dry_run {
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                }
+                info!(id=%candidate.id, alpha_id, ?state, "alpha is not ready for submission");
+            }
         }
     }
-    Ok(submitted)
+    Ok(result)
 }
 
-fn has_failed_check(raw_data: &Value) -> bool {
-    raw_data
-        .get("checks")
-        .and_then(Value::as_array)
-        .map(|checks| {
-            checks
-                .iter()
-                .any(|check| check.get("result").and_then(Value::as_str) == Some("FAIL"))
+async fn persist_remote_state(
+    store: &AlphaStore,
+    candidate: &AlphaRecord,
+    alpha_id: &str,
+    detail: &Value,
+    state: &SubmissionState,
+) -> Result<()> {
+    let simulation = SimulationResult {
+        alpha_id: Some(alpha_id.to_owned()),
+        status: "COMPLETE".into(),
+        data: detail.clone(),
+    };
+    let (metrics, raw, base_reason) = simulation_data(&simulation);
+    let failure_reason = match state {
+        SubmissionState::Failed(reasons) => Some(reasons.join(",")),
+        _ => base_reason,
+    };
+    store
+        .update_result(
+            candidate.id.clone(),
+            metrics,
+            raw,
+            matches!(state, SubmissionState::Failed(_)),
+            failure_reason,
+        )
+        .await
+}
+
+fn select_exact_alpha(expression: &str, matches: &[Value]) -> Option<Value> {
+    let expected = comparable_expression(expression);
+    matches
+        .iter()
+        .find(|alpha| {
+            alpha
+                .get("regular")
+                .and_then(|regular| regular.get("code"))
+                .and_then(Value::as_str)
+                .map(comparable_expression)
+                .as_deref()
+                == Some(expected.as_str())
         })
-        .unwrap_or(true)
+        .cloned()
+}
+
+fn comparable_expression(expression: &str) -> String {
+    expression
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>()
+        .trim_end_matches(';')
+        .to_owned()
+}
+
+fn classify_submission(detail: &Value) -> SubmissionState {
+    let Some(checks) = detail
+        .get("is")
+        .and_then(|value| value.get("checks"))
+        .or_else(|| detail.get("checks"))
+        .and_then(Value::as_array)
+    else {
+        return SubmissionState::Waiting;
+    };
+    let failed = checks
+        .iter()
+        .filter(|check| check.get("result").and_then(Value::as_str) == Some("FAIL"))
+        .filter_map(|check| check.get("name").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if failed.iter().any(|name| name == "OLD_SIMULATION") {
+        return SubmissionState::Stale;
+    }
+    if !failed.is_empty() {
+        return SubmissionState::Failed(failed);
+    }
+    let passed = checks
+        .iter()
+        .filter(|check| check.get("result").and_then(Value::as_str) == Some("PASS"))
+        .count();
+    let pending = checks
+        .iter()
+        .filter(|check| check.get("result").and_then(Value::as_str) == Some("PENDING"))
+        .count();
+    if passed >= 8 && pending == 0 {
+        SubmissionState::Ready
+    } else if passed >= 7 && pending == 1 {
+        SubmissionState::CheckPending
+    } else {
+        SubmissionState::Waiting
+    }
 }
 
 fn build_prompt(role: Role, recent: &[AlphaRecord], policy: &ExpressionPolicy) -> String {
@@ -250,14 +473,13 @@ fn simulation_data(result: &SimulationResult) -> (AlphaMetrics, Value, Option<St
         }
     }
     let is = result.data.get("is").unwrap_or(&result.data);
+    let checks = is.get("checks").or_else(|| result.data.get("checks"));
     let metrics = AlphaMetrics {
         fitness: number(is, "fitness"),
         sharpe: number(is, "sharpe"),
         returns: number(is, "returns"),
         turnover: number(is, "turnover"),
-        pass_count: result
-            .data
-            .get("checks")
+        pass_count: checks
             .and_then(Value::as_array)
             .map(|v| {
                 v.iter()
@@ -265,9 +487,7 @@ fn simulation_data(result: &SimulationResult) -> (AlphaMetrics, Value, Option<St
                     .count() as i64
             })
             .unwrap_or_default(),
-        fail_count: result
-            .data
-            .get("checks")
+        fail_count: checks
             .and_then(Value::as_array)
             .map(|v| {
                 v.iter()
@@ -275,11 +495,7 @@ fn simulation_data(result: &SimulationResult) -> (AlphaMetrics, Value, Option<St
                     .count() as i64
             })
             .unwrap_or_default(),
-        checks_summary: result
-            .data
-            .get("checks")
-            .map(Value::to_string)
-            .unwrap_or_default(),
+        checks_summary: checks.map(Value::to_string).unwrap_or_default(),
     };
     let reason = if result.status == "ERROR" {
         Some(result.data.to_string())
@@ -306,8 +522,12 @@ fn number(value: &Value, key: &str) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_prompt, default_policy};
+    use super::{
+        build_prompt, classify_submission, default_policy, select_exact_alpha, simulation_data,
+        SubmissionState,
+    };
     use crate::domain::{AlphaMetrics, AlphaRecord, Role};
+    use crate::gateway::SimulationResult;
     use serde_json::json;
 
     fn alpha(expression: &str, fitness: f64, sharpe: f64) -> AlphaRecord {
@@ -350,5 +570,80 @@ mod tests {
             .starts_with(" (highest fitness, then Sharpe):\nrank(ts_delta(close, 5));"));
         assert!(prompt.contains("at least one structural change"));
         assert!(prompt.contains("not merely alter a lookback number"));
+    }
+
+    #[test]
+    fn matches_remote_alpha_by_expression_not_metrics_alone() {
+        let matches = vec![
+            json!({"id":"wrong","regular":{"code":"rank(open);"}}),
+            json!({"id":"right","regular":{"code":" rank(close) ; "}}),
+        ];
+
+        let selected = select_exact_alpha("rank(close);", &matches).unwrap();
+
+        assert_eq!(
+            selected.get("id").and_then(|value| value.as_str()),
+            Some("right")
+        );
+    }
+
+    #[test]
+    fn old_simulation_failure_requires_resimulation_before_check() {
+        let detail = json!({"is":{"checks":[
+            {"name":"LOW_SHARPE","result":"PASS"},
+            {"name":"OLD_SIMULATION","result":"FAIL"},
+            {"name":"SELF_CORRELATION","result":"PENDING"}
+        ]}});
+
+        assert_eq!(classify_submission(&detail), SubmissionState::Stale);
+    }
+
+    #[test]
+    fn seven_pass_one_pending_requires_check_and_eight_pass_is_ready() {
+        let pending_checks = (0..7)
+            .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+            .chain([json!({"name":"SELF_CORRELATION","result":"PENDING"})])
+            .collect::<Vec<_>>();
+        let ready_checks = (0..8)
+            .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            classify_submission(&json!({"is":{"checks":pending_checks}})),
+            SubmissionState::CheckPending
+        );
+        assert_eq!(
+            classify_submission(&json!({"is":{"checks":ready_checks}})),
+            SubmissionState::Ready
+        );
+    }
+
+    #[test]
+    fn simulation_metrics_read_checks_from_is_payload() {
+        let result = SimulationResult {
+            alpha_id: Some("alpha-1".into()),
+            status: "COMPLETE".into(),
+            data: json!({
+                "is": {
+                    "fitness": 1.2,
+                    "sharpe": 1.5,
+                    "returns": 0.1,
+                    "turnover": 0.2,
+                    "checks": [
+                        {"name":"A","result":"PASS"},
+                        {"name":"B","result":"FAIL"}
+                    ]
+                }
+            }),
+        };
+
+        let (metrics, raw, _) = simulation_data(&result);
+
+        assert_eq!(metrics.pass_count, 1);
+        assert_eq!(metrics.fail_count, 1);
+        assert_eq!(
+            raw.get("wq_alpha_id").and_then(|value| value.as_str()),
+            Some("alpha-1")
+        );
     }
 }

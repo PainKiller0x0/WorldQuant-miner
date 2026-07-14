@@ -1,5 +1,5 @@
 [Unit]
-Description=WorldQuant Miner Rust automatic submitter
+Description=WorldQuant Miner Rust check and submission reconciler
 After=network-online.target
 
 [Service]
@@ -7,4 +7,5 @@ Type=oneshot
 WorkingDirectory=/root/worldquant-miner
 EnvironmentFile=/root/worldquant-miner/.env
 Environment=WQ_ROOT=/root/worldquant-miner
-ExecStart=/usr/local/bin/worldquant-miner-rs submit --limit 10
+Environment=WQ_TPM=5
+ExecStart=/usr/local/bin/worldquant-miner-rs submit --limit 2 --daily-limit 4

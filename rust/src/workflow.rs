@@ -3,6 +3,7 @@ use crate::gateway::{SimulationResult, WorldQuantGateway};
 use crate::llm::{default_policy, extract_expressions, ModelGateway};
 use crate::store::AlphaStore;
 use anyhow::{Context, Result};
+use chrono::Utc;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -105,6 +106,9 @@ async fn retry_pending(
 
 #[derive(Debug, Default, Serialize)]
 pub struct SubmissionBatchResult {
+    pub configured_daily_limit: i64,
+    pub effective_daily_limit: i64,
+    pub submitted_last_24h: i64,
     pub processed: usize,
     pub matched: usize,
     pub stale: usize,
@@ -131,6 +135,7 @@ pub async fn process_submissions(
     limit: i64,
     dry_run: bool,
     auto_submit: bool,
+    ramp_submit: bool,
     daily_limit: i64,
 ) -> Result<SubmissionBatchResult> {
     let include_ready = dry_run || auto_submit;
@@ -146,8 +151,23 @@ pub async fn process_submissions(
         );
     }
     let already_submitted = store.submitted_today().await?;
-    let mut submit_slots = daily_limit.saturating_sub(already_submitted).max(0);
-    let mut result = SubmissionBatchResult::default();
+    let effective_daily_limit = if ramp_submit {
+        daily_limit.min(submit_ramp_limit(
+            store.auto_submit_started_at().await?,
+            Utc::now().timestamp(),
+        ))
+    } else {
+        daily_limit
+    };
+    let mut submit_slots = effective_daily_limit
+        .saturating_sub(already_submitted)
+        .max(0);
+    let mut result = SubmissionBatchResult {
+        configured_daily_limit: daily_limit,
+        effective_daily_limit,
+        submitted_last_24h: already_submitted,
+        ..SubmissionBatchResult::default()
+    };
 
     for candidate in candidates {
         result.processed += 1;
@@ -251,6 +271,9 @@ pub async fn process_submissions(
                 }
                 worldquant.submit(&alpha_id).await?;
                 store.mark_submitted(candidate.expression.clone()).await?;
+                if ramp_submit {
+                    store.mark_auto_submit_started().await?;
+                }
                 result.submitted += 1;
                 submit_slots -= 1;
                 info!(id=%candidate.id, alpha_id, "alpha submitted");
@@ -276,6 +299,18 @@ pub async fn process_submissions(
         }
     }
     Ok(result)
+}
+
+fn submit_ramp_limit(started_at: Option<i64>, now: i64) -> i64 {
+    let Some(started_at) = started_at else {
+        return 1;
+    };
+    let completed_days = now.saturating_sub(started_at) / 86_400;
+    if completed_days == 0 {
+        1
+    } else {
+        (3 + completed_days).min(10)
+    }
 }
 
 async fn persist_remote_state(
@@ -524,7 +559,7 @@ fn number(value: &Value, key: &str) -> f64 {
 mod tests {
     use super::{
         build_prompt, classify_submission, default_policy, select_exact_alpha, simulation_data,
-        SubmissionState,
+        submit_ramp_limit, SubmissionState,
     };
     use crate::domain::{AlphaMetrics, AlphaRecord, Role};
     use crate::gateway::SimulationResult;
@@ -645,5 +680,17 @@ mod tests {
             raw.get("wq_alpha_id").and_then(|value| value.as_str()),
             Some("alpha-1")
         );
+    }
+
+    #[test]
+    fn submit_limit_ramps_from_one_to_four_then_one_per_day() {
+        let start = 1_000_000;
+        assert_eq!(submit_ramp_limit(None, start), 1);
+        assert_eq!(submit_ramp_limit(Some(start), start), 1);
+        assert_eq!(submit_ramp_limit(Some(start), start + 86_399), 1);
+        assert_eq!(submit_ramp_limit(Some(start), start + 86_400), 4);
+        assert_eq!(submit_ramp_limit(Some(start), start + 2 * 86_400), 5);
+        assert_eq!(submit_ramp_limit(Some(start), start + 7 * 86_400), 10);
+        assert_eq!(submit_ramp_limit(Some(start), start + 30 * 86_400), 10);
     }
 }

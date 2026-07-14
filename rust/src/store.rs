@@ -137,6 +137,38 @@ impl AlphaStore {
         .context("database daily submitted count task")?
     }
 
+    pub async fn auto_submit_started_at(&self) -> Result<Option<i64>> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            Ok::<_, anyhow::Error>(
+                conn.query_row(
+                    "SELECT CAST(value AS INTEGER) FROM automation_state WHERE key='auto_submit_started_at'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?,
+            )
+        })
+        .await
+        .context("database auto-submit start task")?
+    }
+
+    pub async fn mark_auto_submit_started(&self) -> Result<()> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            conn.execute(
+                "INSERT OR IGNORE INTO automation_state (key, value)
+                 VALUES ('auto_submit_started_at', CAST(strftime('%s','now') AS TEXT))",
+                [],
+            )?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .context("database mark auto-submit start task")?
+    }
+
     pub async fn mark_failed(&self, expression: String, reason: String) -> Result<bool> {
         self.update_flags(expression, "is_failed_on_wq=1, failure_reason=?2", reason)
             .await
@@ -371,7 +403,14 @@ pub fn stable_id(expression: &str) -> String {
 fn open(path: &Path) -> Result<Connection> {
     let conn = Connection::open(path).with_context(|| format!("open {}", path.display()))?;
     conn.busy_timeout(std::time::Duration::from_secs(10))?;
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL;
+         PRAGMA synchronous=NORMAL;
+         CREATE TABLE IF NOT EXISTS automation_state (
+             key TEXT PRIMARY KEY,
+             value TEXT NOT NULL
+         );",
+    )?;
     Ok(conn)
 }
 
@@ -404,6 +443,9 @@ mod tests {
             1
         );
         assert_eq!(store.submitted_today().await.unwrap(), 0);
+        assert_eq!(store.auto_submit_started_at().await.unwrap(), None);
+        store.mark_auto_submit_started().await.unwrap();
+        assert!(store.auto_submit_started_at().await.unwrap().is_some());
         let summary = store.dashboard_summary(10).await.unwrap();
         assert_eq!(summary["legacy_submission_backlog"], 1);
         assert_eq!(summary["linked_check_pending"], 0);

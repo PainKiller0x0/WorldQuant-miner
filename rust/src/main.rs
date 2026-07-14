@@ -44,6 +44,8 @@ enum Command {
         dry_run: bool,
         #[arg(long)]
         auto_submit: bool,
+        #[arg(long)]
+        ramp_submit: bool,
         #[arg(long, default_value_t = 4)]
         daily_limit: i64,
     },
@@ -127,6 +129,7 @@ async fn main() -> Result<()> {
             limit,
             dry_run,
             auto_submit,
+            ramp_submit,
             daily_limit,
         } => {
             let worldquant: Arc<dyn WorldQuantGateway> =
@@ -141,6 +144,7 @@ async fn main() -> Result<()> {
                 limit.max(1),
                 dry_run,
                 auto_submit,
+                ramp_submit,
                 daily_limit.max(0),
             )
             .await?;

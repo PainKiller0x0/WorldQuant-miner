@@ -8,4 +8,4 @@ WorkingDirectory=/root/worldquant-miner
 EnvironmentFile=/root/worldquant-miner/.env
 Environment=WQ_ROOT=/root/worldquant-miner
 Environment=WQ_TPM=5
-ExecStart=/usr/local/bin/worldquant-miner-rs submit --limit 2 --daily-limit 4
+ExecStart=/usr/local/bin/worldquant-miner-rs submit --limit 2 --auto-submit --ramp-submit --daily-limit 10

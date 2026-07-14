@@ -33,13 +33,17 @@ impl LiveModelGateway {
     async fn call(&self, role: Role, model: &ModelConfig, prompt: &str) -> Result<String> {
         let url = completion_url(&model.base_url);
         tracing::info!(?role, model=%model.model_name, endpoint=%url, "calling model");
+        let temperature = match role {
+            Role::Miner => 0.8,
+            Role::Evolver => 0.55,
+        };
         let mut body = json!({
             "model": model.model_name,
             "messages": [
-                {"role":"system","content":"You are a quantitative alpha research assistant. Return concise candidate FASTEXPR expressions."},
+                {"role":"system","content":system_prompt(role)},
                 {"role":"user","content":prompt}
             ],
-            "temperature": 0.7,
+            "temperature": temperature,
             "max_tokens": 1200
         });
         if model.model_name.to_ascii_lowercase().contains("glm") {
@@ -60,6 +64,13 @@ impl LiveModelGateway {
         }
         tracing::info!(?role, model=%model.model_name, "model response received");
         response_text(&value).ok_or_else(|| anyhow!("LLM response has no message content"))
+    }
+}
+
+fn system_prompt(role: Role) -> &'static str {
+    match role {
+        Role::Miner => "You are the Miner in a WorldQuant Brain research pipeline. Generate diverse, syntactically valid FASTEXPR candidates that obey the user's exact field, operator, and output constraints. Return expressions only; never invent identifiers or add prose.",
+        Role::Evolver => "You are the Evolver in a WorldQuant Brain research pipeline. Create controlled structural mutations of the supplied high-quality parent while obeying the user's exact field, operator, and output constraints. Return expressions only; never add prose or cosmetic-only variants.",
     }
 }
 
@@ -273,7 +284,8 @@ pub fn default_policy() -> ExpressionPolicy {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_policy, extract_expressions, response_text};
+    use super::{default_policy, extract_expressions, response_text, system_prompt};
+    use crate::domain::Role;
     use serde_json::json;
 
     #[test]
@@ -296,5 +308,14 @@ mod tests {
         });
 
         assert_eq!(response_text(&response).as_deref(), Some("rank(close);"));
+    }
+
+    #[test]
+    fn miner_and_evolver_have_distinct_system_instructions() {
+        let miner = system_prompt(Role::Miner);
+        let evolver = system_prompt(Role::Evolver);
+        assert!(miner.contains("diverse"));
+        assert!(evolver.contains("structural mutations"));
+        assert_ne!(miner, evolver);
     }
 }

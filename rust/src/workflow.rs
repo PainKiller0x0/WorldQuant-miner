@@ -1,4 +1,4 @@
-use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord, Role};
+use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord, ExpressionPolicy, Role};
 use crate::gateway::{SimulationResult, WorldQuantGateway};
 use crate::llm::{default_policy, extract_expressions, ModelGateway};
 use crate::store::AlphaStore;
@@ -35,7 +35,7 @@ pub async fn run_once(
         retry_pending(store.clone(), worldquant.clone()).await?;
     }
     let recent = store.list_recent(12).await.unwrap_or_default();
-    let prompt = build_prompt(role, &recent);
+    let prompt = build_prompt(role, &recent, &policy);
     let answer = models
         .generate(role, &prompt)
         .await
@@ -146,22 +146,83 @@ fn has_failed_check(raw_data: &Value) -> bool {
         .unwrap_or(true)
 }
 
-fn build_prompt(role: Role, recent: &[AlphaRecord]) -> String {
-    let examples = recent
-        .iter()
-        .take(8)
-        .map(|a| {
-            format!(
-                "{} fitness={:.3} sharpe={:.3}",
-                a.expression, a.metrics.fitness, a.metrics.sharpe
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+fn build_prompt(role: Role, recent: &[AlphaRecord], policy: &ExpressionPolicy) -> String {
+    let fields = policy.fields.join(", ");
+    let operators = policy.operators.join(", ");
+    let forbidden = policy.forbidden.join(", ");
+    let output_contract = format!(
+        "STRICT OUTPUT CONTRACT:\n\
+- Return exactly 4 lines.\n\
+- Each line must contain one complete FASTEXPR expression and end with ';'.\n\
+- Return no numbering, bullets, Markdown fences, JSON, variable assignments, comments, or explanations.\n\
+- Parentheses must be balanced. Use only integer lookback windows from 2 to 252.\n\
+- Identifiers must come only from the allowed lists below. Arithmetic symbols +, -, *, and / are allowed.\n\
+ALLOWED DATA FIELDS: {fields}\n\
+ALLOWED OPERATORS: {operators}\n\
+FORBIDDEN IDENTIFIERS: {forbidden}"
+    );
+
     match role {
-        Role::Miner => format!("Discover 4 novel US equity FASTEXPR alpha expressions. Use only known price/volume fields and standard operators. Avoid buy_turnover, sell_turnover, momentum and invented identifiers. Every expression must be one line and end with a semicolon. Existing candidates:\n{examples}"),
-        Role::Evolver => format!("Improve the strongest existing alpha while changing its structure enough to avoid duplication. Return 4 FASTEXPR expressions, one per line, ending with semicolons. Existing candidates:\n{examples}"),
+        Role::Miner => {
+            let recent_examples = format_examples(recent.iter().take(8));
+            format!(
+                "ROLE: MINER\n\
+TASK: Discover four diverse, economically plausible WorldQuant Brain alpha candidates for USA TOP3000 equities with delay 1.\n\
+RESEARCH RULES:\n\
+- Each candidate must express a meaningfully different hypothesis; do not create four parameter tweaks of one formula.\n\
+- Prefer compact structures with 2-6 operators and at least two market inputs where sensible.\n\
+- Use interpretable price, volume, return, volatility, correlation, or liquidity relationships. Avoid random operator stacking.\n\
+- Do not copy any recent candidate verbatim or return one of its nested subexpressions.\n\
+{output_contract}\n\
+RECENT CANDIDATES TO AVOID COPYING:\n{recent_examples}"
+            )
+        }
+        Role::Evolver => {
+            let mut ranked = recent.iter().collect::<Vec<_>>();
+            ranked.sort_by(|left, right| {
+                right
+                    .metrics
+                    .fitness
+                    .total_cmp(&left.metrics.fitness)
+                    .then_with(|| right.metrics.sharpe.total_cmp(&left.metrics.sharpe))
+            });
+            let parent = ranked
+                .first()
+                .map(|alpha| format_alpha(alpha))
+                .unwrap_or_else(|| {
+                    "No parent is available; create conservative seed candidates.".to_owned()
+                });
+            let comparison = format_examples(ranked.into_iter().skip(1).take(5));
+            format!(
+                "ROLE: EVOLVER\n\
+TASK: Produce four structurally distinct children of the target parent while preserving its plausible economic intuition.\n\
+MUTATION RULES:\n\
+- Every child must make at least one structural change, not merely alter a lookback number.\n\
+- Across the four children, cover at least three mutation dimensions: data-field relationship, time-series transformation, normalization/ranking, and signal interaction.\n\
+- Keep useful parts of the parent, but do not copy it verbatim or reproduce another child with different constants.\n\
+- Prefer controlled changes over unnecessary complexity; every added operator must have a clear purpose.\n\
+{output_contract}\n\
+TARGET PARENT (highest fitness, then Sharpe):\n{parent}\n\
+OTHER STRONG/RECENT CANDIDATES FOR CONTEXT ONLY:\n{comparison}"
+            )
+        }
     }
+}
+
+fn format_examples<'a>(records: impl Iterator<Item = &'a AlphaRecord>) -> String {
+    let values = records.map(format_alpha).collect::<Vec<_>>();
+    if values.is_empty() {
+        "(none)".to_owned()
+    } else {
+        values.join("\n")
+    }
+}
+
+fn format_alpha(alpha: &AlphaRecord) -> String {
+    format!(
+        "{} | fitness={:.3} sharpe={:.3} turnover={:.3}",
+        alpha.expression, alpha.metrics.fitness, alpha.metrics.sharpe, alpha.metrics.turnover
+    )
 }
 
 fn default_settings() -> Value {
@@ -233,4 +294,50 @@ fn number(value: &Value, key: &str) -> f64 {
                 .and_then(|v| v.parse().ok())
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_prompt, default_policy};
+    use crate::domain::{AlphaMetrics, AlphaRecord, Role};
+    use serde_json::json;
+
+    fn alpha(expression: &str, fitness: f64, sharpe: f64) -> AlphaRecord {
+        AlphaRecord {
+            id: expression.to_owned(),
+            expression: expression.to_owned(),
+            metrics: AlphaMetrics {
+                fitness,
+                sharpe,
+                turnover: 0.12,
+                ..AlphaMetrics::default()
+            },
+            is_submitted: false,
+            is_failed_on_wq: false,
+            failure_reason: None,
+            raw_data: json!({}),
+        }
+    }
+
+    #[test]
+    fn miner_prompt_is_strict_and_matches_expression_policy() {
+        let prompt = build_prompt(Role::Miner, &[], &default_policy());
+        assert!(prompt.contains("Return exactly 4 lines"));
+        assert!(prompt.contains("ALLOWED DATA FIELDS: open"));
+        assert!(prompt.contains("ts_corr"));
+        assert!(prompt.contains("FORBIDDEN IDENTIFIERS: buy_turnover"));
+        assert!(prompt.contains("no numbering, bullets, Markdown fences, JSON"));
+    }
+
+    #[test]
+    fn evolver_prompt_selects_best_parent_and_requires_structural_mutation() {
+        let weak = alpha("rank(close);", 0.2, 0.4);
+        let strong = alpha("rank(ts_delta(close, 5));", 1.4, 1.1);
+        let prompt = build_prompt(Role::Evolver, &[weak, strong], &default_policy());
+        let parent_section = prompt.split("TARGET PARENT").nth(1).unwrap();
+        assert!(parent_section
+            .starts_with(" (highest fitness, then Sharpe):\nrank(ts_delta(close, 5));"));
+        assert!(prompt.contains("at least one structural change"));
+        assert!(prompt.contains("not merely alter a lookback number"));
+    }
 }

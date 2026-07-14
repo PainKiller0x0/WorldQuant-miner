@@ -73,7 +73,7 @@
                     <span id="miner-status-badge" class="badge bg-secondary">Unknown</span>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2"><small class="text-muted">模型: Flash-Lite</small><small id="miner-last-seen" class="text-muted">...</small></div>
+                    <div class="d-flex justify-content-between mb-2"><small class="text-muted">模型: <span id="miner-model">加载中...</span></small><small id="miner-last-seen" class="text-muted">...</small></div>
                     <label class="form-label d-flex justify-content-between small mb-1"><span>API 预算</span><span id="miner-budget-text" class="fw-bold">0 / 0</span></label>
                     <div class="progress mb-3"><div id="miner-budget-bar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated" style="width: 0%"></div></div>
                     <div class="d-flex gap-2 mb-2">
@@ -91,7 +91,7 @@
                     <span id="evolver-status-badge" class="badge bg-secondary">Unknown</span>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2"><small class="text-muted">模型: Doubao/Pro</small><small id="evolver-last-seen" class="text-muted">...</small></div>
+                    <div class="d-flex justify-content-between mb-2"><small class="text-muted">模型: <span id="evolver-model">加载中...</span></small><small id="evolver-last-seen" class="text-muted">...</small></div>
                     <label class="form-label d-flex justify-content-between small mb-1"><span>API 预算</span><span id="evolver-budget-text" class="fw-bold">0 / 0</span></label>
                     <div class="progress mb-3"><div id="evolver-budget-bar" class="progress-bar bg-success progress-bar-striped progress-bar-animated" style="width: 0%"></div></div>
                     <div class="d-flex gap-2 mb-2">
@@ -193,6 +193,15 @@
     themeToggle.addEventListener('click', function() { setTheme(html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark'); });
     function setTheme(theme) { html.setAttribute('data-bs-theme', theme); localStorage.setItem('theme', theme); themeToggle.innerHTML = theme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>'; }
 
+    function formatTimestamp(value) {
+        if (!value) return 'N/A';
+        var date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        function pad(number) { return String(number).padStart(2, '0'); }
+        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+            ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+    }
+
     function fetchData() {
         fetch('/status')
             .then(function(r) { if(!r.ok) throw new Error(r.statusText); return r.json(); })
@@ -227,7 +236,9 @@
         else if (status.status === 'STALLED') { badge.className = 'badge bg-warning text-dark'; badge.textContent = 'STALLED'; }
         else { badge.className = 'badge bg-danger'; badge.textContent = 'ERROR'; }
         
-        lastSeen.textContent = status.last_seen || 'N/A';
+        lastSeen.textContent = formatTimestamp(status.last_seen);
+        var model = document.getElementById(name + '-model');
+        if (model) model.textContent = status.model_name || '未配置';
         logs.textContent = status.logs || '';
 
         var used = (wd && wd[name + '_budget_used']) || 0;
@@ -308,16 +319,8 @@
             }
 
             // v14.7 修复: 时间显示 MM-DD HH:MM
-            var timeStr = 'N/A';
-            var fullTimeStr = a.timestamp || 'N/A';
-            if (a.timestamp) {
-                try {
-                    var parts = a.timestamp.split(' '); // YYYY-MM-DD HH:MM:SS
-                    var datePart = parts[0].split('-').slice(1).join('-'); // MM-DD
-                    var timePart = parts[1].split(':').slice(0, 2).join(':'); // HH:MM
-                    timeStr = datePart + ' ' + timePart;
-                } catch(e) { timeStr = a.timestamp.split(' ')[1] || 'N/A'; }
-            }
+            var fullTimeStr = formatTimestamp(a.timestamp);
+            var timeStr = fullTimeStr === 'N/A' ? 'N/A' : fullTimeStr.slice(5, 16);
 
             // v14.9 修复: 精度两位小数 & 复制纯数值
             var fitVal = parseFloat(p.fitness||0).toFixed(2);

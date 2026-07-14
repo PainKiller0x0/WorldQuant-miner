@@ -11,8 +11,11 @@ use axum::{
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
-use tokio::fs;
+use std::{io::SeekFrom, net::SocketAddr, path::PathBuf, sync::Arc};
+use tokio::{
+    fs,
+    io::{AsyncReadExt, AsyncSeekExt},
+};
 use tower_http::services::ServeDir;
 
 #[derive(Clone)]
@@ -20,6 +23,7 @@ struct DashboardState {
     store: Arc<AlphaStore>,
     root: PathBuf,
     system_config_path: PathBuf,
+    api_config_path: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,12 +35,14 @@ pub async fn serve(
     store: Arc<AlphaStore>,
     root: PathBuf,
     system_config_path: PathBuf,
+    api_config_path: PathBuf,
     listen: &str,
 ) -> Result<()> {
     let state = DashboardState {
         store,
         root: root.clone(),
         system_config_path,
+        api_config_path,
     };
     let app = Router::new()
         .route("/", get(page_dashboard))
@@ -62,6 +68,21 @@ pub async fn serve(
     let address: SocketAddr = listen.parse().context("parse WQ_LISTEN")?;
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!(%address, "Rust dashboard listening");
+
+    let compat_listen =
+        std::env::var("WQ_COMPAT_LISTEN").unwrap_or_else(|_| "0.0.0.0:8080".to_owned());
+    if compat_listen != listen {
+        let compat_address: SocketAddr = compat_listen.parse().context("parse WQ_COMPAT_LISTEN")?;
+        let compat_listener = tokio::net::TcpListener::bind(compat_address).await?;
+        tracing::info!(%compat_address, target=%address, "Rust dashboard compatibility listener active");
+        let compat_app = app.clone();
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(compat_listener, compat_app).await {
+                tracing::error!(%error, "Rust dashboard compatibility listener stopped");
+            }
+        });
+    }
+
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -112,6 +133,9 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
     let config = read_json(&state.system_config_path)
         .await
         .unwrap_or_else(|_| json!({}));
+    let model_config = read_json(&state.api_config_path)
+        .await
+        .unwrap_or_else(|_| json!({}));
     let budgets = config
         .get("llm_budgets")
         .cloned()
@@ -135,11 +159,24 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
     let remaining = (cooldown - (Utc::now().timestamp_millis() as f64 / 1000.0 - last_failure))
         .max(0.0)
         .round() as i64;
-    let service = |role: &str| json!({"status":"RUNNING","last_seen":Utc::now().to_rfc3339(),"logs":format!("Rust {role} pipeline is managed by worldquant-rust-worker.service")});
+    let miner_logs = read_log_tail(&state.root.join("logs/miner.log"))
+        .await
+        .unwrap_or_else(|error| format!("无法读取 Miner 日志: {error}"));
+    let evolver_logs = read_log_tail(&state.root.join("logs/evolver.log"))
+        .await
+        .unwrap_or_else(|error| format!("无法读取 Evolver 日志: {error}"));
+    let service = |role: &str, logs: String| {
+        json!({
+            "status":"RUNNING",
+            "last_seen":Utc::now().to_rfc3339(),
+            "model_name":configured_model_name(&model_config, role),
+            "logs":logs
+        })
+    };
     let body = json!({
         "runtime":"rust",
-        "miner":service("miner"),
-        "evolver":service("evolver"),
+        "miner":service("miner", miner_logs),
+        "evolver":service("evolver", evolver_logs),
         "hopeful_alphas":hopeful,
         "watchdog_status":{
             "llm_budget_used": budget_value(&budgets, &active_nodes, "miner", "used_today"),
@@ -320,11 +357,7 @@ async fn download_log(State(state): State<DashboardState>, Path(name): Path<Stri
     if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return (StatusCode::BAD_REQUEST, "invalid log name").into_response();
     }
-    let actual_name = match name.as_str() {
-        "miner.log" => "alpha_generator.log",
-        "miner_issues.log" => "alpha_generator_issues.log",
-        other => other,
-    };
+    let actual_name = log_filename(&name);
     let path = state.root.join("logs").join(actual_name);
     match fs::read(path).await {
         Ok(data) => Response::builder()
@@ -345,4 +378,78 @@ async fn download_log(State(state): State<DashboardState>, Path(name): Path<Stri
 async fn read_json(path: &PathBuf) -> Result<Value> {
     let raw = fs::read_to_string(path).await?;
     Ok(serde_json::from_str(&raw)?)
+}
+
+fn configured_model_name(config: &Value, role: &str) -> String {
+    for suffix in [
+        "config",
+        "config_backup",
+        "config_backup_2",
+        "config_backup_3",
+    ] {
+        let key = format!("{role}_{suffix}");
+        if let Some(model_name) = config
+            .get(&key)
+            .and_then(|value| value.get("model_name"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            return model_name.to_owned();
+        }
+    }
+    "未配置".to_owned()
+}
+
+fn log_filename(name: &str) -> &str {
+    match name {
+        "miner.log" => "miner.log",
+        "miner_issues.log" => "miner_issues.log",
+        "evolver.log" => "evolver.log",
+        "evolver_issues.log" => "evolver_issues.log",
+        other => other,
+    }
+}
+
+async fn read_log_tail(path: &PathBuf) -> Result<String> {
+    const MAX_TAIL_BYTES: u64 = 64 * 1024;
+    let mut file = fs::File::open(path).await?;
+    let size = file.metadata().await?.len();
+    let start = size.saturating_sub(MAX_TAIL_BYTES);
+    file.seek(SeekFrom::Start(start)).await?;
+    let mut bytes = Vec::with_capacity((size - start) as usize);
+    file.read_to_end(&mut bytes).await?;
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if start > 0 {
+        if let Some(newline) = text.find('\n') {
+            text = text[(newline + 1)..].to_owned();
+        }
+    }
+    Ok(text.trim_end().to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{configured_model_name, log_filename};
+    use serde_json::json;
+
+    #[test]
+    fn dashboard_uses_primary_model_name_for_each_role() {
+        let config = json!({
+            "miner_config": {"model_name": "agnes-2.0-flash"},
+            "miner_config_backup": {"model_name": "glm-4.7-flash"},
+            "evolver_config": {"model_name": "glm-4.7-flash"}
+        });
+
+        assert_eq!(configured_model_name(&config, "miner"), "agnes-2.0-flash");
+        assert_eq!(configured_model_name(&config, "evolver"), "glm-4.7-flash");
+        assert_eq!(configured_model_name(&config, "missing"), "未配置");
+    }
+
+    #[test]
+    fn dashboard_log_aliases_point_to_current_runtime_logs() {
+        assert_eq!(log_filename("miner.log"), "miner.log");
+        assert_eq!(log_filename("miner_issues.log"), "miner_issues.log");
+        assert_eq!(log_filename("evolver.log"), "evolver.log");
+        assert_eq!(log_filename("evolver_issues.log"), "evolver_issues.log");
+    }
 }

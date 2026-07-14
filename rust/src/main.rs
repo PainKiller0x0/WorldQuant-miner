@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
                 store,
                 config.root.clone(),
                 config.system_config_path.clone(),
+                config.api_config_path.clone(),
                 &config.listen,
             )
             .await?

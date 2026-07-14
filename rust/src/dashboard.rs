@@ -1,5 +1,5 @@
 use crate::store::AlphaStore;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use axum::{
     body::Body,
     extract::{Path, Query, State},
@@ -15,6 +15,7 @@ use std::{io::SeekFrom, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt},
+    process::Command,
 };
 use tower_http::services::ServeDir;
 
@@ -159,12 +160,22 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
     let remaining = (cooldown - (Utc::now().timestamp_millis() as f64 / 1000.0 - last_failure))
         .max(0.0)
         .round() as i64;
-    let miner_logs = read_log_tail(&state.root.join("logs/miner.log"))
-        .await
-        .unwrap_or_else(|error| format!("无法读取 Miner 日志: {error}"));
-    let evolver_logs = read_log_tail(&state.root.join("logs/evolver.log"))
-        .await
-        .unwrap_or_else(|error| format!("无法读取 Evolver 日志: {error}"));
+    let journal_logs = read_worker_journal().await;
+    if let Err(error) = &journal_logs {
+        tracing::warn!(?error, "worker journal unavailable; using legacy log files");
+    }
+    let miner_logs = match &journal_logs {
+        Ok(logs) => logs.clone(),
+        Err(_) => read_log_tail(&state.root.join("logs/miner.log"))
+            .await
+            .unwrap_or_else(|error| format!("无法读取 Miner 日志: {error}")),
+    };
+    let evolver_logs = match &journal_logs {
+        Ok(logs) => logs.clone(),
+        Err(_) => read_log_tail(&state.root.join("logs/evolver.log"))
+            .await
+            .unwrap_or_else(|error| format!("无法读取 Evolver 日志: {error}")),
+    };
     let service = |role: &str, logs: String| {
         json!({
             "status":"RUNNING",
@@ -380,6 +391,30 @@ async fn read_json(path: &PathBuf) -> Result<Value> {
     Ok(serde_json::from_str(&raw)?)
 }
 
+async fn read_worker_journal() -> Result<String> {
+    let output = Command::new("journalctl")
+        .args([
+            "-u",
+            "worldquant-rust-worker.service",
+            "--no-pager",
+            "-n",
+            "120",
+            "-o",
+            "short-iso",
+        ])
+        .output()
+        .await
+        .context("read worker journal")?;
+    if !output.status.success() {
+        return Err(anyhow!("journalctl exited with {}", output.status));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    if text.trim().is_empty() {
+        return Err(anyhow!("worker journal is empty"));
+    }
+    Ok(newest_first(text.trim_end()))
+}
+
 fn configured_model_name(config: &Value, role: &str) -> String {
     for suffix in [
         "config",
@@ -424,12 +459,16 @@ async fn read_log_tail(path: &PathBuf) -> Result<String> {
             text = text[(newline + 1)..].to_owned();
         }
     }
-    Ok(text.trim_end().to_owned())
+    Ok(newest_first(text.trim_end()))
+}
+
+fn newest_first(text: &str) -> String {
+    text.lines().rev().collect::<Vec<_>>().join("\n")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{configured_model_name, log_filename};
+    use super::{configured_model_name, log_filename, newest_first};
     use serde_json::json;
 
     #[test]
@@ -451,5 +490,13 @@ mod tests {
         assert_eq!(log_filename("miner_issues.log"), "miner_issues.log");
         assert_eq!(log_filename("evolver.log"), "evolver.log");
         assert_eq!(log_filename("evolver_issues.log"), "evolver_issues.log");
+    }
+
+    #[test]
+    fn dashboard_log_tail_places_newest_entry_first() {
+        assert_eq!(
+            newest_first("old entry\nnew entry\n"),
+            "new entry\nold entry"
+        );
     }
 }

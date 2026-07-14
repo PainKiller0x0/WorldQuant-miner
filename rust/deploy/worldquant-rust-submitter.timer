@@ -2,8 +2,8 @@
 Description=Run WorldQuant Rust automatic submitter
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=10min
+OnActiveSec=2min
+OnUnitInactiveSec=10min
 Persistent=true
 
 [Install]

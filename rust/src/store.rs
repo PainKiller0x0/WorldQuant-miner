@@ -1,6 +1,6 @@
 use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord};
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -66,6 +66,26 @@ impl AlphaStore {
         }).await.context("database insert task")?
     }
 
+    pub async fn needs_simulation(&self, expression: String) -> Result<bool> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            let raw: Option<String> = conn
+                .query_row(
+                    "SELECT raw_data FROM alphas WHERE expression=?1",
+                    [expression],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            Ok::<_, anyhow::Error>(
+                raw.map(|value| !value.contains("wq_alpha_id"))
+                    .unwrap_or(true),
+            )
+        })
+        .await
+        .context("database simulation state task")?
+    }
+
     pub async fn get_unsubmitted(&self, limit: i64) -> Result<Vec<AlphaRecord>> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
@@ -74,6 +94,16 @@ impl AlphaStore {
             let rows = stmt.query_map([limit], alpha_from_row)?;
             Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
         }).await.context("database pending task")?
+    }
+
+    pub async fn rust_pending(&self, limit: i64) -> Result<Vec<AlphaRecord>> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            let mut stmt = conn.prepare("SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas WHERE COALESCE(is_failed_on_wq, 0)=0 AND raw_data LIKE '%\"source\":\"rust\"%' AND raw_data NOT LIKE '%wq_alpha_id%' ORDER BY created_at ASC LIMIT ?1")?;
+            let rows = stmt.query_map([limit], alpha_from_row)?;
+            Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        }).await.context("database Rust pending task")?
     }
 
     pub async fn update_result(

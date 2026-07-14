@@ -31,6 +31,9 @@ pub async fn run_once(
     worldquant: Arc<dyn WorldQuantGateway>,
 ) -> Result<usize> {
     let policy = default_policy();
+    if role == Role::Evolver {
+        retry_pending(store.clone(), worldquant.clone()).await?;
+    }
     let recent = store.list_recent(12).await.unwrap_or_default();
     let prompt = build_prompt(role, &recent);
     let answer = models
@@ -50,7 +53,8 @@ pub async fn run_once(
             settings: settings.clone(),
             parent_id: recent.first().map(|a| a.id.clone()),
         };
-        if !store.insert_candidate(candidate).await? {
+        let inserted = store.insert_candidate(candidate).await?;
+        if !inserted && !store.needs_simulation(expression.clone()).await? {
             continue;
         }
         let local_id = crate::store::stable_id(&expression);
@@ -72,6 +76,32 @@ pub async fn run_once(
     Ok(accepted)
 }
 
+async fn retry_pending(
+    store: Arc<AlphaStore>,
+    worldquant: Arc<dyn WorldQuantGateway>,
+) -> Result<()> {
+    for candidate in store.rust_pending(8).await? {
+        let settings = candidate
+            .raw_data
+            .get("settings")
+            .cloned()
+            .unwrap_or_else(default_settings);
+        match worldquant.simulate(&candidate.expression, settings).await {
+            Ok(result) => {
+                let failed = result.status == "ERROR" || result.alpha_id.is_none();
+                let (metrics, raw, reason) = simulation_data(&result);
+                store
+                    .update_result(candidate.id, metrics, raw, failed, reason)
+                    .await?;
+            }
+            Err(error) => {
+                warn!(?error, expression=%candidate.expression, "pending simulation retry failed")
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn submit_pending(
     store: Arc<AlphaStore>,
     worldquant: Arc<dyn WorldQuantGateway>,
@@ -88,6 +118,10 @@ pub async fn submit_pending(
             warn!(id=%candidate.id, "candidate has no WorldQuant alpha id; skipping submit");
             continue;
         };
+        if has_failed_check(&candidate.raw_data) {
+            info!(id=%candidate.id, alpha_id, "alpha has failed checks; skipping submit");
+            continue;
+        }
         match worldquant.submit(alpha_id).await {
             Ok(_) => {
                 store.mark_submitted(candidate.expression.clone()).await?;
@@ -98,6 +132,18 @@ pub async fn submit_pending(
         }
     }
     Ok(submitted)
+}
+
+fn has_failed_check(raw_data: &Value) -> bool {
+    raw_data
+        .get("checks")
+        .and_then(Value::as_array)
+        .map(|checks| {
+            checks
+                .iter()
+                .any(|check| check.get("result").and_then(Value::as_str) == Some("FAIL"))
+        })
+        .unwrap_or(true)
 }
 
 fn build_prompt(role: Role, recent: &[AlphaRecord]) -> String {

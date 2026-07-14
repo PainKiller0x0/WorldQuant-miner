@@ -241,7 +241,7 @@ impl WorldQuantGateway for LiveWorldQuant {
             .request(
                 reqwest::Method::POST,
                 format!("{}/alphas/{}/submit", self.base_url, alpha_id),
-                Some(json!({})),
+                None,
             )
             .await?
             .json()

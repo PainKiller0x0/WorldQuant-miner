@@ -93,7 +93,7 @@ impl ModelGateway for LiveModelGateway {
                         ?role,
                         model=%model.model_name,
                         error=%error,
-                        "model call failed; trying next configured model"
+                        "model call failed"
                     );
                     errors.push(format!("{}: {}", model.model_name, error));
                 }

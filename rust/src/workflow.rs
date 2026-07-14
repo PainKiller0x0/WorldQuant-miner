@@ -150,15 +150,23 @@ fn build_prompt(role: Role, recent: &[AlphaRecord], policy: &ExpressionPolicy) -
     let fields = policy.fields.join(", ");
     let operators = policy.operators.join(", ");
     let forbidden = policy.forbidden.join(", ");
+    let signature_guide = "rank(x); zscore(x); abs(x); log(x); sqrt(x); sign(x); \
+ts_mean(x, d); ts_std_dev(x, d); ts_delta(x, d); ts_rank(x, d); ts_zscore(x, d); \
+decay_linear(x, d); ts_corr(x, y, d); correlation(x, y, d); \
+max(x, y); min(x, y); signed_power(x, p); power(x, p); \
+multiply(x, y); divide(x, y); add(x, y); subtract(x, y)";
     let output_contract = format!(
         "STRICT OUTPUT CONTRACT:\n\
 - Return exactly 4 lines.\n\
 - Each line must contain one complete FASTEXPR expression and end with ';'.\n\
 - Return no numbering, bullets, Markdown fences, JSON, variable assignments, comments, or explanations.\n\
-- Parentheses must be balanced. Use only integer lookback windows from 2 to 252.\n\
+- Parentheses must be balanced. Every d must be an integer lookback from 2 to 252; every p must be a numeric exponent.\n\
+- Use only the signatures in PREFERRED OPERATOR SIGNATURES. Every argument is required: for example, ts_delta(x) is invalid and ts_delta(x, 5) is valid.\n\
+- Before answering, silently check all function argument counts and remove any invalid line.\n\
 - Identifiers must come only from the allowed lists below. Arithmetic symbols +, -, *, and / are allowed.\n\
 ALLOWED DATA FIELDS: {fields}\n\
 ALLOWED OPERATORS: {operators}\n\
+PREFERRED OPERATOR SIGNATURES: {signature_guide}\n\
 FORBIDDEN IDENTIFIERS: {forbidden}"
     );
 
@@ -327,6 +335,9 @@ mod tests {
         assert!(prompt.contains("ts_corr"));
         assert!(prompt.contains("FORBIDDEN IDENTIFIERS: buy_turnover"));
         assert!(prompt.contains("no numbering, bullets, Markdown fences, JSON"));
+        assert!(prompt.contains("ts_delta(x, d)"));
+        assert!(prompt.contains("ts_delta(x) is invalid"));
+        assert!(prompt.contains("silently check all function argument counts"));
     }
 
     #[test]

@@ -70,7 +70,15 @@ async fn main() -> Result<()> {
                 serde_json::json!({"ok":true,"runtime":"rust","alphas":count})
             );
         }
-        Command::Dashboard => dashboard::serve(store, &config.listen).await?,
+        Command::Dashboard => {
+            dashboard::serve(
+                store,
+                config.root.clone(),
+                config.system_config_path.clone(),
+                &config.listen,
+            )
+            .await?
+        }
         Command::Run {
             role,
             interval_secs,

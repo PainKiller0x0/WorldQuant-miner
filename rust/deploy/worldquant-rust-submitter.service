@@ -1,0 +1,10 @@
+[Unit]
+Description=WorldQuant Miner Rust automatic submitter
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/worldquant-miner
+EnvironmentFile=/root/worldquant-miner/.env
+Environment=WQ_ROOT=/root/worldquant-miner
+ExecStart=/usr/local/bin/worldquant-miner-rs submit --limit 10

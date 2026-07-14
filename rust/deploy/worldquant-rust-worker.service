@@ -1,0 +1,17 @@
+[Unit]
+Description=WorldQuant Miner Rust miner and evolver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/worldquant-miner
+EnvironmentFile=/root/worldquant-miner/.env
+Environment=WQ_ROOT=/root/worldquant-miner
+ExecStart=/usr/local/bin/worldquant-miner-rs run both --interval-secs 60
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

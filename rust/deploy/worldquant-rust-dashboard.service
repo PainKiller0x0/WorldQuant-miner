@@ -1,0 +1,18 @@
+[Unit]
+Description=WorldQuant Miner Rust dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/worldquant-miner
+EnvironmentFile=/root/worldquant-miner/.env
+Environment=WQ_ROOT=/root/worldquant-miner
+Environment=WQ_LISTEN=0.0.0.0:5000
+ExecStart=/usr/local/bin/worldquant-miner-rs dashboard
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

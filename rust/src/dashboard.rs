@@ -400,7 +400,7 @@ async fn read_worker_journal() -> Result<String> {
             "-n",
             "120",
             "-o",
-            "short-iso",
+            "cat",
         ])
         .output()
         .await
@@ -408,7 +408,7 @@ async fn read_worker_journal() -> Result<String> {
     if !output.status.success() {
         return Err(anyhow!("journalctl exited with {}", output.status));
     }
-    let text = String::from_utf8_lossy(&output.stdout);
+    let text = strip_ansi(&String::from_utf8_lossy(&output.stdout));
     if text.trim().is_empty() {
         return Err(anyhow!("worker journal is empty"));
     }
@@ -466,9 +466,26 @@ fn newest_first(text: &str) -> String {
     text.lines().rev().collect::<Vec<_>>().join("\n")
 }
 
+fn strip_ansi(text: &str) -> String {
+    let mut clean = String::with_capacity(text.len());
+    let mut in_escape = false;
+    for character in text.chars() {
+        if in_escape {
+            if character.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+        } else if character == '\u{1b}' {
+            in_escape = true;
+        } else {
+            clean.push(character);
+        }
+    }
+    clean
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{configured_model_name, log_filename, newest_first};
+    use super::{configured_model_name, log_filename, newest_first, strip_ansi};
     use serde_json::json;
 
     #[test]
@@ -497,6 +514,14 @@ mod tests {
         assert_eq!(
             newest_first("old entry\nnew entry\n"),
             "new entry\nold entry"
+        );
+    }
+
+    #[test]
+    fn dashboard_removes_ansi_formatting_from_journal_lines() {
+        assert_eq!(
+            strip_ansi("\u{1b}[2m2026-01-01\u{1b}[0m INFO"),
+            "2026-01-01 INFO"
         );
     }
 }

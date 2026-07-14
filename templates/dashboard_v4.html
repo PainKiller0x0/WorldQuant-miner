@@ -202,6 +202,13 @@
             ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
     }
 
+    function formatLogText(value) {
+        return (value || '').split('\n').map(function(line) {
+            var match = line.match(/^(\d{4}-\d{2}-\d{2}T[^ ]+)\s+(.*)$/);
+            return match ? formatTimestamp(match[1]) + ' ' + match[2] : line;
+        }).join('\n');
+    }
+
     function fetchData() {
         fetch('/status')
             .then(function(r) { if(!r.ok) throw new Error(r.statusText); return r.json(); })
@@ -239,7 +246,7 @@
         lastSeen.textContent = formatTimestamp(status.last_seen);
         var model = document.getElementById(name + '-model');
         if (model) model.textContent = status.model_name || '未配置';
-        logs.textContent = status.logs || '';
+        logs.textContent = formatLogText(status.logs || '');
 
         var used = (wd && wd[name + '_budget_used']) || 0;
         var limit = (wd && wd[name + '_budget_limit']) || 1;

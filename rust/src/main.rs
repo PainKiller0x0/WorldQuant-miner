@@ -57,6 +57,7 @@ async fn main() -> Result<()> {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .with_target(false)
+        .with_ansi(false)
         .init();
     let cli = Cli::parse();
     let config = AppConfig::load()?;

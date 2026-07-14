@@ -30,9 +30,9 @@ impl LiveModelGateway {
         })
     }
 
-    async fn call(&self, model: &ModelConfig, prompt: &str) -> Result<String> {
+    async fn call(&self, role: Role, model: &ModelConfig, prompt: &str) -> Result<String> {
         let url = completion_url(&model.base_url);
-        tracing::info!(model=%model.model_name, endpoint=%url, "calling model");
+        tracing::info!(?role, model=%model.model_name, endpoint=%url, "calling model");
         let mut body = json!({
             "model": model.model_name,
             "messages": [
@@ -58,7 +58,7 @@ impl LiveModelGateway {
         if !status.is_success() {
             return Err(anyhow!("LLM returned {}", status));
         }
-        tracing::info!(model=%model.model_name, "model response received");
+        tracing::info!(?role, model=%model.model_name, "model response received");
         response_text(&value).ok_or_else(|| anyhow!("LLM response has no message content"))
     }
 }
@@ -75,9 +75,17 @@ impl ModelGateway for LiveModelGateway {
         }
         let mut errors = Vec::new();
         for model in models {
-            match self.call(model, prompt).await {
+            match self.call(role, model, prompt).await {
                 Ok(value) => return Ok(value),
-                Err(error) => errors.push(format!("{}: {}", model.model_name, error)),
+                Err(error) => {
+                    tracing::warn!(
+                        ?role,
+                        model=%model.model_name,
+                        error=%error,
+                        "model call failed; trying next configured model"
+                    );
+                    errors.push(format!("{}: {}", model.model_name, error));
+                }
             }
         }
         Err(anyhow!(

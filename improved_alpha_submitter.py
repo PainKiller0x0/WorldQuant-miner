@@ -22,10 +22,30 @@ class ImprovedAlphaSubmitter:
 
     def setup_auth(self, credentials_path: str) -> None:
         """设置 WorldQuant Brain 的身份验证。"""
-        with open(credentials_path) as f:
-            credentials = json.load(f)
+        username = os.getenv("WQ_USER_ID")
+        password = os.getenv("WQ_API_KEY")
+        if not username or not password:
+            with open(credentials_path, encoding="utf-8") as f:
+                raw = f.read().strip()
+            try:
+                credentials = json.loads(raw)
+                if isinstance(credentials, dict):
+                    username = credentials.get("username") or credentials.get("user_id")
+                    password = credentials.get("password") or credentials.get("api_key")
+                else:
+                    username, password = credentials[:2]
+            except (json.JSONDecodeError, TypeError, ValueError):
+                lines = [line.strip() for line in raw.splitlines() if line.strip()]
+                tokens = lines[0].split() if lines else []
+                if len(tokens) >= 2:
+                    username, password = tokens[0], tokens[1]
+                elif len(lines) >= 2:
+                    username, password = lines[0], lines[1]
+                else:
+                    raise ValueError("凭据文件必须是 JSON、同一行的用户名密码或两行凭据")
 
-        username, password = credentials
+        if not username or not password:
+            raise ValueError("缺少 WorldQuant 用户名或 API 密钥")
         self.sess.auth = HTTPBasicAuth(username, password)
 
         response = self.sess.post("https://api.worldquantbrain.com/authentication")

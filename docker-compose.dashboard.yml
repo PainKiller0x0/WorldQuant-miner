@@ -35,6 +35,7 @@ services:
       # 添加这行:
       - ./invalid_functions.json.lock:/app/invalid_functions.json.lock
       - ./wq_miner.db:/app/wq_miner.db  # <--- 新增这行
+      - ./database.py:/app/database.py:ro
     command: python -u Web仪表盘.py # 运行新的后台脚本
     ports:
       - "8080:8080"

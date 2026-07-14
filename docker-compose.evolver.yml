@@ -18,6 +18,7 @@ services:
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
       - ./tested_alphas_log.json:/app/tested_alphas_log.json
       - ./api_config.json:/app/api_config.json
+      - ./llm_provider.py:/app/llm_provider.py:ro
       - ./alpha_generator_ollama.py:/app/alpha_generator_ollama.py:ro
       - ./invalid_functions.json:/app/invalid_functions.json
       - ./system_config.json:/app/system_config.json
@@ -37,6 +38,7 @@ services:
       # 添加这行:
       - ./invalid_functions.json.lock:/app/invalid_functions.json.lock
       - ./wq_miner.db:/app/wq_miner.db  # <--- 新增数据库挂载
+      - ./database.py:/app/database.py:ro
     command: >
       sh -c "rm -rf /app/__pycache__ && find . -name '*.pyc' -delete && python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}

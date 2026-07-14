@@ -10,15 +10,24 @@ services:
     environment:
       - WQ_USER_ID=${WQ_USER_ID}
       - WQ_API_KEY=${WQ_API_KEY}
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
     volumes:
       - ./logs:/app/logs
       - ./hopeful_alphas.json:/app/hopeful_alphas.json
       - ./tested_alphas_log.json:/app/tested_alphas_log.json
       - ./api_config.json:/app/api_config.json
+      - ./llm_provider.py:/app/llm_provider.py:ro
+      - ./wq_client.py:/app/wq_client.py:ro
       - ./system_config.json:/app/system_config.json
       - ./local_model:/app/local_model:ro
       # [v18.0] 新增：挂载本地推理代码
       - ./llm_local.py:/app/llm_local.py:ro
+      - ./alpha_generator_ollama.py:/app/alpha_generator_ollama.py:ro
+      - ./wq_miner.db:/app/wq_miner.db
+      - ./database.py:/app/database.py:ro
+      - ./utils.py:/app/utils.py:ro
     command: >
       sh -c "python -u alpha_generator_ollama.py
       --user-id ${WQ_USER_ID}

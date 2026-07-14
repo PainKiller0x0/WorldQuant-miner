@@ -1,4 +1,3 @@
-
 requests
 pandas
 numpy
@@ -7,5 +6,7 @@ openai
 filelock
 sqlalchemy
 # [v18] 本地模型依赖
+# 确保使用 CPU 版本的 torch 以减小体积
 torch --index-url https://download.pytorch.org/whl/cpu
-transformers
+# [Fix] 锁定 transformers 版本以修复 'generate' 方法丢失的问题
+transformers==4.46.0

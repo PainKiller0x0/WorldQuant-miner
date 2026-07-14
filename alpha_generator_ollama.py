@@ -47,15 +47,18 @@ def is_alpha_syntactically_suspicious(alpha_code: str) -> bool:
     return False
 
 class AlphaGenerator:
-    def __init__(self, wq: WorldQuant, api_config_path, batch_size=5, concurrency_level=2): 
+    def __init__(self, wq: WorldQuant, api_config_path, batch_size=5, concurrency_level=2, mode='discover'):
         self.wq = wq 
         self.batch_size = batch_size
+        self.mode = mode
         try:
             self.llm = LLMProvider(api_config_path=api_config_path)
         except Exception as e: logger.critical(f"初始化 LLMProvider 失败: {e}"); raise
         
         self.local_llm = None
-        if LOCAL_LLM_AVAILABLE:
+        model_config_key = "miner_use_local_model" if mode == "discover" else "evolver_use_local_model"
+        use_local_model = utils.load_system_config().get(model_config_key, mode == "discover")
+        if LOCAL_LLM_AVAILABLE and use_local_model:
             logger.info("[Init] 检测到 llm_local 模块，尝试加载本地模型...")
             if os.path.exists("./local_model/miner_zero.pth"):
                 try:
@@ -320,17 +323,25 @@ class AlphaGenerator:
         use_local = config.get("miner_use_local_model", True)
         
         if use_local and self.local_llm:
+            # [Fix] 动态提示词构建：随机注入算子，强制模型发散思维
+            random_op = random.choice(['rank', 'ts_corr', 'ts_delta', 'ts_rank', 'decay_linear', 'signed_power'])
+            random_field = random.choice(['close', 'open', 'volume', 'returns', 'vwap'])
+            
             prompt_templates = [
-                "Generate a WorldQuant alpha expression.",
-                "Write a valid alpha factor using standard operators.",
-                "Create a financial trading signal expression."
+                f"Generate a WorldQuant alpha expression using {random_op}.",
+                f"Write a trading formula involving {random_field} and {random_op}.",
+                f"Create a alpha factor that uses {random_op} operator.",
+                f"Think of a new alpha expression based on {random_field}."
             ]
             prompt = random.choice(prompt_templates)
+            
+            # 使用高温度 (1.2) 激发创造力
             alpha_code = self.local_llm.generate(prompt, temp=1.2)
             if alpha_code:
                 return {"expression": alpha_code, "settings": {}}
             else:
                 logger.warning("[Miner] 本地模型生成失败，回退到在线 API。")
+
 
         result = self.llm.generate_alpha_idea(fields, operators, guidance, failed_examples)
         if result == "BUDGET_EXHAUSTED": logger.warning("[AlphaGenerator] BUDGET_EXHAUSTED (Discover)。"); return "BUDGET_EXHAUSTED"
@@ -549,5 +560,5 @@ if __name__ == "__main__":
     while wq_client is None:
         try: wq_client = WorldQuant(user_id=args.user_id, api_key=args.api_key); logger.info("WQ 登录成功。")
         except Exception as e: logger.error(f"WQ 登录失败: {e}"); time.sleep(30)
-    try: AlphaGenerator(wq=wq_client, api_config_path=args.api_config_path, batch_size=args.batch_size, concurrency_level=concurrency).run(mode=args.mode)
+    try: AlphaGenerator(wq=wq_client, api_config_path=args.api_config_path, batch_size=args.batch_size, concurrency_level=concurrency, mode=args.mode).run(mode=args.mode)
     except Exception as e: logger.critical(f"Fatal Error: {e}", exc_info=True)

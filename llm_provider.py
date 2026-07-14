@@ -136,13 +136,14 @@ class LLMProvider:
 
     def generate_alpha_idea(self, fields, operators, guidance=None, failed_examples=None):
         prompt = self._build_miner_prompt(fields, operators, guidance, failed_examples)
-        return self._call_fleet('miner', prompt, json_mode=False)
+        allowed = set(fields or []) | set(operators or [])
+        return self._call_fleet('miner', prompt, json_mode=False, allowed_identifiers=allowed)
 
     def generate_evolved_alpha_idea(self, base_obj, guidance=None):
         prompt = self._build_evolver_prompt(base_obj, guidance)
         return self._call_fleet('evolver', prompt, json_mode=False)
 
-    def _call_fleet(self, role, prompt, json_mode=False):
+    def _call_fleet(self, role, prompt, json_mode=False, allowed_identifiers=None):
         candidates = [role] + self.backup_fleets.get(role, [])
         
         for i, client_key in enumerate(candidates):
@@ -176,7 +177,13 @@ class LLMProvider:
                     if idea:
                         dynamic_forbidden = self._get_dynamic_forbidden_keywords()
                         tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', idea)
-                        if not set(tokens).isdisjoint(dynamic_forbidden):
+                        unknown = sorted(set(tokens) - set(allowed_identifiers or set()) - {
+                            'and', 'or', 'not', 'true', 'false', 'nan', 'inf'
+                        }) if allowed_identifiers else []
+                        if unknown:
+                            logger.warning(f"[{client_key}] ❌ 包含未提供的字段/算子(本地拦截): {unknown[:8]}")
+                            soft_failure = True
+                        elif not set(tokens).isdisjoint(dynamic_forbidden):
                             logger.warning(f"[{client_key}] ❌ 包含违禁词(本地拦截)，视为 Soft Failure")
                             soft_failure = True
                         else:
@@ -226,6 +233,10 @@ class LLMProvider:
         if not client or not model_name: return None, "NO_CONFIG"
         
         extra_args = {}
+        # GLM-4.7 defaults to thinking mode. Miner/Evolver only need a short
+        # FASTEXPR, so disable reasoning to keep the output within the budget.
+        if model_name.lower().startswith('glm-4.7'):
+            extra_args['extra_body'] = {'thinking': {'type': 'disabled'}}
         
         try:
             resp = client.chat.completions.create(
@@ -375,7 +386,9 @@ class LLMProvider:
             f"1. Output ONLY the expression code ending with ';'.\n"
             f"2. NO explanations. NO markdown wrapping needed, just the code.\n"
             f"3. ❌ STRICTLY FORBIDDEN: {forbidden_str}.\n"
-            f"4. Make it mathematically diverse.\n"
+            f"4. Use only the exact field and operator names listed above; never invent, concatenate, or rename identifiers.\n"
+            f"5. Use ordinary decimal constants only (for example 0.000001), never scientific notation such as 1e-8.\n"
+            f"6. Make it mathematically diverse.\n"
         )
         return prompt
 

@@ -34,7 +34,9 @@ def get_hopeful_alphas_stats():
     try:
         with get_db() as db:
             # 1. 基础统计 (针对全量数据)
-            total_count = db.query(func.count(Alpha.id)).scalar()
+            # Count a required business field, not the legacy id column.
+            # Historical rows may have NULL ids until the migration runs.
+            total_count = db.query(func.count(Alpha.expression)).scalar()
             stats['count'] = total_count
             
             metrics = db.query(
@@ -47,15 +49,15 @@ def get_hopeful_alphas_stats():
             stats['avg_fitness'] = metrics[1] or 0.0
             stats['max_sharpe'] = metrics[2] or 0.0
             
-            stats['submittable_pending_count'] = db.query(func.count(Alpha.id)).filter(
+            stats['submittable_pending_count'] = db.query(func.count(Alpha.expression)).filter(
                 Alpha.pass_count >= 7, 
                 Alpha.fail_count == 0, 
                 Alpha.is_submitted == False, 
                 Alpha.is_failed_on_wq == False
             ).scalar()
             
-            stats['successfully_submitted_count'] = db.query(func.count(Alpha.id)).filter(Alpha.is_submitted == True).scalar()
-            stats['total_submitted_count'] = stats['successfully_submitted_count'] + db.query(func.count(Alpha.id)).filter(Alpha.is_failed_on_wq == True).scalar()
+            stats['successfully_submitted_count'] = db.query(func.count(Alpha.expression)).filter(Alpha.is_submitted == True).scalar()
+            stats['total_submitted_count'] = stats['successfully_submitted_count'] + db.query(func.count(Alpha.expression)).filter(Alpha.is_failed_on_wq == True).scalar()
 
             # 2. 列表获取 (限制返回数量，防止前端卡死)
             # [v17.1] 优化：只返回 Fitness 最高的 300 条
@@ -64,6 +66,11 @@ def get_hopeful_alphas_stats():
             
             processed_list = []
             for a in all_alphas:
+                # SQLAlchemy returns None for rows whose legacy primary key is
+                # NULL. The migration repairs them, but the dashboard must
+                # remain healthy if an old row is encountered during rollout.
+                if a is None:
+                    continue
                 score = a.calculate_score()
                 is_submittable = (a.pass_count >= 7 and a.fail_count == 0)
                 is_successfully_submitted = (a.is_submitted)

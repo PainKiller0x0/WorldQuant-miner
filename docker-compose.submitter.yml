@@ -1,0 +1,24 @@
+services:
+  submitter:
+    image: worldquant-miner-miner:latest
+    container_name: wq-submitter
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./wq_miner.db:/app/wq_miner.db
+      - ./database.py:/app/database.py:ro
+      - ./auto_submitter.py:/app/auto_submitter.py:ro
+      - ./improved_alpha_submitter.py:/app/improved_alpha_submitter.py:ro
+      - ./credential.txt:/app/credential.txt:ro
+      - ./logs:/app/logs
+    command: >
+      python -u /app/auto_submitter.py
+      --credentials /app/credential.txt
+      --batch-size 3
+      --interval-hours 1
+      --min-pass-count 7
+      --min-fitness 1.0
+      --min-sharpe 1.25
+      --max-age-hours 24
+    restart: always

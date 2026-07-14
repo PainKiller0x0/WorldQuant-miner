@@ -3,13 +3,13 @@ import os
 import re
 import logging
 from transformers import AutoTokenizer, PretrainedConfig, PreTrainedModel
-from transformers.generation.utils import GenerationMixin 
-from transformers.modeling_outputs import CausalLMOutputWithPast
+from transformers.generation.utils import GenerationMixin
 import torch.nn as nn
 import math
 
 logger = logging.getLogger(__name__)
 
+# --- MiniMind 模型定义 ---
 class MiniMindConfig(PretrainedConfig):
     model_type = "minimind"
     def __init__(self, dim=512, n_layers=8, n_heads=8, vocab_size=6400, max_seq_len=512, **kwargs):
@@ -19,7 +19,6 @@ class MiniMindConfig(PretrainedConfig):
         self.n_heads = n_heads
         self.vocab_size = vocab_size
         self.max_seq_len = max_seq_len
-        # 兼容性字段
         self.hidden_size = dim
         self.num_hidden_layers = n_layers
         self.num_attention_heads = n_heads
@@ -94,17 +93,23 @@ class MiniMindForCausalLM(PreTrainedModel, GenerationMixin):
             h = layer(h)
         h = self.norm(h)
         logits = self.output(h)
-        
-        return CausalLMOutputWithPast(
-            loss=None,
-            logits=logits,
-            past_key_values=None,
-            hidden_states=None,
-            attentions=None,
-        )
+        from transformers.modeling_outputs import CausalLMOutputWithPast
+        return CausalLMOutputWithPast(loss=None, logits=logits)
 
     def prepare_inputs_for_generation(self, input_ids, **kwargs):
         return {"input_ids": input_ids}
+
+    def get_input_embeddings(self):
+        return self.tok_embeddings
+
+    def set_input_embeddings(self, value):
+        self.tok_embeddings = value
+
+    def get_output_embeddings(self):
+        return self.output
+
+    def set_output_embeddings(self, new_embeddings):
+        self.output = new_embeddings
 
 class LocalLLM:
     def __init__(self, model_dir="./local_model"):
@@ -139,17 +144,16 @@ class LocalLLM:
         except Exception as e:
             logger.critical(f"❌ [LocalLLM] 模型加载失败: {e}", exc_info=True)
 
-        def generate(self, prompt, temp=1.0):
+    def generate(self, prompt, temp=1.0):
         if not self.model or not self.tokenizer: return None
         try:
             inputs = self.tokenizer(prompt, return_tensors='pt').to(self.device)
             with torch.no_grad():
-                # [v18.9 Tuning] 极度保守模式
                 output_ids = self.model.generate(
                     inputs['input_ids'], 
                     max_new_tokens=200, 
-                    temperature=0.6,        # [Fix] 降温至 0.6，减少幻觉
-                    top_k=20,               # [Fix] 只选概率最高的 20 个词
+                    temperature=temp,        
+                    top_k=50,               
                     top_p=0.9, 
                     repetition_penalty=1.2, 
                     do_sample=True, 
@@ -158,7 +162,6 @@ class LocalLLM:
             full_text = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
             generated = full_text[len(prompt):].strip()
             
-            # [v18.9] 放宽过滤：只要有长度就行
             if len(generated) < 3: 
                 return None
 

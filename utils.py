@@ -68,8 +68,18 @@ def _get_default_config():
 
 def load_hopeful_alphas_safe():
     try:
+        config = load_system_config()
+        pool_limit = max(1, int(config.get("hopeful_pool_max_size", 200)))
         with database.get_db() as db:
-            alphas = db.query(Alpha).all()
+            # The database also contains the historical archive. Only load
+            # the configured elite pool into the evolver process.
+            alphas = (
+                db.query(Alpha)
+                .filter(Alpha.is_failed_on_wq == False)
+                .order_by(Alpha.fitness.desc())
+                .limit(pool_limit)
+                .all()
+            )
             result = []
             for a in alphas:
                 # [v18.6 Fix] 绝对防御：先检查对象本身

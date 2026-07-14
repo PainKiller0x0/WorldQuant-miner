@@ -300,7 +300,14 @@ class WorldQuant:
             response = self._make_request('GET', url, timeout=60) 
             data = response.json()
             op_list = data.get('results', []) if isinstance(data, dict) else data
-            operators = [str(op) for op in op_list]
+            operators = []
+            for op in op_list:
+                if isinstance(op, dict):
+                    name = op.get('name') or op.get('operator') or op.get('id')
+                    if name:
+                        operators.append(str(name))
+                elif op:
+                    operators.append(str(op))
             logger.info(f"成功獲取 {len(operators)} 個操作符。")
             return operators
         except requests.exceptions.RequestException as e:

@@ -1,6 +1,7 @@
 # --- database.py v17.0 (Dual Pool & Auto-Clean) ---
 import os
 import json
+import hashlib
 import logging
 from datetime import datetime, timezone
 from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, Text, DateTime, JSON, func
@@ -19,7 +20,11 @@ Base = declarative_base()
 class Alpha(Base):
     __tablename__ = 'alphas'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    # The existing SQLite database uses TEXT ids.  Some historical rows have
+    # no id because the old writer relied on integer autoincrement semantics.
+    # Keep the database key textual and repair missing values with the
+    # migration script before starting the fixed services.
+    id = Column(String(128), primary_key=True)
     expression = Column(Text, unique=True, nullable=False, index=True)
     
     # 性能指标
@@ -86,9 +91,23 @@ def get_db():
 
 # --- 操作函数 ---
 
+def _persistent_alpha_id(alpha_data, expression):
+    """Return the WorldQuant id, or a stable local id for legacy records."""
+    alpha_id = alpha_data.get('alpha_id')
+    if not alpha_id:
+        raw_data = alpha_data.get('raw_data')
+        if isinstance(raw_data, dict):
+            alpha_id = raw_data.get('alpha_id')
+    if alpha_id:
+        return str(alpha_id)
+    digest = hashlib.sha256(expression.encode('utf-8')).hexdigest()[:32]
+    return f"local:{digest}"
+
+
 def add_alpha(alpha_data):
     expr = alpha_data.get('expression')
     if not expr: return False
+    alpha_id = _persistent_alpha_id(alpha_data, expr)
     
     checks = alpha_data.get('checks_summary', '')
     import re
@@ -103,8 +122,11 @@ def add_alpha(alpha_data):
         existing = db.query(Alpha).filter(Alpha.expression == expr).first()
         if existing:
             return False 
+        if db.get(Alpha, alpha_id) is not None:
+            return False
             
         new_alpha = Alpha(
+            id=alpha_id,
             expression=expr,
             fitness=float(perf.get('fitness', 0) or 0),
             sharpe=float(perf.get('sharpe', 0) or 0),

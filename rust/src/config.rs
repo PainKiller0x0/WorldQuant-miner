@@ -77,22 +77,46 @@ impl AppConfig {
 }
 
 fn role_models(values: &HashMap<String, ModelConfig>, role: &str) -> Vec<ModelConfig> {
-    let mut result = Vec::new();
-    let names = [
-        format!("{role}_config"),
-        format!("{role}_config_backup"),
-        format!("{role}_config_backup_2"),
-        format!("{role}_config_backup_3"),
-    ];
-    for name in names {
-        if let Some(value) = values.get(&name) {
-            if !value.api_key.is_empty()
-                && !value.model_name.is_empty()
-                && !value.base_url.is_empty()
-            {
-                result.push(value.clone());
-            }
+    values
+        .get(&format!("{role}_config"))
+        .filter(|value| {
+            !value.api_key.is_empty() && !value.model_name.is_empty() && !value.base_url.is_empty()
+        })
+        .cloned()
+        .into_iter()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model(name: &str) -> ModelConfig {
+        ModelConfig {
+            model_name: name.into(),
+            api_key: "test-key".into(),
+            base_url: "https://example.test/v1".into(),
         }
     }
-    result
+
+    #[test]
+    fn role_models_uses_only_the_primary_role_config() {
+        let values = HashMap::from([
+            ("miner_config".into(), model("agnes-2.0-flash")),
+            ("miner_config_backup".into(), model("unwanted-backup")),
+            ("miner_config_backup_2".into(), model("unwanted-backup-2")),
+        ]);
+
+        let models = role_models(&values, "miner");
+
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].model_name, "agnes-2.0-flash");
+    }
+
+    #[test]
+    fn role_models_does_not_promote_a_backup_when_primary_is_missing() {
+        let values = HashMap::from([("evolver_config_backup".into(), model("unwanted-backup"))]);
+
+        assert!(role_models(&values, "evolver").is_empty());
+    }
 }

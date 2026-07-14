@@ -59,14 +59,7 @@ impl LiveModelGateway {
             return Err(anyhow!("LLM returned {}", status));
         }
         tracing::info!(model=%model.model_name, "model response received");
-        value
-            .get("choices")
-            .and_then(Value::as_array)
-            .and_then(|v| v.first())
-            .and_then(|v| v.get("message"))
-            .and_then(|v| v.get("content"))
-            .and_then(content_text)
-            .ok_or_else(|| anyhow!("LLM response has no message content"))
+        response_text(&value).ok_or_else(|| anyhow!("LLM response has no message content"))
     }
 }
 
@@ -112,15 +105,28 @@ fn completion_url(base: &str) -> String {
 }
 
 fn content_text(value: &Value) -> Option<String> {
-    value.as_str().map(str::to_owned).or_else(|| {
-        value.as_array().map(|parts| {
-            parts
-                .iter()
-                .filter_map(|part| part.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("")
-        })
+    if let Some(text) = value.as_str() {
+        let text = text.trim();
+        return (!text.is_empty()).then(|| text.to_owned());
+    }
+    value.as_array().and_then(|parts| {
+        let text = parts
+            .iter()
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("");
+        (!text.trim().is_empty()).then_some(text)
     })
+}
+
+fn response_text(value: &Value) -> Option<String> {
+    let choice = value.get("choices")?.as_array()?.first()?;
+    let message = choice.get("message");
+    ["content", "reasoning_content"]
+        .iter()
+        .filter_map(|key| message.and_then(|message| message.get(*key)))
+        .find_map(content_text)
+        .or_else(|| choice.get("text").and_then(content_text))
 }
 
 pub fn extract_expressions(text: &str, policy: &ExpressionPolicy) -> Vec<String> {
@@ -210,6 +216,7 @@ pub fn default_policy() -> ExpressionPolicy {
             "ts_mean",
             "ts_std_dev",
             "ts_delta",
+            "ts_corr",
             "ts_rank",
             "ts_zscore",
             "decay_linear",
@@ -253,5 +260,33 @@ pub fn default_policy() -> ExpressionPolicy {
             .into_iter()
             .map(String::from)
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{default_policy, extract_expressions, response_text};
+    use serde_json::json;
+
+    #[test]
+    fn extracts_common_ts_corr_expression_from_markdown_response() {
+        let response = "```fastexpr\nrank(ts_corr(low, volume, 10));\n```";
+        let expressions = extract_expressions(response, &default_policy());
+
+        assert!(expressions.contains(&"rank(ts_corr(low, volume, 10));".to_owned()));
+    }
+
+    #[test]
+    fn falls_back_to_reasoning_content_when_message_content_is_empty() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "reasoning_content": "rank(close);"
+                }
+            }]
+        });
+
+        assert_eq!(response_text(&response).as_deref(), Some("rank(close);"));
     }
 }

@@ -165,13 +165,13 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
         tracing::warn!(?error, "worker journal unavailable; using legacy log files");
     }
     let miner_logs = match &journal_logs {
-        Ok(logs) => logs.clone(),
+        Ok(logs) => role_logs(logs, "Miner"),
         Err(_) => read_log_tail(&state.root.join("logs/miner.log"))
             .await
             .unwrap_or_else(|error| format!("无法读取 Miner 日志: {error}")),
     };
     let evolver_logs = match &journal_logs {
-        Ok(logs) => logs.clone(),
+        Ok(logs) => role_logs(logs, "Evolver"),
         Err(_) => read_log_tail(&state.root.join("logs/evolver.log"))
             .await
             .unwrap_or_else(|error| format!("无法读取 Evolver 日志: {error}")),
@@ -466,6 +466,19 @@ fn newest_first(text: &str) -> String {
     text.lines().rev().collect::<Vec<_>>().join("\n")
 }
 
+fn role_logs(text: &str, role: &str) -> String {
+    let marker = format!("role={role}");
+    let filtered = text
+        .lines()
+        .filter(|line| line.contains(&marker))
+        .collect::<Vec<_>>();
+    if filtered.is_empty() {
+        format!("暂无 {role} 运行日志")
+    } else {
+        filtered.join("\n")
+    }
+}
+
 fn strip_ansi(text: &str) -> String {
     let mut clean = String::with_capacity(text.len());
     let mut in_escape = false;
@@ -485,7 +498,7 @@ fn strip_ansi(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{configured_model_name, log_filename, newest_first, strip_ansi};
+    use super::{configured_model_name, log_filename, newest_first, role_logs, strip_ansi};
     use serde_json::json;
 
     #[test]
@@ -522,6 +535,19 @@ mod tests {
         assert_eq!(
             strip_ansi("\u{1b}[2m2026-01-01\u{1b}[0m INFO"),
             "2026-01-01 INFO"
+        );
+    }
+
+    #[test]
+    fn dashboard_separates_miner_and_evolver_journal_lines() {
+        let logs = "new role=Evolver model=glm-4.7-flash\nold role=Miner model=agnes-2.0-flash";
+        assert_eq!(
+            role_logs(logs, "Miner"),
+            "old role=Miner model=agnes-2.0-flash"
+        );
+        assert_eq!(
+            role_logs(logs, "Evolver"),
+            "new role=Evolver model=glm-4.7-flash"
         );
     }
 }

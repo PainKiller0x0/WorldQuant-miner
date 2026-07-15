@@ -155,6 +155,9 @@ fn response_text(value: &Value) -> Option<String> {
 
 pub fn extract_expressions(text: &str, policy: &ExpressionPolicy) -> Vec<String> {
     let mut expressions = Vec::new();
+    let direct_expression =
+        regex::Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(").expect("static direct expression regex");
+    let mut rejected_direct_expression = false;
     let cleaned = text.replace("<think>", "").replace("</think>", "");
     for line in cleaned.lines() {
         let candidate = line
@@ -164,11 +167,25 @@ pub fn extract_expressions(text: &str, policy: &ExpressionPolicy) -> Vec<String>
         if candidate.is_empty() || candidate.starts_with('#') || candidate.len() > 500 {
             continue;
         }
-        if let Ok(expression) = policy.validate(candidate) {
-            if !expressions.contains(&expression) {
-                expressions.push(expression);
+        match policy.validate(candidate) {
+            Ok(expression) => {
+                if !expressions.contains(&expression) {
+                    expressions.push(expression);
+                }
             }
+            Err(error) if direct_expression.is_match(candidate) => {
+                rejected_direct_expression = true;
+                tracing::warn!(
+                    candidate,
+                    error = %error,
+                    "discarded invalid model expression before WorldQuant simulation"
+                );
+            }
+            Err(_) => {}
         }
+    }
+    if !expressions.is_empty() || rejected_direct_expression {
+        return expressions;
     }
     let mut starts = Vec::new();
     for operator in &policy.operators {
@@ -176,7 +193,10 @@ pub fn extract_expressions(text: &str, policy: &ExpressionPolicy) -> Vec<String>
         let mut offset = 0;
         while let Some(found) = cleaned[offset..].find(&needle) {
             let start = offset + found;
-            if start == 0 || !cleaned.as_bytes()[start - 1].is_ascii_alphanumeric() {
+            if start == 0
+                || !(cleaned.as_bytes()[start - 1].is_ascii_alphanumeric()
+                    || cleaned.as_bytes()[start - 1] == b'_')
+            {
                 starts.push(start);
             }
             offset = start + needle.len();
@@ -187,14 +207,25 @@ pub fn extract_expressions(text: &str, policy: &ExpressionPolicy) -> Vec<String>
     }
     starts.sort_unstable();
     starts.dedup();
+    let mut covered_until = 0;
     for start in starts {
-        let Some(end) = balanced_end(&cleaned[start..]) else {
+        if start < covered_until {
+            continue;
+        }
+        let balanced = balanced_end(&cleaned[start..]);
+        let semicolon = cleaned[start..].find(';').map(|end| end + 1);
+        let candidates = semicolon.into_iter().chain(balanced).collect::<Vec<_>>();
+        let Some((end, expression)) = candidates.into_iter().find_map(|end| {
+            policy
+                .validate(&cleaned[start..start + end])
+                .ok()
+                .map(|expression| (end, expression))
+        }) else {
             continue;
         };
-        if let Ok(expression) = policy.validate(&cleaned[start..start + end]) {
-            if !expressions.contains(&expression) {
-                expressions.push(expression);
-            }
+        covered_until = start + end;
+        if !expressions.contains(&expression) {
+            expressions.push(expression);
         }
     }
     expressions
@@ -245,11 +276,7 @@ pub fn default_policy() -> ExpressionPolicy {
             "ts_sum",
             "ts_rank",
             "ts_zscore",
-            "decay_linear",
-            "winsorize",
             "zscore",
-            "group_neutralize",
-            "group_rank",
             "signed_power",
             "abs",
             "log",
@@ -257,27 +284,12 @@ pub fn default_policy() -> ExpressionPolicy {
             "sign",
             "max",
             "min",
-            "sum",
-            "product",
-            "if_else",
             "multiply",
             "divide",
             "add",
             "subtract",
             "correlation",
-            "std_dev",
-            "mean",
             "power",
-            "sigmoid",
-            "tanh",
-            "inverse",
-            "clamp",
-            "filter",
-            "trade_when",
-            "group_mean",
-            "group_std_dev",
-            "industry_neutralize",
-            "sector_neutralize",
         ]
         .into_iter()
         .map(String::from)
@@ -308,6 +320,30 @@ mod tests {
         let expression = "rank(ts_decay_linear(ts_corr(close, volume, 10), 5));";
 
         assert_eq!(default_policy().validate(expression).unwrap(), expression);
+    }
+
+    #[test]
+    fn inline_markdown_backticks_do_not_create_a_dirty_duplicate() {
+        let response = "`rank(ts_mean(close, 10))`;";
+
+        assert_eq!(
+            extract_expressions(response, &default_policy()),
+            vec!["rank(ts_mean(close, 10));".to_owned()]
+        );
+    }
+
+    #[test]
+    fn default_policy_rejects_inaccessible_mean_operator() {
+        assert!(default_policy()
+            .validate("mean(multiply(close, volume), 10);")
+            .is_err());
+    }
+
+    #[test]
+    fn invalid_outer_operator_does_not_salvage_a_nested_factor() {
+        let response = "mean(multiply(ts_corr(close, volume, 10), ts_delta(vwap, 5)), 15);";
+
+        assert!(extract_expressions(response, &default_policy()).is_empty());
     }
 
     #[test]

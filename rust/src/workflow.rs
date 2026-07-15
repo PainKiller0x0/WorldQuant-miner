@@ -122,7 +122,30 @@ async fn retry_pending(
     store: Arc<AlphaStore>,
     worldquant: Arc<dyn WorldQuantGateway>,
 ) -> Result<()> {
+    let policy = default_policy();
     for candidate in store.rust_pending(8).await? {
+        if let Err(reason) = validate_stored_expression(&candidate.expression, &policy) {
+            let expression = candidate.expression.clone();
+            let raw = json!({
+                "status": "LOCAL_VALIDATION_ERROR",
+                "message": reason,
+                "rejected_expression": expression,
+            });
+            store
+                .update_result(
+                    candidate.id,
+                    candidate.metrics,
+                    raw,
+                    true,
+                    Some(reason.clone()),
+                )
+                .await?;
+            warn!(
+                expression,
+                reason, "discarded invalid pending expression before WorldQuant retry"
+            );
+            continue;
+        }
         let settings = candidate
             .raw_data
             .get("settings")
@@ -142,6 +165,19 @@ async fn retry_pending(
         }
     }
     Ok(())
+}
+
+fn validate_stored_expression(
+    expression: &str,
+    policy: &ExpressionPolicy,
+) -> std::result::Result<(), String> {
+    match policy.validate(expression) {
+        Ok(normalized) if normalized == expression => Ok(()),
+        Ok(normalized) => Err(format!(
+            "LOCAL_VALIDATION_ERROR: stored expression is not canonical; normalized={normalized}"
+        )),
+        Err(error) => Err(format!("LOCAL_VALIDATION_ERROR: {error}")),
+    }
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -767,7 +803,7 @@ fn build_generation_plan_for_slot(
     let forbidden = policy.forbidden.join(", ");
     let signature_guide = "rank(x); zscore(x); abs(x); log(x); sqrt(x); sign(x); \
 ts_mean(x, d); ts_std_dev(x, d); ts_delta(x, d); ts_sum(x, d); ts_rank(x, d); ts_zscore(x, d); \
-decay_linear(x, d); ts_decay_linear(x, d); ts_corr(x, y, d); correlation(x, y, d); \
+ts_decay_linear(x, d); ts_corr(x, y, d); correlation(x, y, d); \
 max(x, y); min(x, y); signed_power(x, p); power(x, p); \
 multiply(x, y); divide(x, y); add(x, y); subtract(x, y)";
     let output_contract = format!(
@@ -1020,7 +1056,7 @@ mod tests {
     use super::{
         build_generation_plan, build_generation_plan_for_slot, classify_submission, default_policy,
         is_research_worthy, process_submissions, retry_delay, select_exact_alpha, simulation_data,
-        SubmissionState,
+        validate_stored_expression, SubmissionState,
     };
     use crate::domain::{AlphaMetrics, AlphaPools, AlphaRecord, Role};
     use crate::gateway::{SimulationResult, WorldQuantGateway};
@@ -1084,6 +1120,15 @@ mod tests {
             "rank(ts_decay_linear(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 20), 8));",
             &policy
         ));
+    }
+
+    #[test]
+    fn pending_retry_refuses_noncanonical_or_invalid_stored_expression() {
+        let policy = default_policy();
+
+        assert!(validate_stored_expression("rank(ts_mean(close, 10));", &policy).is_ok());
+        assert!(validate_stored_expression("rank(ts_mean(close, 10))`;", &policy).is_err());
+        assert!(validate_stored_expression("mean(multiply(close, volume), 10);", &policy).is_err());
     }
 
     #[test]

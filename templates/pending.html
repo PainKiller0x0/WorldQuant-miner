@@ -20,6 +20,12 @@
         .scroll-buttons { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; }
         .scroll-btn { background-color: var(--bs-secondary-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); border-radius: 5px; padding: 10px 12px; cursor: pointer; opacity: 0.7; font-size: 1.2em; margin-top: 5px; transition: opacity 0.2s; }
         .scroll-btn:hover { background-color: #0d6efd; opacity: 1; color: #fff; }
+        .phase-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--bs-border-color); }
+        .phase-badge { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 0.86rem; font-weight: 600; }
+        .phase-waiting { background: rgba(108,117,125,.18); color: var(--bs-secondary-color); border: 1px solid rgba(108,117,125,.4); }
+        .phase-checking { background: rgba(255,193,7,.16); color: #d39e00; border: 1px solid rgba(255,193,7,.45); }
+        .phase-ready { background: rgba(25,135,84,.16); color: #28a745; border: 1px solid rgba(25,135,84,.45); }
+        .phase-other { background: rgba(13,110,253,.13); color: #5b9cff; border: 1px solid rgba(13,110,253,.35); }
     </style>
 </head>
 <body>
@@ -52,6 +58,12 @@
             <span class="badge bg-primary rounded-pill fs-6" id="summary">总数: 0</span>
         </div>
         <div class="card-body p-0">
+            <div class="phase-summary">
+                <span class="phase-badge phase-waiting">待回测 / 待 Check <strong id="waiting-count">0</strong></span>
+                <span class="phase-badge phase-checking">Check 中 <strong id="checking-count">0</strong></span>
+                <span class="phase-badge phase-ready">可提交 <strong id="ready-count">0</strong></span>
+                <span class="ms-auto small text-muted" id="last-updated">尚未刷新</span>
+            </div>
             <div id="loading" class="text-center p-5 text-muted">
                 <div class="spinner-border text-primary mb-2" role="status"></div>
                 <div>正在加载数据...</div>
@@ -62,6 +74,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>操作</th>
+                            <th data-sort-key="submission_phase">阶段 <i class="bi bi-arrow-down-up sort-icon"></i></th>
                             <th data-sort-key="dashboard_score">得分 <i class="bi bi-arrow-down-up sort-icon"></i></th>
                             <th data-sort-key="expression">Alpha 表达式 (点击复制)</th>
                             <th data-sort-key="fitness">性能指标</th>
@@ -113,35 +126,62 @@
     let allAlphas = [];
     let currentSortKey = 'dashboard_score';
     let currentSortDir = 'desc';
+    let fetchInFlight = false;
 
     document.addEventListener('DOMContentLoaded', function() {
         fetchPendingAlphas();
         setupSortHeaders();
         setupScrollButtons();
+        setupActionHandlers(document.getElementById('alphaTableBody'));
+        setInterval(fetchPendingAlphas, 30000);
     });
 
-    function fetchPendingAlphas() {
+    async function fetchPendingAlphas() {
+        if (fetchInFlight) return;
+        fetchInFlight = true;
         const loadingDiv = document.getElementById('loading');
         const table = document.getElementById('alphaTable');
-        const summarySpan = document.getElementById('summary');
-
-        fetch('/api/get_pending_alphas').then(r=>r.json()).then(data => {
+        try {
+            const response = await fetch('/api/get_pending_alphas', {cache: 'no-store'});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
             if(data.error) throw new Error(data.error);
             allAlphas = data.map(alpha => {
                 const { pass, fail, pending } = parseChecksSummary(alpha.checks_summary);
-                alpha.checks_summary_pass = pass; alpha.checks_summary_fail = fail; alpha.checks_summary_pending = pending;
-                alpha.fitness = parseFloat(alpha.fitness)|| -999; alpha.sharpe = parseFloat(alpha.sharpe)|| -999;
-                alpha.returns = parseFloat(alpha.returns)||0; alpha.turnover = parseFloat(alpha.turnover)||0;
+                alpha.checks_summary_pass = Number(alpha.pass_count ?? pass) || 0;
+                alpha.checks_summary_fail = Number(alpha.fail_count ?? fail) || 0;
+                alpha.checks_summary_pending = pending;
+                const performance = alpha.performance || {};
+                alpha.fitness = toNumber(performance.fitness ?? alpha.fitness, -999);
+                alpha.sharpe = toNumber(performance.sharpe ?? alpha.sharpe, -999);
+                alpha.returns = toNumber(performance.returns ?? alpha.returns, 0);
+                alpha.turnover = toNumber(performance.turnover ?? alpha.turnover, 0);
                 return alpha;
             });
             updateSummaryCount(); renderTable();
             loadingDiv.style.display = 'none'; table.style.display = 'table';
-        }).catch(err => {
+            document.getElementById('last-updated').textContent = `自动刷新：${new Date().toLocaleTimeString()}`;
+        } catch (err) {
             loadingDiv.innerHTML = `<div class="text-danger">加载失败: ${err.message}</div>`;
-        });
+            loadingDiv.style.display = 'block';
+        } finally {
+            fetchInFlight = false;
+        }
     }
-    
-    function updateSummaryCount() { document.getElementById('summary').textContent = `总数: ${allAlphas.length}`; }
+
+    function updateSummaryCount() {
+        const counts = allAlphas.reduce((value, alpha) => {
+            const phase = alpha.submission_phase || 'waiting_check';
+            if (phase === 'checking') value.checking += 1;
+            else if (phase === 'ready') value.ready += 1;
+            else value.waiting += 1;
+            return value;
+        }, {waiting: 0, checking: 0, ready: 0});
+        document.getElementById('summary').textContent = `总数: ${allAlphas.length}`;
+        document.getElementById('waiting-count').textContent = counts.waiting;
+        document.getElementById('checking-count').textContent = counts.checking;
+        document.getElementById('ready-count').textContent = counts.ready;
+    }
 
     function setupSortHeaders() {
         document.querySelectorAll('#alphaTable th[data-sort-key]').forEach(th => {
@@ -157,6 +197,18 @@
 
     function parseChecksSummary(str) {
         if (typeof str !== 'string') return { pass: 0, fail: 0, pending: 0 };
+        try {
+            const checks = JSON.parse(str);
+            if (Array.isArray(checks)) {
+                return checks.reduce((counts, check) => {
+                    const result = String(check.result || '').toUpperCase();
+                    if (result === 'PASS') counts.pass += 1;
+                    else if (result === 'FAIL') counts.fail += 1;
+                    else if (result === 'PENDING') counts.pending += 1;
+                    return counts;
+                }, { pass: 0, fail: 0, pending: 0 });
+            }
+        } catch (_) {}
         const p = parseInt((str.match(/(\d+)\s+PASS/i)||[])[1]||0);
         const f = parseInt((str.match(/(\d+)\s+FAIL/i)||[])[1]||0);
         const pd = parseInt((str.match(/(\d+)\s+PENDING/i)||[])[1]||0);
@@ -168,12 +220,12 @@
         tbody.innerHTML = '';
         const sorted = [...allAlphas].sort((a, b) => {
             let va = a[currentSortKey], vb = b[currentSortKey];
-            if (['expression','timestamp'].includes(currentSortKey)) { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+            if (['expression','timestamp','submission_phase'].includes(currentSortKey)) { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
             else { va = parseFloat(va)||-Infinity; vb = parseFloat(vb)||-Infinity; }
             return (va < vb ? -1 : 1) * (currentSortDir === 'asc' ? 1 : -1);
         });
 
-        if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">没有待处理的 Alphas</td></tr>'; return; }
+        if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">没有待处理的 Alphas</td></tr>'; return; }
 
         sorted.forEach(a => {
             const row = document.createElement('tr');
@@ -182,6 +234,7 @@
             const fit = a.fitness.toFixed(4), sha = a.sharpe.toFixed(4);
             const ret = (a.returns*100).toFixed(2), trn = (a.turnover*100).toFixed(2);
             const timeStr = a.timestamp ? new Date(a.timestamp).toLocaleString() : 'N/A';
+            const phase = phaseView(a.submission_phase, a.submission_last_attempt_at);
             
             let checksHtml = '';
             if(a.checks_summary_pass > 0) checksHtml += `<span class="check-tag pass">${a.checks_summary_pass} PASS</span>`;
@@ -196,6 +249,7 @@
                         <button class="btn btn-outline-danger btn-sm btn-action" data-action="mark-failed"><i class="bi bi-x-lg"></i> 失败</button>
                     </div>
                 </td>
+                <td style="min-width:150px"><span class="phase-badge ${phase.className}">${phase.label}</span>${phase.lastAttempt}</td>
                 <td class="fw-bold text-primary">${parseFloat(a.dashboard_score).toFixed(4)}</td>
                 <td><div class="alpha-expression" data-copy-value="${escapeHTML(a.expression)}">${escapeHTML(a.expression)}</div></td>
                 <td class="perf-cell">
@@ -209,7 +263,27 @@
             `;
             tbody.appendChild(row);
         });
-        setupActionHandlers(tbody);
+    }
+
+    function phaseView(phase, lastAttemptAt) {
+        const views = {
+            waiting_check: ['待回测 / 待 Check', 'phase-waiting'],
+            resimulation_required: ['待重新回测', 'phase-waiting'],
+            checking: ['Check 中', 'phase-checking'],
+            ready: ['可提交', 'phase-ready'],
+            waiting: ['等待官网状态', 'phase-other']
+        };
+        const [label, className] = views[phase] || ['待处理', 'phase-other'];
+        const timestamp = Number(lastAttemptAt);
+        const lastAttempt = Number.isFinite(timestamp) && timestamp > 0
+            ? `<div class="small text-muted mt-1">最近检查：${new Date(timestamp * 1000).toLocaleString()}</div>`
+            : '';
+        return {label, className, lastAttempt};
+    }
+
+    function toNumber(value, fallback) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
     }
 
     function setupActionHandlers(container) {

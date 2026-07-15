@@ -1,7 +1,7 @@
 use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord};
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -101,6 +101,11 @@ impl AlphaStore {
                 Some(false) => " AND raw_data NOT LIKE '%\"wq_alpha_id\"%'",
                 None => "",
             };
+            let order_by = if linked == Some(true) {
+                "COALESCE(CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_last_attempt_at') AS INTEGER) END, 0) ASC, fitness DESC, created_at ASC"
+            } else {
+                "fitness DESC, created_at ASC"
+            };
             let sql = format!(
                 "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
                  FROM alphas
@@ -110,7 +115,7 @@ impl AlphaStore {
                    AND COALESCE(is_failed_on_wq, 0)=0
                    AND (?1=1 OR pass_count<8)
                    {linked_filter}
-                 ORDER BY fitness DESC, created_at ASC
+                 ORDER BY {order_by}
                  LIMIT ?2"
             );
             let mut stmt = conn.prepare(&sql)?;
@@ -249,8 +254,8 @@ impl AlphaStore {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
-            let mut stmt = conn.prepare("SELECT expression, datetime(created_at,'+8 hours'), datetime(submitted_timestamp,'+8 hours'), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq FROM alphas WHERE pass_count>=7 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0 ORDER BY fitness DESC LIMIT ?1")?;
-            let rows = stmt.query_map([limit], dashboard_row)?;
+            let mut stmt = conn.prepare("SELECT expression, datetime(created_at,'+8 hours'), datetime(submitted_timestamp,'+8 hours'), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data FROM alphas WHERE pass_count>=7 AND fail_count=0 AND is_submitted=0 AND is_failed_on_wq=0 ORDER BY fitness DESC LIMIT ?1")?;
+            let rows = stmt.query_map([limit], pending_dashboard_row)?;
             Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
         }).await.context("dashboard pending task")?
     }
@@ -328,9 +333,46 @@ fn dashboard_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "is_submittable": pass_count >= 7 && fail_count == 0, "is_submitted": row.get::<_, i64>(10).unwrap_or(0) != 0,
         "is_failed_on_wq": row.get::<_, i64>(11).unwrap_or(0) != 0,
         "is_successfully_submitted": row.get::<_, i64>(10).unwrap_or(0) != 0,
+        "pass_count": pass_count, "fail_count": fail_count,
         "dashboard_score": fitness + pass_count as f64 * 0.2 + sharpe.abs() * 0.3 - turnover * 0.1,
         "performance": {"fitness": fitness, "sharpe": sharpe, "returns": row.get::<_, Option<f64>>(5)?.unwrap_or_default(), "turnover": turnover}
     }))
+}
+
+fn pending_dashboard_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
+    let mut value = dashboard_row(row)?;
+    let raw = row
+        .get::<_, Option<String>>(12)?
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or(Value::Null);
+    let alpha_id = raw.get("wq_alpha_id").and_then(Value::as_str);
+    let pass_count = value
+        .get("pass_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default();
+    let phase = raw
+        .get("submission_phase")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| {
+            if pass_count >= 8 {
+                "ready"
+            } else if alpha_id.is_some() {
+                "checking"
+            } else {
+                "waiting_check"
+            }
+        });
+    if let Some(object) = value.as_object_mut() {
+        object.insert("submission_phase".into(), json!(phase));
+        object.insert("wq_alpha_id".into(), json!(alpha_id));
+        object.insert(
+            "submission_last_attempt_at".into(),
+            raw.get("submission_last_attempt_at")
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
+    }
+    Ok(value)
 }
 
 fn grouped_count(conn: &Connection, sql: &str) -> Result<BTreeMap<String, i64>> {
@@ -450,6 +492,54 @@ mod tests {
         assert_eq!(summary["legacy_submission_backlog"], 1);
         assert_eq!(summary["linked_check_pending"], 0);
         assert_eq!(summary["ready_to_submit"], 0);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn linked_submission_candidates_rotate_after_an_attempt() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-rs-queue-test-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('high','rank(high);',2.0,1.5,0.1,0.2,7,0,'7 PASS',0,0,'{\"wq_alpha_id\":\"remote-high\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('low','rank(low);',1.0,1.3,0.1,0.2,7,0,'7 PASS',0,0,'{\"wq_alpha_id\":\"remote-low\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = AlphaStore::new(&path);
+
+        let first = store
+            .get_submission_candidates(1, false, Some(true))
+            .await
+            .unwrap();
+        assert_eq!(first[0].id, "high");
+
+        let conn = Connection::open(&path).unwrap();
+        conn.execute(
+            "UPDATE alphas SET raw_data='{\"wq_alpha_id\":\"remote-high\",\"submission_phase\":\"checking\",\"submission_last_attempt_at\":100}' WHERE id='high'",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let next = store
+            .get_submission_candidates(1, false, Some(true))
+            .await
+            .unwrap();
+        assert_eq!(next[0].id, "low");
+        let pending = store.pending_dashboard(10).await.unwrap();
+        let high = pending
+            .iter()
+            .find(|row| row.get("expression").and_then(Value::as_str) == Some("rank(high);"))
+            .unwrap();
+        assert_eq!(high["submission_phase"], "checking");
+        assert_eq!(high["wq_alpha_id"], "remote-high");
+        assert_eq!(high["submission_last_attempt_at"], 100);
+        assert_eq!(high["performance"]["fitness"], 2.0);
+        assert_eq!(high["pass_count"], 7);
         let _ = std::fs::remove_file(path);
     }
 }

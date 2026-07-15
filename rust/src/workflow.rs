@@ -224,7 +224,7 @@ pub async fn process_submissions(
             alpha_id = new_alpha_id;
             detail = simulation.data;
             state = classify_submission(&detail);
-            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false).await?;
             result.resimulated += 1;
             info!(id=%candidate.id, alpha_id, ?state, "stale alpha resimulated");
         }
@@ -234,6 +234,7 @@ pub async fn process_submissions(
                 info!(id=%candidate.id, alpha_id, "dry-run: submission check required");
                 continue;
             }
+            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, true).await?;
             let checked_detail = match worldquant.check_submission(&alpha_id).await {
                 Ok(detail) => detail,
                 Err(error) => {
@@ -248,7 +249,7 @@ pub async fn process_submissions(
                 worldquant.alpha(&alpha_id).await?
             };
             state = classify_submission(&detail);
-            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+            persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, true).await?;
             result.checked += 1;
             info!(id=%candidate.id, alpha_id, ?state, "submission check complete");
         }
@@ -257,7 +258,8 @@ pub async fn process_submissions(
             SubmissionState::Ready => {
                 result.ready += 1;
                 if !dry_run {
-                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
+                        .await?;
                 }
                 if !auto_submit || dry_run || submit_slots == 0 {
                     info!(
@@ -281,7 +283,8 @@ pub async fn process_submissions(
             SubmissionState::Failed(ref reasons) => {
                 result.rejected += 1;
                 if !dry_run {
-                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
+                        .await?;
                 }
                 info!(id=%candidate.id, alpha_id, ?reasons, "alpha rejected by submission checks");
             }
@@ -292,7 +295,8 @@ pub async fn process_submissions(
             SubmissionState::CheckPending | SubmissionState::Waiting => {
                 result.skipped += 1;
                 if !dry_run {
-                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state).await?;
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
+                        .await?;
                 }
                 info!(id=%candidate.id, alpha_id, ?state, "alpha is not ready for submission");
             }
@@ -319,13 +323,25 @@ async fn persist_remote_state(
     alpha_id: &str,
     detail: &Value,
     state: &SubmissionState,
+    mark_attempt: bool,
 ) -> Result<()> {
     let simulation = SimulationResult {
         alpha_id: Some(alpha_id.to_owned()),
         status: "COMPLETE".into(),
         data: detail.clone(),
     };
-    let (metrics, raw, base_reason) = simulation_data(&simulation);
+    let (metrics, mut raw, base_reason) = simulation_data(&simulation);
+    if let Value::Object(map) = &mut raw {
+        map.insert("submission_phase".into(), json!(submission_phase(state)));
+        if mark_attempt {
+            map.insert(
+                "submission_last_attempt_at".into(),
+                json!(Utc::now().timestamp()),
+            );
+        } else if let Some(last_attempt) = candidate.raw_data.get("submission_last_attempt_at") {
+            map.insert("submission_last_attempt_at".into(), last_attempt.clone());
+        }
+    }
     let failure_reason = match state {
         SubmissionState::Failed(reasons) => Some(reasons.join(",")),
         _ => base_reason,
@@ -339,6 +355,16 @@ async fn persist_remote_state(
             failure_reason,
         )
         .await
+}
+
+fn submission_phase(state: &SubmissionState) -> &'static str {
+    match state {
+        SubmissionState::Stale => "resimulation_required",
+        SubmissionState::Failed(_) => "failed",
+        SubmissionState::CheckPending => "checking",
+        SubmissionState::Ready => "ready",
+        SubmissionState::Waiting => "waiting",
+    }
 }
 
 fn select_exact_alpha(expression: &str, matches: &[Value]) -> Option<Value> {
@@ -558,12 +584,18 @@ fn number(value: &Value, key: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_prompt, classify_submission, default_policy, select_exact_alpha, simulation_data,
-        submit_ramp_limit, SubmissionState,
+        build_prompt, classify_submission, default_policy, process_submissions, select_exact_alpha,
+        simulation_data, submit_ramp_limit, SubmissionState,
     };
     use crate::domain::{AlphaMetrics, AlphaRecord, Role};
-    use crate::gateway::SimulationResult;
+    use crate::gateway::{SimulationResult, WorldQuantGateway};
+    use crate::store::AlphaStore;
+    use anyhow::{anyhow, Result};
+    use async_trait::async_trait;
     use serde_json::json;
+    use serde_json::Value;
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn alpha(expression: &str, fitness: f64, sharpe: f64) -> AlphaRecord {
         AlphaRecord {
@@ -692,5 +724,85 @@ mod tests {
         assert_eq!(submit_ramp_limit(Some(start), start + 2 * 86_400), 5);
         assert_eq!(submit_ramp_limit(Some(start), start + 7 * 86_400), 10);
         assert_eq!(submit_ramp_limit(Some(start), start + 30 * 86_400), 10);
+    }
+
+    #[derive(Default)]
+    struct PendingCheckGateway;
+
+    #[async_trait]
+    impl WorldQuantGateway for PendingCheckGateway {
+        async fn operators(&self) -> Result<Vec<String>> {
+            Ok(Vec::new())
+        }
+
+        async fn simulate(&self, _expression: &str, _settings: Value) -> Result<SimulationResult> {
+            unreachable!()
+        }
+
+        async fn find_unsubmitted(&self, _metrics: &AlphaMetrics) -> Result<Vec<Value>> {
+            Ok(vec![
+                json!({"id":"remote-1","regular":{"code":"rank(close);"}}),
+            ])
+        }
+
+        async fn alpha(&self, _alpha_id: &str) -> Result<Value> {
+            let checks = (0..7)
+                .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+                .chain([json!({"name":"SELF_CORRELATION","result":"PENDING"})])
+                .collect::<Vec<_>>();
+            Ok(
+                json!({"id":"remote-1","is":{"fitness":1.2,"sharpe":1.5,"returns":0.1,"turnover":0.2,"checks":checks}}),
+            )
+        }
+
+        async fn check_submission(&self, _alpha_id: &str) -> Result<Value> {
+            Err(anyhow!("still pending"))
+        }
+
+        async fn submit(&self, _alpha_id: &str) -> Result<Value> {
+            unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn pending_check_keeps_remote_link_for_next_batch() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-submit-test-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('local-1','rank(close);',1.2,1.5,0.1,0.2,7,0,0,0,'{}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = Arc::new(AlphaStore::new(&path));
+
+        process_submissions(
+            store.clone(),
+            Arc::new(PendingCheckGateway),
+            1,
+            false,
+            false,
+            false,
+            4,
+        )
+        .await
+        .unwrap();
+
+        let linked = store
+            .get_submission_candidates(10, false, Some(true))
+            .await
+            .unwrap();
+        assert_eq!(linked.len(), 1);
+        assert_eq!(
+            linked[0]
+                .raw_data
+                .get("wq_alpha_id")
+                .and_then(Value::as_str),
+            Some("remote-1")
+        );
+        let _ = std::fs::remove_file(path);
     }
 }

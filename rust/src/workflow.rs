@@ -288,6 +288,79 @@ pub async fn process_submissions(
             info!(id=%candidate.id, alpha_id, ?state, "submission check complete");
         }
 
+        let self_correlation_override = is_self_correlation_submit_override(&state);
+        if auto_submit
+            && !dry_run
+            && (matches!(state, SubmissionState::Ready) || self_correlation_override)
+        {
+            if matches!(state, SubmissionState::Ready) {
+                result.ready += 1;
+                persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false).await?;
+            } else {
+                warn!(
+                    id=%candidate.id,
+                    alpha_id,
+                    "SELF_CORRELATION check errored; attempting submit and trusting the submit response"
+                );
+            }
+            store
+                .record_submission_stage(&candidate.id, "submitting", Some(&alpha_id))
+                .await?;
+            let submit_response = match worldquant.submit(&alpha_id).await {
+                Ok(response) => response,
+                Err(error) => {
+                    result.skipped += 1;
+                    let retry_count = store
+                        .record_submission_queue_error(
+                            &candidate.id,
+                            "submit_error",
+                            &error.to_string(),
+                        )
+                        .await?;
+                    if is_active_check && retry_count >= 3 {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
+                    warn!(?error, id=%candidate.id, alpha_id, "submission transport failed; will retry");
+                    continue;
+                }
+            };
+            if let Some(reason) = submission_rejection_reason(&submit_response) {
+                persist_submit_outcome(
+                    &store,
+                    &candidate,
+                    &alpha_id,
+                    &detail,
+                    &submit_response,
+                    Some(reason.clone()),
+                    self_correlation_override,
+                )
+                .await?;
+                if is_active_check {
+                    store.release_submission_candidate(&candidate.id).await?;
+                }
+                result.rejected += 1;
+                warn!(id=%candidate.id, alpha_id, reason, "alpha submission rejected by WorldQuant");
+                continue;
+            }
+            persist_submit_outcome(
+                &store,
+                &candidate,
+                &alpha_id,
+                &detail,
+                &submit_response,
+                None,
+                self_correlation_override,
+            )
+            .await?;
+            store.mark_submitted(candidate.expression.clone()).await?;
+            if is_active_check {
+                store.release_submission_candidate(&candidate.id).await?;
+            }
+            result.submitted += 1;
+            info!(id=%candidate.id, alpha_id, self_correlation_override, "alpha submitted");
+            continue;
+        }
+
         match state {
             SubmissionState::Ready => {
                 result.ready += 1;
@@ -368,6 +441,111 @@ pub async fn process_submissions(
         }
     }
     Ok(result)
+}
+
+fn is_self_correlation_submit_override(state: &SubmissionState) -> bool {
+    matches!(
+        state,
+        SubmissionState::CheckError(reasons)
+            if !reasons.is_empty() && reasons.iter().all(|reason| reason == "SELF_CORRELATION")
+    )
+}
+
+fn submission_rejection_reason(response: &Value) -> Option<String> {
+    let status = response
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    let message = response
+        .get("message")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            response
+                .get("response")
+                .and_then(|value| value.get("message"))
+                .and_then(Value::as_str)
+        })
+        .or_else(|| response.get("error").and_then(Value::as_str));
+    let message_is_rejection = message
+        .map(|message| {
+            let message = message.to_ascii_lowercase();
+            message.contains("cannot submit")
+                || message.contains("test failed")
+                || message.contains("submission failed")
+        })
+        .unwrap_or(false);
+    let status_is_rejection = matches!(status.as_str(), "ERROR" | "FAIL" | "FAILED" | "REJECTED");
+    if status_is_rejection || message_is_rejection {
+        Some(
+            message
+                .map(str::to_owned)
+                .unwrap_or_else(|| response.to_string()),
+        )
+    } else {
+        None
+    }
+}
+
+async fn persist_submit_outcome(
+    store: &AlphaStore,
+    candidate: &AlphaRecord,
+    alpha_id: &str,
+    detail: &Value,
+    submit_response: &Value,
+    rejection_reason: Option<String>,
+    self_correlation_override: bool,
+) -> Result<()> {
+    let simulation = SimulationResult {
+        alpha_id: Some(alpha_id.to_owned()),
+        status: "COMPLETE".into(),
+        data: detail.clone(),
+    };
+    let (metrics, mut raw, base_reason) = simulation_data(&simulation);
+    if let Value::Object(map) = &mut raw {
+        for key in [
+            "submission_enqueued_at",
+            "submission_check_retry_count",
+            "submission_last_attempt_at",
+            "submission_last_error",
+        ] {
+            if let Some(value) = candidate.raw_data.get(key) {
+                map.insert(key.into(), value.clone());
+            }
+        }
+        map.insert(
+            "submission_phase".into(),
+            json!(if rejection_reason.is_some() {
+                "submit_failed"
+            } else {
+                "submit_accepted"
+            }),
+        );
+        map.insert("submission_submit_response".into(), submit_response.clone());
+        map.insert(
+            "submission_completed_at".into(),
+            json!(Utc::now().timestamp()),
+        );
+        if self_correlation_override {
+            map.insert(
+                "submission_check_override".into(),
+                json!("SELF_CORRELATION=ERROR"),
+            );
+        }
+        if let Some(reason) = &rejection_reason {
+            map.insert("submission_last_error".into(), json!(reason));
+        }
+    }
+    let rejected = rejection_reason.is_some();
+    store
+        .update_result(
+            candidate.id.clone(),
+            metrics,
+            raw,
+            rejected,
+            rejection_reason.or(base_reason),
+        )
+        .await
 }
 
 async fn persist_remote_state(
@@ -972,6 +1150,166 @@ mod tests {
         assert_eq!(result.submitted_last_24h, 1);
         assert_eq!(result.submitted, 2);
         assert_eq!(submitted.load(Ordering::SeqCst), 2);
+        let _ = std::fs::remove_file(path);
+    }
+
+    struct SelfCorrelationSubmitGateway {
+        submitted: Arc<AtomicUsize>,
+        submit_response: Value,
+    }
+
+    #[async_trait]
+    impl WorldQuantGateway for SelfCorrelationSubmitGateway {
+        async fn operators(&self) -> Result<Vec<String>> {
+            Ok(Vec::new())
+        }
+
+        async fn simulate(&self, _expression: &str, _settings: Value) -> Result<SimulationResult> {
+            unreachable!()
+        }
+
+        async fn find_unsubmitted(&self, _metrics: &AlphaMetrics) -> Result<Vec<Value>> {
+            unreachable!()
+        }
+
+        async fn alpha(&self, alpha_id: &str) -> Result<Value> {
+            let checks = (0..7)
+                .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+                .chain([json!({"name":"SELF_CORRELATION","result":"ERROR"})])
+                .collect::<Vec<_>>();
+            Ok(json!({
+                "id": alpha_id,
+                "is": {
+                    "fitness": 1.3,
+                    "sharpe": 1.7,
+                    "returns": 0.1,
+                    "turnover": 0.2,
+                    "checks": checks
+                }
+            }))
+        }
+
+        async fn check_submission(&self, _alpha_id: &str) -> Result<Value> {
+            unreachable!()
+        }
+
+        async fn submit(&self, _alpha_id: &str) -> Result<Value> {
+            self.submitted.fetch_add(1, Ordering::SeqCst);
+            Ok(self.submit_response.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn self_correlation_error_attempts_submit_and_records_remote_rejection() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-self-correlation-submit-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('self-error','rank(close);',1.3,7,0,0,0,'{\"wq_alpha_id\":\"remote-self-error\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = Arc::new(AlphaStore::new(&path));
+        let submitted = Arc::new(AtomicUsize::new(0));
+
+        let result = process_submissions(
+            store,
+            Arc::new(SelfCorrelationSubmitGateway {
+                submitted: submitted.clone(),
+                submit_response: json!({
+                    "status": "ERROR",
+                    "message": "Cannot submit Alpha: 1 test failed"
+                }),
+            }),
+            1,
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(submitted.load(Ordering::SeqCst), 1);
+        assert_eq!(result.submitted, 0);
+        assert_eq!(result.rejected, 1);
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let (is_submitted, is_failed, reason, raw): (i64, i64, String, String) = conn
+            .query_row(
+                "SELECT is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas WHERE id='self-error'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        let raw: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(is_submitted, 0);
+        assert_eq!(is_failed, 1);
+        assert_eq!(reason, "Cannot submit Alpha: 1 test failed");
+        assert_eq!(
+            raw.pointer("/submission_submit_response/message")
+                .and_then(Value::as_str),
+            Some("Cannot submit Alpha: 1 test failed")
+        );
+        assert_eq!(
+            raw.get("submission_phase").and_then(Value::as_str),
+            Some("submit_failed")
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn self_correlation_error_marks_submitted_when_remote_accepts() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-self-correlation-accepted-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('self-error','rank(close);',1.3,7,0,0,0,'{\"wq_alpha_id\":\"remote-self-error\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = Arc::new(AlphaStore::new(&path));
+        let submitted = Arc::new(AtomicUsize::new(0));
+
+        let result = process_submissions(
+            store,
+            Arc::new(SelfCorrelationSubmitGateway {
+                submitted: submitted.clone(),
+                submit_response: json!({"status":"submitted","alpha_id":"remote-self-error"}),
+            }),
+            1,
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(submitted.load(Ordering::SeqCst), 1);
+        assert_eq!(result.submitted, 1);
+        assert_eq!(result.rejected, 0);
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let (is_submitted, is_failed, raw): (i64, i64, String) = conn
+            .query_row(
+                "SELECT is_submitted, is_failed_on_wq, raw_data FROM alphas WHERE id='self-error'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        let raw: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(is_submitted, 1);
+        assert_eq!(is_failed, 0);
+        assert_eq!(
+            raw.get("submission_check_override").and_then(Value::as_str),
+            Some("SELF_CORRELATION=ERROR")
+        );
+        assert_eq!(
+            raw.pointer("/submission_submit_response/status")
+                .and_then(Value::as_str),
+            Some("submitted")
+        );
         let _ = std::fs::remove_file(path);
     }
 }

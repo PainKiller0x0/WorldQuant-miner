@@ -333,7 +333,7 @@ impl WorldQuantGateway for LiveWorldQuant {
             return Ok(json!({"status":"already_submitted","alpha_id":alpha_id}));
         }
         if !response.status().is_success() {
-            return Err(anyhow!("alpha submit returned {}", response.status()));
+            return submit_rejection_response(response).await;
         }
 
         let started = Instant::now();
@@ -351,7 +351,9 @@ impl WorldQuantGateway for LiveWorldQuant {
                 tokio::time::sleep(retry_after(&response, 60)).await;
                 continue;
             }
-            let response = response.error_for_status()?;
+            if !response.status().is_success() {
+                return submit_rejection_response(response).await;
+            }
             let bytes = response.bytes().await?;
             if bytes.is_empty() {
                 tokio::time::sleep(Duration::from_secs(10)).await;
@@ -362,6 +364,29 @@ impl WorldQuantGateway for LiveWorldQuant {
             return Ok(value);
         }
     }
+}
+
+async fn submit_rejection_response(response: reqwest::Response) -> Result<Value> {
+    let http_status = response.status();
+    let bytes = response.bytes().await?;
+    let payload = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or_else(
+            |_| json!({"message": String::from_utf8_lossy(&bytes).trim().to_owned()}),
+        )
+    };
+    let message = payload
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("alpha submit returned {http_status}"));
+    Ok(json!({
+        "status": "rejected",
+        "http_status": http_status.as_u16(),
+        "message": message,
+        "response": payload
+    }))
 }
 
 fn retry_after(response: &reqwest::Response, default_seconds: u64) -> Duration {

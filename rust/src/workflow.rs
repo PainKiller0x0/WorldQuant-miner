@@ -20,11 +20,31 @@ pub async fn run_loop(
     interval: Duration,
 ) -> Result<()> {
     loop {
-        if let Err(error) = run_once(role, store.clone(), models.clone(), worldquant.clone()).await
-        {
-            warn!(?error, ?role, "pipeline iteration failed");
-        }
-        tokio::time::sleep(interval).await;
+        let delay = match run_once(role, store.clone(), models.clone(), worldquant.clone()).await {
+            Ok(_) => interval,
+            Err(error) => {
+                let delay = retry_delay(&error, interval);
+                warn!(
+                    ?error,
+                    ?role,
+                    retry_after_secs = delay.as_secs(),
+                    "pipeline iteration failed"
+                );
+                delay
+            }
+        };
+        tokio::time::sleep(delay).await;
+    }
+}
+
+fn retry_delay(error: &anyhow::Error, interval: Duration) -> Duration {
+    if error
+        .chain()
+        .any(|cause| cause.to_string().contains("429 Too Many Requests"))
+    {
+        interval.max(Duration::from_secs(15 * 60))
+    } else {
+        interval
     }
 }
 
@@ -47,9 +67,17 @@ pub async fn run_once(
         .generate(role, &plan.prompt)
         .await
         .context("generate alpha candidates")?;
-    let expressions = extract_expressions(&answer, &policy);
+    let extracted = extract_expressions(&answer, &policy);
+    let extracted_count = extracted.len();
+    let expressions = extracted
+        .into_iter()
+        .filter(|expression| is_research_worthy(expression, &policy))
+        .collect::<Vec<_>>();
     if expressions.is_empty() {
-        warn!(?role, "model returned no valid expressions");
+        warn!(
+            ?role,
+            extracted_count, "model returned no research-worthy expressions"
+        );
         return Ok(0);
     }
     let settings = default_settings();
@@ -59,6 +87,7 @@ pub async fn run_once(
             expression: expression.clone(),
             settings: settings.clone(),
             parent_id: plan.parent_id.clone(),
+            role,
         };
         let inserted = store.insert_candidate(candidate).await?;
         if !inserted && !store.needs_simulation(expression.clone()).await? {
@@ -79,7 +108,13 @@ pub async fn run_once(
             Err(error) => warn!(?error, expression, "simulation failed"),
         }
     }
-    info!(?role, accepted, "pipeline iteration complete");
+    info!(
+        ?role,
+        accepted,
+        parent_id = plan.parent_id.as_deref().unwrap_or("none"),
+        prompt_version = "quality-v2",
+        "pipeline iteration complete"
+    );
     Ok(accepted)
 }
 
@@ -717,12 +752,22 @@ fn build_generation_plan(
     pools: &AlphaPools,
     policy: &ExpressionPolicy,
 ) -> GenerationPlan {
+    let slot = Utc::now().timestamp().unsigned_abs() as usize / 60;
+    build_generation_plan_for_slot(role, pools, policy, slot)
+}
+
+fn build_generation_plan_for_slot(
+    role: Role,
+    pools: &AlphaPools,
+    policy: &ExpressionPolicy,
+    slot: usize,
+) -> GenerationPlan {
     let fields = policy.fields.join(", ");
     let operators = policy.operators.join(", ");
     let forbidden = policy.forbidden.join(", ");
     let signature_guide = "rank(x); zscore(x); abs(x); log(x); sqrt(x); sign(x); \
-ts_mean(x, d); ts_std_dev(x, d); ts_delta(x, d); ts_rank(x, d); ts_zscore(x, d); \
-decay_linear(x, d); ts_corr(x, y, d); correlation(x, y, d); \
+ts_mean(x, d); ts_std_dev(x, d); ts_delta(x, d); ts_sum(x, d); ts_rank(x, d); ts_zscore(x, d); \
+decay_linear(x, d); ts_decay_linear(x, d); ts_corr(x, y, d); correlation(x, y, d); \
 max(x, y); min(x, y); signed_power(x, p); power(x, p); \
 multiply(x, y); divide(x, y); add(x, y); subtract(x, y)";
     let output_contract = format!(
@@ -742,27 +787,36 @@ FORBIDDEN IDENTIFIERS: {forbidden}"
 
     match role {
         Role::Miner => {
-            let recent_examples = format_examples(
+            let successful_examples = format_examples(pools.successful.iter().take(4));
+            let promising_examples = format_examples(
                 pools
                     .candidates
                     .iter()
-                    .chain(pools.successful.iter())
-                    .take(8),
+                    .filter(|alpha| {
+                        alpha.metrics.fitness >= 1.0
+                            || (alpha.metrics.pass_count >= 7 && alpha.metrics.fail_count == 0)
+                    })
+                    .take(4),
             );
-            let failures = format_failures(pools.failures.iter().take(5));
+            let failures = format_failures(pools.failures.iter().take(3));
             GenerationPlan {
                 parent_id: None,
                 prompt: format!(
                 "ROLE: MINER\n\
-TASK: Discover four diverse, economically plausible WorldQuant Brain alpha candidates for USA TOP3000 equities with delay 1.\n\
+OBJECTIVE: Discover four diverse WorldQuant Brain alpha candidates for USA TOP3000 equities with delay 1. Optimize for out-of-sample Fitness >= 1.0, Sharpe >= 1.25, stable turnover, and submission-check robustness.\n\
 RESEARCH RULES:\n\
 - Each candidate must express a meaningfully different hypothesis; do not create four parameter tweaks of one formula.\n\
-- Prefer compact structures with 2-6 operators and at least two market inputs where sensible.\n\
-- Use interpretable price, volume, return, volatility, correlation, or liquidity relationships. Avoid random operator stacking.\n\
-- Do not copy any recent candidate verbatim or return one of its nested subexpressions.\n\
+- Use 4-12 purposeful operators and at least two distinct market inputs in every candidate. Reject single-field level, trend, mean, volatility, rank, or z-score signals.\n\
+- Build an interpretable relationship: price-volume confirmation/divergence, volatility-adjusted momentum or reversal, liquidity-conditioned returns, or correlation/dispersion regime.\n\
+- Normalize scale before combining signals. Sanity-check direction: a candidate should not accidentally reverse its economic hypothesis.\n\
+- Treat successful examples as design priors: reuse robust motifs and interactions, but never copy a complete expression or merely change lookbacks.\n\
+- Avoid raw price/volume levels, redundant nested ranks, random operator stacking, and division by an unscaled or near-zero denominator.\n\
 {output_contract}\n\
-STRONG/RECENT ALPHAS TO AVOID COPYING:\n{recent_examples}\n\
-FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
+SUCCESSFUL REFERENCE ALPHAS (learn motifs, do not copy):\n{successful_examples}\n\
+PROMISING UNSUBMITTED REFERENCES:\n{promising_examples}\n\
+FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n\
+{failures}\n\
+FINAL REMINDER: Begin directly with the first FASTEXPR expression. Output exactly four expression lines and nothing else."
                 ),
             }
         }
@@ -787,7 +841,17 @@ FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
                     .total_cmp(&left.metrics.fitness)
                     .then_with(|| right.metrics.sharpe.total_cmp(&left.metrics.sharpe))
             });
-            let selected = successful.first().or_else(|| candidates.first()).copied();
+            let parent_pool = if successful.is_empty() {
+                &candidates
+            } else {
+                &successful
+            };
+            let rotation_width = parent_pool.len().min(4);
+            let selected = if rotation_width == 0 {
+                None
+            } else {
+                parent_pool.get(slot % rotation_width).copied()
+            };
             let parent = selected
                 .map(|alpha| format_alpha(alpha))
                 .unwrap_or_else(|| {
@@ -796,30 +860,52 @@ FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
             let selected_id = selected.map(|alpha| alpha.id.as_str());
             let comparison = format_examples(
                 successful
-                    .into_iter()
-                    .chain(candidates)
+                    .iter()
+                    .copied()
+                    .chain(candidates.iter().copied())
                     .filter(|alpha| Some(alpha.id.as_str()) != selected_id)
                     .take(5),
             );
-            let failures = format_failures(pools.failures.iter().take(5));
+            let failures = format_failures(pools.failures.iter().take(3));
             GenerationPlan {
                 parent_id: selected.map(|alpha| alpha.id.clone()),
                 prompt: format!(
                 "ROLE: EVOLVER\n\
-TASK: Produce four structurally distinct children of the target parent while preserving its plausible economic intuition.\n\
+OBJECTIVE: Produce four controlled children that have a credible chance to improve the target parent's out-of-sample Fitness without sacrificing Sharpe, turnover, or submission checks.\n\
 MUTATION RULES:\n\
-- Every child must make at least one structural change, not merely alter a lookback number.\n\
-- Across the four children, cover at least three mutation dimensions: data-field relationship, time-series transformation, normalization/ranking, and signal interaction.\n\
+- Preserve the parent's core economic relationship and at least one of its main data interactions; do not simplify it into a single-field signal.\n\
+- Every child must make exactly one primary structural mutation plus at most one supporting normalization change; lookback-only changes are forbidden.\n\
+- Produce one child for each dimension: field relationship, time-series transform, normalization/neutralization, and signal interaction.\n\
+- Use 4-14 purposeful operators and at least two distinct market inputs. Remove redundant nesting and guard unstable division.\n\
+- Check sign and scale against the parent before answering; accidental inversion and raw-level exposure are invalid.\n\
 - Keep useful parts of the parent, but do not copy it verbatim or reproduce another child with different constants.\n\
-- Prefer controlled changes over unnecessary complexity; every added operator must have a clear purpose.\n\
 {output_contract}\n\
-TARGET PARENT (highest fitness, then Sharpe):\n{parent}\n\
+TARGET PARENT (rotated among top submitted alphas):\n{parent}\n\
 OTHER SUCCESSFUL OR QUALIFIED CANDIDATES FOR CONTEXT ONLY:\n{comparison}\n\
-FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
+FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n\
+{failures}\n\
+FINAL REMINDER: Begin directly with the first FASTEXPR expression. Output exactly four expression lines and nothing else."
                 ),
             }
         }
     }
+}
+
+fn is_research_worthy(expression: &str, policy: &ExpressionPolicy) -> bool {
+    let token_pattern =
+        regex::Regex::new(r"[A-Za-z_][A-Za-z0-9_]*").expect("static research token regex");
+    let fields = token_pattern
+        .find_iter(expression)
+        .map(|token| token.as_str())
+        .filter(|token| policy.fields.iter().any(|field| field == token))
+        .collect::<std::collections::HashSet<_>>();
+    let operators = token_pattern
+        .find_iter(expression)
+        .map(|token| token.as_str())
+        .filter(|token| policy.operators.iter().any(|operator| operator == token))
+        .count();
+
+    fields.len() >= 2 && (4..=18).contains(&operators)
 }
 
 fn eligible_candidate_parent(alpha: &AlphaRecord) -> bool {
@@ -932,8 +1018,9 @@ fn number(value: &Value, key: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_generation_plan, classify_submission, default_policy, process_submissions,
-        select_exact_alpha, simulation_data, SubmissionState,
+        build_generation_plan, build_generation_plan_for_slot, classify_submission, default_policy,
+        is_research_worthy, process_submissions, retry_delay, select_exact_alpha, simulation_data,
+        SubmissionState,
     };
     use crate::domain::{AlphaMetrics, AlphaPools, AlphaRecord, Role};
     use crate::gateway::{SimulationResult, WorldQuantGateway};
@@ -946,7 +1033,7 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     fn alpha(expression: &str, fitness: f64, sharpe: f64) -> AlphaRecord {
         AlphaRecord {
@@ -979,6 +1066,60 @@ mod tests {
         assert!(prompt.contains("ts_delta(x, d)"));
         assert!(prompt.contains("ts_delta(x) is invalid"));
         assert!(prompt.contains("silently check all function argument counts"));
+        assert!(prompt.contains("SUCCESSFUL REFERENCE ALPHAS"));
+        assert!(prompt.contains("Fitness"));
+        assert!(prompt.contains("Reject single-field"));
+    }
+
+    #[test]
+    fn research_gate_rejects_trivial_single_field_signals() {
+        let policy = default_policy();
+
+        assert!(!is_research_worthy("ts_mean(returns, 5);", &policy));
+        assert!(!is_research_worthy(
+            "rank(subtract(ts_mean(close, 10), close));",
+            &policy
+        ));
+        assert!(is_research_worthy(
+            "rank(ts_decay_linear(ts_corr(ts_delta(close, 5), ts_delta(volume, 5), 20), 8));",
+            &policy
+        ));
+    }
+
+    #[test]
+    fn rate_limit_uses_a_long_backoff_without_slowing_other_errors() {
+        let normal = Duration::from_secs(60);
+
+        assert_eq!(
+            retry_delay(&anyhow!("LLM returned 429 Too Many Requests"), normal),
+            Duration::from_secs(15 * 60)
+        );
+        assert_eq!(
+            retry_delay(&anyhow!("temporary network error"), normal),
+            normal
+        );
+    }
+
+    #[test]
+    fn evolver_rotates_across_top_submitted_parents() {
+        let mut first = alpha("rank(close);", 2.0, 1.8);
+        first.id = "first".into();
+        first.is_submitted = true;
+        let mut second = alpha("rank(open);", 1.8, 1.7);
+        second.id = "second".into();
+        second.is_submitted = true;
+        let pools = AlphaPools {
+            successful: vec![first, second],
+            ..AlphaPools::default()
+        };
+
+        let first_plan =
+            build_generation_plan_for_slot(Role::Evolver, &pools, &default_policy(), 0);
+        let second_plan =
+            build_generation_plan_for_slot(Role::Evolver, &pools, &default_policy(), 1);
+
+        assert_eq!(first_plan.parent_id.as_deref(), Some("first"));
+        assert_eq!(second_plan.parent_id.as_deref(), Some("second"));
     }
 
     #[test]
@@ -989,12 +1130,13 @@ mod tests {
             candidates: vec![weak, strong],
             ..AlphaPools::default()
         };
-        let prompt = build_generation_plan(Role::Evolver, &pools, &default_policy()).prompt;
+        let prompt =
+            build_generation_plan_for_slot(Role::Evolver, &pools, &default_policy(), 0).prompt;
         let parent_section = prompt.split("TARGET PARENT").nth(1).unwrap();
         assert!(parent_section
-            .starts_with(" (highest fitness, then Sharpe):\nrank(ts_delta(close, 5));"));
-        assert!(prompt.contains("at least one structural change"));
-        assert!(prompt.contains("not merely alter a lookback number"));
+            .starts_with(" (rotated among top submitted alphas):\nrank(ts_delta(close, 5));"));
+        assert!(prompt.contains("primary structural mutation"));
+        assert!(prompt.contains("lookback-only changes are forbidden"));
     }
 
     #[test]
@@ -1018,9 +1160,9 @@ mod tests {
 
         assert_eq!(plan.parent_id.as_deref(), Some("submitted-parent"));
         let parent_section = plan.prompt.split("TARGET PARENT").nth(1).unwrap();
-        assert!(parent_section.starts_with(" (highest fitness, then Sharpe):\nrank(close);"));
+        assert!(parent_section.starts_with(" (rotated among top submitted alphas):\nrank(close);"));
         assert!(plan.prompt.contains("Cannot submit Alpha: 1 test failed"));
-        assert!(!parent_section.starts_with(" (highest fitness, then Sharpe):\nrank(open);"));
+        assert!(!parent_section.starts_with(" (rotated among top submitted alphas):\nrank(open);"));
     }
 
     #[test]

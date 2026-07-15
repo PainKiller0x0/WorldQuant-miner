@@ -34,8 +34,12 @@ impl LiveModelGateway {
         let url = completion_url(&model.base_url);
         tracing::info!(?role, model=%model.model_name, endpoint=%url, "calling model");
         let temperature = match role {
-            Role::Miner => 0.8,
-            Role::Evolver => 0.55,
+            Role::Miner => 0.6,
+            Role::Evolver => 0.45,
+        };
+        let max_tokens = match role {
+            Role::Miner => 2600,
+            Role::Evolver => 1800,
         };
         let mut body = json!({
             "model": model.model_name,
@@ -44,9 +48,10 @@ impl LiveModelGateway {
                 {"role":"user","content":prompt}
             ],
             "temperature": temperature,
-            "max_tokens": 1200
+            "max_tokens": max_tokens
         });
-        if model.model_name.to_ascii_lowercase().contains("glm") {
+        let model_name = model.model_name.to_ascii_lowercase();
+        if model_name.contains("glm") || model_name.contains("agnes") {
             body["thinking"] = json!({"type":"disabled"});
         }
         let response = self
@@ -69,8 +74,8 @@ impl LiveModelGateway {
 
 fn system_prompt(role: Role) -> &'static str {
     match role {
-        Role::Miner => "You are the Miner in a WorldQuant Brain research pipeline. Generate diverse, syntactically valid FASTEXPR candidates that obey the user's exact field, operator, and output constraints. Return expressions only; never invent identifiers or add prose.",
-        Role::Evolver => "You are the Evolver in a WorldQuant Brain research pipeline. Create controlled structural mutations of the supplied high-quality parent while obeying the user's exact field, operator, and output constraints. Return expressions only; never add prose or cosmetic-only variants.",
+        Role::Miner => "You are the Miner in a WorldQuant Brain research pipeline. Generate diverse, syntactically valid FASTEXPR candidates that obey the user's exact field, operator, and output constraints. Your response must begin immediately with the first expression. Never reveal analysis, reasoning, a thinking process, a plan, or prose.",
+        Role::Evolver => "You are the Evolver in a WorldQuant Brain research pipeline. Create controlled structural mutations of the supplied high-quality parent while obeying the user's exact field, operator, and output constraints. Your response must begin immediately with the first expression. Never reveal analysis, reasoning, a thinking process, a plan, or prose.",
     }
 }
 
@@ -236,6 +241,8 @@ pub fn default_policy() -> ExpressionPolicy {
             "ts_std_dev",
             "ts_delta",
             "ts_corr",
+            "ts_decay_linear",
+            "ts_sum",
             "ts_rank",
             "ts_zscore",
             "decay_linear",
@@ -294,6 +301,13 @@ mod tests {
         let expressions = extract_expressions(response, &default_policy());
 
         assert!(expressions.contains(&"rank(ts_corr(low, volume, 10));".to_owned()));
+    }
+
+    #[test]
+    fn policy_accepts_prompted_time_series_decay_operator() {
+        let expression = "rank(ts_decay_linear(ts_corr(close, volume, 10), 5));";
+
+        assert_eq!(default_policy().validate(expression).unwrap(), expression);
     }
 
     #[test]

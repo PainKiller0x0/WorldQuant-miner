@@ -24,6 +24,7 @@ pub struct AlphaCandidate {
     pub expression: String,
     pub settings: serde_json::Value,
     pub parent_id: Option<String>,
+    pub role: Role,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

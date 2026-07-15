@@ -92,7 +92,9 @@ impl AlphaStore {
             let raw_data = serde_json::json!({
                 "settings": candidate.settings,
                 "parent_id": candidate.parent_id,
-                "source": "rust"
+                "source": "rust",
+                "generation_role": candidate.role,
+                "prompt_version": "quality-v2"
             }).to_string();
             let changed = conn.execute(
                 "INSERT OR IGNORE INTO alphas (id, expression, raw_data, is_submitted, is_failed_on_wq, created_at) VALUES (?1, ?2, ?3, 0, 0, CURRENT_TIMESTAMP)",
@@ -664,7 +666,7 @@ impl AlphaStore {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
-            let mut stmt = conn.prepare("SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas WHERE COALESCE(is_failed_on_wq, 0)=0 AND raw_data LIKE '%\"source\":\"rust\"%' AND raw_data NOT LIKE '%wq_alpha_id%' ORDER BY created_at ASC LIMIT ?1")?;
+            let mut stmt = conn.prepare("SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas WHERE COALESCE(is_failed_on_wq, 0)=0 AND raw_data LIKE '%\"source\":\"rust\"%' AND raw_data NOT LIKE '%wq_alpha_id%' AND created_at <= datetime('now','-10 minutes') ORDER BY created_at ASC LIMIT ?1")?;
             let rows = stmt.query_map([limit], alpha_from_row)?;
             Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
         }).await.context("database Rust pending task")?
@@ -674,13 +676,19 @@ impl AlphaStore {
         &self,
         id: String,
         metrics: AlphaMetrics,
-        raw_data: Value,
+        mut raw_data: Value,
         failed: bool,
         failure_reason: Option<String>,
     ) -> Result<()> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
+            let existing_raw: Option<String> = conn
+                .query_row("SELECT raw_data FROM alphas WHERE id=?1", [&id], |row| {
+                    row.get(0)
+                })
+                .optional()?;
+            preserve_generation_metadata(existing_raw.as_deref(), &mut raw_data);
             conn.execute(
                 "UPDATE alphas
                  SET fitness=?1,
@@ -714,6 +722,31 @@ impl AlphaStore {
         })
         .await
         .context("database result task")?
+    }
+}
+
+fn preserve_generation_metadata(existing: Option<&str>, incoming: &mut Value) {
+    let existing = existing
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .unwrap_or(Value::Null);
+    if !incoming.is_object() {
+        *incoming = json!({"simulation_data": incoming.take()});
+    }
+    let Some(incoming) = incoming.as_object_mut() else {
+        return;
+    };
+    for key in [
+        "source",
+        "generation_role",
+        "parent_id",
+        "prompt_version",
+        "settings",
+    ] {
+        if !incoming.contains_key(key) {
+            if let Some(value) = existing.get(key) {
+                incoming.insert(key.to_owned(), value.clone());
+            }
+        }
     }
 }
 
@@ -1087,6 +1120,68 @@ mod tests {
             .unwrap();
         assert!(!candidate.is_failed_on_wq);
         assert_eq!(candidate.failure_reason, None);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn simulation_result_preserves_generation_feedback_metadata() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-rs-generation-metadata-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('child','rank(close);',0,0,'{\"source\":\"rust\",\"generation_role\":\"evolver\",\"parent_id\":\"winner\",\"prompt_version\":\"quality-v2\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = AlphaStore::new(&path);
+
+        store
+            .update_result(
+                "child".into(),
+                AlphaMetrics {
+                    fitness: 1.2,
+                    ..AlphaMetrics::default()
+                },
+                json!({"wq_alpha_id":"remote-child"}),
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let pools = store.generation_pools(1).await.unwrap();
+        let raw = &pools.candidates[0].raw_data;
+        assert_eq!(raw["source"], "rust");
+        assert_eq!(raw["generation_role"], "evolver");
+        assert_eq!(raw["parent_id"], "winner");
+        assert_eq!(raw["prompt_version"], "quality-v2");
+        assert_eq!(raw["wq_alpha_id"], "remote-child");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn pending_retry_ignores_fresh_in_flight_simulations() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-rs-pending-age-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('fresh','rank(close);',0,0,'{\"source\":\"rust\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('stale','rank(open);',0,0,'{\"source\":\"rust\"}',datetime('now','-11 minutes'))", []).unwrap();
+        drop(conn);
+        let store = AlphaStore::new(&path);
+
+        let pending = store.rust_pending(10).await.unwrap();
+
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id, "stale");
         let _ = std::fs::remove_file(path);
     }
 }

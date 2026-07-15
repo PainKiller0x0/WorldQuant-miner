@@ -82,6 +82,7 @@ backups/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # ---v17.0 忽略升级/fix专用代码---
 up/

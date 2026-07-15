@@ -22,6 +22,10 @@
         .scroll-btn:hover { background-color: #0d6efd; opacity: 1; color: #fff; }
         .phase-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--bs-border-color); }
         .phase-badge { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 0.86rem; font-weight: 600; }
+        button.phase-badge { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease; }
+        button.phase-badge:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.18); }
+        button.phase-badge:not(.active) { opacity: .72; }
+        button.phase-badge.active { outline: 2px solid var(--bs-primary); outline-offset: 2px; opacity: 1; }
         .phase-waiting { background: rgba(108,117,125,.18); color: var(--bs-secondary-color); border: 1px solid rgba(108,117,125,.4); }
         .phase-checking { background: rgba(255,193,7,.16); color: #d39e00; border: 1px solid rgba(255,193,7,.45); }
         .phase-ready { background: rgba(25,135,84,.16); color: #28a745; border: 1px solid rgba(25,135,84,.45); }
@@ -59,9 +63,10 @@
         </div>
         <div class="card-body p-0">
             <div class="phase-summary">
-                <span class="phase-badge phase-waiting">待回测 / 待 Check <strong id="waiting-count">0</strong></span>
-                <span class="phase-badge phase-checking">Check 中 <strong id="checking-count">0</strong></span>
-                <span class="phase-badge phase-ready">可提交 <strong id="ready-count">0</strong></span>
+                <button type="button" class="phase-badge phase-other active" data-phase-filter="all" aria-pressed="true">全部 <strong id="all-count">0</strong></button>
+                <button type="button" class="phase-badge phase-waiting" data-phase-filter="waiting" aria-pressed="false">待回测 / 待 Check <strong id="waiting-count">0</strong></button>
+                <button type="button" class="phase-badge phase-checking" data-phase-filter="checking" aria-pressed="false">Check 中 <strong id="checking-count">0</strong></button>
+                <button type="button" class="phase-badge phase-ready" data-phase-filter="ready" aria-pressed="false">可提交（自动 Submit） <strong id="ready-count">0</strong></button>
                 <span class="ms-auto small text-muted" id="last-updated">尚未刷新</span>
             </div>
             <div id="loading" class="text-center p-5 text-muted">
@@ -127,10 +132,12 @@
     let currentSortKey = 'dashboard_score';
     let currentSortDir = 'desc';
     let fetchInFlight = false;
+    let activePhaseFilter = 'all';
 
     document.addEventListener('DOMContentLoaded', function() {
         fetchPendingAlphas();
         setupSortHeaders();
+        setupPhaseFilters();
         setupScrollButtons();
         setupActionHandlers(document.getElementById('alphaTableBody'));
         setInterval(fetchPendingAlphas, 30000);
@@ -178,9 +185,24 @@
             return value;
         }, {waiting: 0, checking: 0, ready: 0});
         document.getElementById('summary').textContent = `总数: ${allAlphas.length}`;
+        document.getElementById('all-count').textContent = allAlphas.length;
         document.getElementById('waiting-count').textContent = counts.waiting;
         document.getElementById('checking-count').textContent = counts.checking;
         document.getElementById('ready-count').textContent = counts.ready;
+    }
+
+    function setupPhaseFilters() {
+        document.querySelectorAll('[data-phase-filter]').forEach(button => {
+            button.addEventListener('click', () => {
+                activePhaseFilter = button.getAttribute('data-phase-filter') || 'all';
+                document.querySelectorAll('[data-phase-filter]').forEach(item => {
+                    const active = item === button;
+                    item.classList.toggle('active', active);
+                    item.setAttribute('aria-pressed', String(active));
+                });
+                renderTable();
+            });
+        });
     }
 
     function setupSortHeaders() {
@@ -218,14 +240,18 @@
     function renderTable() {
         const tbody = document.getElementById('alphaTableBody');
         tbody.innerHTML = '';
-        const sorted = [...allAlphas].sort((a, b) => {
+        const visibleAlphas = allAlphas.filter(alpha => {
+            if (activePhaseFilter === 'all') return true;
+            return phaseBucket(alpha.submission_phase) === activePhaseFilter;
+        });
+        const sorted = [...visibleAlphas].sort((a, b) => {
             let va = a[currentSortKey], vb = b[currentSortKey];
             if (['expression','timestamp','submission_phase'].includes(currentSortKey)) { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
             else { va = parseFloat(va)||-Infinity; vb = parseFloat(vb)||-Infinity; }
             return (va < vb ? -1 : 1) * (currentSortDir === 'asc' ? 1 : -1);
         });
 
-        if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">没有待处理的 Alphas</td></tr>'; return; }
+        if (!sorted.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">当前筛选没有 Alpha</td></tr>'; return; }
 
         sorted.forEach(a => {
             const row = document.createElement('tr');
@@ -245,7 +271,7 @@
             row.innerHTML = `
                 <td style="min-width:140px">
                     <div class="d-grid gap-1">
-                        <button class="btn btn-outline-primary btn-sm btn-action" data-action="mark-submitted"><i class="bi bi-check-lg"></i> 提交</button>
+                        <button class="btn btn-outline-primary btn-sm btn-action" data-action="mark-submitted" title="仅更新本地状态，不调用 WorldQuant 官网"><i class="bi bi-check-lg"></i> 本地标记已提交</button>
                         <button class="btn btn-outline-danger btn-sm btn-action" data-action="mark-failed"><i class="bi bi-x-lg"></i> 失败</button>
                     </div>
                 </td>
@@ -279,6 +305,12 @@
             ? `<div class="small text-muted mt-1">最近检查：${new Date(timestamp * 1000).toLocaleString()}</div>`
             : '';
         return {label, className, lastAttempt};
+    }
+
+    function phaseBucket(phase) {
+        if (phase === 'checking') return 'checking';
+        if (phase === 'ready') return 'ready';
+        return 'waiting';
     }
 
     function toNumber(value, fallback) {

@@ -102,7 +102,7 @@ impl AlphaStore {
                 None => "",
             };
             let order_by = if linked == Some(true) {
-                "COALESCE(CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_last_attempt_at') AS INTEGER) END, 0) ASC, fitness DESC, created_at ASC"
+                "CASE WHEN pass_count>=8 THEN 0 ELSE 1 END ASC, COALESCE(CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_last_attempt_at') AS INTEGER) END, 0) ASC, fitness DESC, created_at ASC"
             } else {
                 "fitness DESC, created_at ASC"
             };
@@ -508,6 +508,7 @@ mod tests {
         conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
         conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('high','rank(high);',2.0,1.5,0.1,0.2,7,0,'7 PASS',0,0,'{\"wq_alpha_id\":\"remote-high\"}',CURRENT_TIMESTAMP)", []).unwrap();
         conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('low','rank(low);',1.0,1.3,0.1,0.2,7,0,'7 PASS',0,0,'{\"wq_alpha_id\":\"remote-low\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('ready','rank(close);',0.8,1.4,0.1,0.2,8,0,'8 PASS',0,0,'{\"wq_alpha_id\":\"remote-ready\",\"submission_phase\":\"ready\",\"submission_last_attempt_at\":999}',CURRENT_TIMESTAMP)", []).unwrap();
         drop(conn);
         let store = AlphaStore::new(&path);
 
@@ -530,6 +531,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(next[0].id, "low");
+        let ready = store
+            .get_submission_candidates(1, true, Some(true))
+            .await
+            .unwrap();
+        assert_eq!(ready[0].id, "ready");
         let pending = store.pending_dashboard(10).await.unwrap();
         let high = pending
             .iter()

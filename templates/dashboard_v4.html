@@ -121,6 +121,9 @@
         <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 class="mb-0"><i class="bi bi-stars text-warning"></i> 精英策略池</h5>
             <div class="d-flex gap-3 text-muted small">
+                <span>成功池: <strong id="alphas-successful-pool" class="text-success">...</strong></span>
+                <span>候选池: <strong id="alphas-candidate-pool" class="text-primary">...</strong></span>
+                <span>失败池: <strong id="alphas-failure-pool" class="text-danger">...</strong></span>
                 <span>总数: <strong id="alphas-count">...</strong></span>
                 <span>待提交: <strong id="alphas-pending-submission" class="text-primary">...</strong></span>
                 <span>待重跑: <strong id="alphas-legacy-backlog" class="text-warning">...</strong></span>
@@ -273,6 +276,9 @@
     function updateTable(data) {
         data = data || {};
         document.getElementById('alphas-count').textContent = data.count || 0;
+        document.getElementById('alphas-successful-pool').textContent = data.successful_pool_count || 0;
+        document.getElementById('alphas-candidate-pool').textContent = data.candidate_pool_count || 0;
+        document.getElementById('alphas-failure-pool').textContent = data.failure_pool_count || 0;
         document.getElementById('alphas-pending-submission').textContent = data.submittable_pending_count || 0;
         document.getElementById('alphas-legacy-backlog').textContent = data.legacy_submission_backlog || 0;
         document.getElementById('alphas-check-pending').textContent = data.linked_check_pending || 0;

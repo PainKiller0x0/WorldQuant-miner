@@ -1,4 +1,6 @@
-use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord, ExpressionPolicy, Role};
+use crate::domain::{
+    AlphaCandidate, AlphaMetrics, AlphaPools, AlphaRecord, ExpressionPolicy, Role,
+};
 use crate::gateway::{SimulationResult, WorldQuantGateway};
 use crate::llm::{default_policy, extract_expressions, ModelGateway};
 use crate::store::AlphaStore;
@@ -36,10 +38,13 @@ pub async fn run_once(
     if role == Role::Evolver {
         retry_pending(store.clone(), worldquant.clone()).await?;
     }
-    let recent = store.list_recent(12).await.unwrap_or_default();
-    let prompt = build_prompt(role, &recent, &policy);
+    let pools = store
+        .generation_pools(12)
+        .await
+        .context("load generation pools")?;
+    let plan = build_generation_plan(role, &pools, &policy);
     let answer = models
-        .generate(role, &prompt)
+        .generate(role, &plan.prompt)
         .await
         .context("generate alpha candidates")?;
     let expressions = extract_expressions(&answer, &policy);
@@ -53,7 +58,7 @@ pub async fn run_once(
         let candidate = AlphaCandidate {
             expression: expression.clone(),
             settings: settings.clone(),
-            parent_id: recent.first().map(|a| a.id.clone()),
+            parent_id: plan.parent_id.clone(),
         };
         let inserted = store.insert_candidate(candidate).await?;
         if !inserted && !store.needs_simulation(expression.clone()).await? {
@@ -701,7 +706,17 @@ fn classify_submission(detail: &Value) -> SubmissionState {
     }
 }
 
-fn build_prompt(role: Role, recent: &[AlphaRecord], policy: &ExpressionPolicy) -> String {
+#[derive(Debug)]
+struct GenerationPlan {
+    prompt: String,
+    parent_id: Option<String>,
+}
+
+fn build_generation_plan(
+    role: Role,
+    pools: &AlphaPools,
+    policy: &ExpressionPolicy,
+) -> GenerationPlan {
     let fields = policy.fields.join(", ");
     let operators = policy.operators.join(", ");
     let forbidden = policy.forbidden.join(", ");
@@ -727,8 +742,17 @@ FORBIDDEN IDENTIFIERS: {forbidden}"
 
     match role {
         Role::Miner => {
-            let recent_examples = format_examples(recent.iter().take(8));
-            format!(
+            let recent_examples = format_examples(
+                pools
+                    .candidates
+                    .iter()
+                    .chain(pools.successful.iter())
+                    .take(8),
+            );
+            let failures = format_failures(pools.failures.iter().take(5));
+            GenerationPlan {
+                parent_id: None,
+                prompt: format!(
                 "ROLE: MINER\n\
 TASK: Discover four diverse, economically plausible WorldQuant Brain alpha candidates for USA TOP3000 equities with delay 1.\n\
 RESEARCH RULES:\n\
@@ -737,26 +761,50 @@ RESEARCH RULES:\n\
 - Use interpretable price, volume, return, volatility, correlation, or liquidity relationships. Avoid random operator stacking.\n\
 - Do not copy any recent candidate verbatim or return one of its nested subexpressions.\n\
 {output_contract}\n\
-RECENT CANDIDATES TO AVOID COPYING:\n{recent_examples}"
-            )
+STRONG/RECENT ALPHAS TO AVOID COPYING:\n{recent_examples}\n\
+FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
+                ),
+            }
         }
         Role::Evolver => {
-            let mut ranked = recent.iter().collect::<Vec<_>>();
-            ranked.sort_by(|left, right| {
+            let mut successful = pools.successful.iter().collect::<Vec<_>>();
+            successful.sort_by(|left, right| {
                 right
                     .metrics
                     .fitness
                     .total_cmp(&left.metrics.fitness)
                     .then_with(|| right.metrics.sharpe.total_cmp(&left.metrics.sharpe))
             });
-            let parent = ranked
-                .first()
+            let mut candidates = pools
+                .candidates
+                .iter()
+                .filter(|alpha| eligible_candidate_parent(alpha))
+                .collect::<Vec<_>>();
+            candidates.sort_by(|left, right| {
+                right
+                    .metrics
+                    .fitness
+                    .total_cmp(&left.metrics.fitness)
+                    .then_with(|| right.metrics.sharpe.total_cmp(&left.metrics.sharpe))
+            });
+            let selected = successful.first().or_else(|| candidates.first()).copied();
+            let parent = selected
                 .map(|alpha| format_alpha(alpha))
                 .unwrap_or_else(|| {
                     "No parent is available; create conservative seed candidates.".to_owned()
                 });
-            let comparison = format_examples(ranked.into_iter().skip(1).take(5));
-            format!(
+            let selected_id = selected.map(|alpha| alpha.id.as_str());
+            let comparison = format_examples(
+                successful
+                    .into_iter()
+                    .chain(candidates)
+                    .filter(|alpha| Some(alpha.id.as_str()) != selected_id)
+                    .take(5),
+            );
+            let failures = format_failures(pools.failures.iter().take(5));
+            GenerationPlan {
+                parent_id: selected.map(|alpha| alpha.id.clone()),
+                prompt: format!(
                 "ROLE: EVOLVER\n\
 TASK: Produce four structurally distinct children of the target parent while preserving its plausible economic intuition.\n\
 MUTATION RULES:\n\
@@ -766,14 +814,43 @@ MUTATION RULES:\n\
 - Prefer controlled changes over unnecessary complexity; every added operator must have a clear purpose.\n\
 {output_contract}\n\
 TARGET PARENT (highest fitness, then Sharpe):\n{parent}\n\
-OTHER STRONG/RECENT CANDIDATES FOR CONTEXT ONLY:\n{comparison}"
-            )
+OTHER SUCCESSFUL OR QUALIFIED CANDIDATES FOR CONTEXT ONLY:\n{comparison}\n\
+FAILED ALPHAS AND AUTHORITATIVE REASONS TO AVOID:\n{failures}"
+                ),
+            }
         }
     }
 }
 
+fn eligible_candidate_parent(alpha: &AlphaRecord) -> bool {
+    alpha.metrics.pass_count >= 7
+        && alpha.metrics.fail_count == 0
+        && alpha
+            .raw_data
+            .get("wq_alpha_id")
+            .and_then(Value::as_str)
+            .is_some()
+}
+
 fn format_examples<'a>(records: impl Iterator<Item = &'a AlphaRecord>) -> String {
     let values = records.map(format_alpha).collect::<Vec<_>>();
+    if values.is_empty() {
+        "(none)".to_owned()
+    } else {
+        values.join("\n")
+    }
+}
+
+fn format_failures<'a>(records: impl Iterator<Item = &'a AlphaRecord>) -> String {
+    let values = records
+        .map(|alpha| {
+            format!(
+                "{} | failure_reason={}",
+                alpha.expression,
+                alpha.failure_reason.as_deref().unwrap_or("UNKNOWN")
+            )
+        })
+        .collect::<Vec<_>>();
     if values.is_empty() {
         "(none)".to_owned()
     } else {
@@ -855,10 +932,10 @@ fn number(value: &Value, key: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_prompt, classify_submission, default_policy, process_submissions, select_exact_alpha,
-        simulation_data, SubmissionState,
+        build_generation_plan, classify_submission, default_policy, process_submissions,
+        select_exact_alpha, simulation_data, SubmissionState,
     };
-    use crate::domain::{AlphaMetrics, AlphaRecord, Role};
+    use crate::domain::{AlphaMetrics, AlphaPools, AlphaRecord, Role};
     use crate::gateway::{SimulationResult, WorldQuantGateway};
     use crate::store::AlphaStore;
     use anyhow::{anyhow, Result};
@@ -879,18 +956,21 @@ mod tests {
                 fitness,
                 sharpe,
                 turnover: 0.12,
+                pass_count: 7,
                 ..AlphaMetrics::default()
             },
             is_submitted: false,
             is_failed_on_wq: false,
             failure_reason: None,
-            raw_data: json!({}),
+            raw_data: json!({"wq_alpha_id": format!("remote-{expression}")}),
         }
     }
 
     #[test]
     fn miner_prompt_is_strict_and_matches_expression_policy() {
-        let prompt = build_prompt(Role::Miner, &[], &default_policy());
+        let plan = build_generation_plan(Role::Miner, &AlphaPools::default(), &default_policy());
+        let prompt = plan.prompt;
+        assert_eq!(plan.parent_id, None);
         assert!(prompt.contains("Return exactly 4 lines"));
         assert!(prompt.contains("ALLOWED DATA FIELDS: open"));
         assert!(prompt.contains("ts_corr"));
@@ -905,12 +985,42 @@ mod tests {
     fn evolver_prompt_selects_best_parent_and_requires_structural_mutation() {
         let weak = alpha("rank(close);", 0.2, 0.4);
         let strong = alpha("rank(ts_delta(close, 5));", 1.4, 1.1);
-        let prompt = build_prompt(Role::Evolver, &[weak, strong], &default_policy());
+        let pools = AlphaPools {
+            candidates: vec![weak, strong],
+            ..AlphaPools::default()
+        };
+        let prompt = build_generation_plan(Role::Evolver, &pools, &default_policy()).prompt;
         let parent_section = prompt.split("TARGET PARENT").nth(1).unwrap();
         assert!(parent_section
             .starts_with(" (highest fitness, then Sharpe):\nrank(ts_delta(close, 5));"));
         assert!(prompt.contains("at least one structural change"));
         assert!(prompt.contains("not merely alter a lookback number"));
+    }
+
+    #[test]
+    fn evolver_prefers_successful_pool_and_persists_the_same_parent() {
+        let mut successful = alpha("rank(close);", 1.0, 1.1);
+        successful.id = "submitted-parent".into();
+        successful.is_submitted = true;
+        let mut fitter_candidate = alpha("rank(open);", 9.0, 3.0);
+        fitter_candidate.id = "candidate-parent".into();
+        let mut failure = alpha("rank(high);", 20.0, 4.0);
+        failure.id = "failed-parent".into();
+        failure.is_failed_on_wq = true;
+        failure.failure_reason = Some("Cannot submit Alpha: 1 test failed".into());
+        let pools = AlphaPools {
+            successful: vec![successful],
+            candidates: vec![fitter_candidate],
+            failures: vec![failure],
+        };
+
+        let plan = build_generation_plan(Role::Evolver, &pools, &default_policy());
+
+        assert_eq!(plan.parent_id.as_deref(), Some("submitted-parent"));
+        let parent_section = plan.prompt.split("TARGET PARENT").nth(1).unwrap();
+        assert!(parent_section.starts_with(" (highest fitness, then Sharpe):\nrank(close);"));
+        assert!(plan.prompt.contains("Cannot submit Alpha: 1 test failed"));
+        assert!(!parent_section.starts_with(" (highest fitness, then Sharpe):\nrank(open);"));
     }
 
     #[test]

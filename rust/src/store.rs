@@ -1,4 +1,4 @@
-use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaRecord};
+use crate::domain::{AlphaCandidate, AlphaMetrics, AlphaPools, AlphaRecord};
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -30,14 +30,33 @@ impl AlphaStore {
         .context("database health task")?
     }
 
-    pub async fn list_recent(&self, limit: i64) -> Result<Vec<AlphaRecord>> {
+    pub async fn generation_pools(&self, limit: i64) -> Result<AlphaPools> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
-            let mut stmt = conn.prepare("SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data FROM alphas ORDER BY created_at DESC LIMIT ?1")?;
-            let rows = stmt.query_map([limit], alpha_from_row)?;
-            Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-        }).await.context("database list task")?
+            Ok::<_, anyhow::Error>(AlphaPools {
+                successful: load_generation_pool(
+                    &conn,
+                    "COALESCE(is_submitted, 0)=1 AND COALESCE(is_failed_on_wq, 0)=0",
+                    "fitness DESC, sharpe DESC, submitted_timestamp DESC, created_at DESC",
+                    limit,
+                )?,
+                candidates: load_generation_pool(
+                    &conn,
+                    "COALESCE(is_submitted, 0)=0 AND COALESCE(is_failed_on_wq, 0)=0",
+                    "fitness DESC, sharpe DESC, created_at DESC",
+                    limit,
+                )?,
+                failures: load_generation_pool(
+                    &conn,
+                    "COALESCE(is_submitted, 0)=0 AND COALESCE(is_failed_on_wq, 0)=1",
+                    "COALESCE(submitted_timestamp, created_at) DESC, created_at DESC",
+                    limit,
+                )?,
+            })
+        })
+        .await
+        .context("database generation pools task")?
     }
 
     pub async fn mark_submitted(&self, expression: String) -> Result<bool> {
@@ -47,6 +66,8 @@ impl AlphaStore {
             let changed = conn.execute(
                 "UPDATE alphas
                  SET is_submitted=1,
+                     is_failed_on_wq=0,
+                     failure_reason=NULL,
                      submitted_timestamp=CURRENT_TIMESTAMP,
                      raw_data=json_set(
                          CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
@@ -354,8 +375,12 @@ impl AlphaStore {
     }
 
     pub async fn mark_failed(&self, expression: String, reason: String) -> Result<bool> {
-        self.update_flags(expression, "is_failed_on_wq=1, failure_reason=?2", reason)
-            .await
+        self.update_flags(
+            expression,
+            "is_failed_on_wq=1, failure_reason=?2, is_submitted=0, submitted_timestamp=NULL",
+            reason,
+        )
+        .await
     }
 
     pub async fn unmark_failed(&self, expression: String) -> Result<bool> {
@@ -413,6 +438,10 @@ impl AlphaStore {
             let submitted_today: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_submitted=1 AND submitted_timestamp>=datetime('now','-24 hours')", [], |row| row.get(0))?;
             let submitted: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_submitted=1", [], |row| row.get(0))?;
             let failed: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE is_failed_on_wq=1", [], |row| row.get(0))?;
+            let successful_pool: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE COALESCE(is_submitted,0)=1 AND COALESCE(is_failed_on_wq,0)=0", [], |row| row.get(0))?;
+            let candidate_pool: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE COALESCE(is_submitted,0)=0 AND COALESCE(is_failed_on_wq,0)=0", [], |row| row.get(0))?;
+            let failure_pool: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE COALESCE(is_submitted,0)=0 AND COALESCE(is_failed_on_wq,0)=1", [], |row| row.get(0))?;
+            let pool_conflicts: i64 = conn.query_row("SELECT COUNT(expression) FROM alphas WHERE COALESCE(is_submitted,0)=1 AND COALESCE(is_failed_on_wq,0)=1", [], |row| row.get(0))?;
             let mut stmt = conn.prepare("SELECT expression, datetime(created_at,'+8 hours'), datetime(submitted_timestamp,'+8 hours'), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq FROM alphas ORDER BY fitness DESC LIMIT ?1")?;
             let rows = stmt.query_map([limit], dashboard_row)?;
             let all_alphas = rows.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -424,6 +453,10 @@ impl AlphaStore {
                 "linked_check_pending": linked_check_pending,
                 "ready_to_submit": ready_to_submit,
                 "submitted_today": submitted_today,
+                "successful_pool_count": successful_pool,
+                "candidate_pool_count": candidate_pool,
+                "failure_pool_count": failure_pool,
+                "pool_conflict_count": pool_conflicts,
                 "total_submitted_count": submitted + failed, "all_alphas": all_alphas
             }))
         }).await.context("dashboard summary task")?
@@ -649,11 +682,38 @@ impl AlphaStore {
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
             conn.execute(
-                "UPDATE alphas SET fitness=?1, sharpe=?2, returns=?3, turnover=?4, pass_count=?5, fail_count=?6, checks_summary=?7, raw_data=?8, is_failed_on_wq=?9, failure_reason=?10 WHERE id=?11",
-                params![metrics.fitness, metrics.sharpe, metrics.returns, metrics.turnover, metrics.pass_count, metrics.fail_count, metrics.checks_summary, raw_data.to_string(), failed as i64, failure_reason, id],
+                "UPDATE alphas
+                 SET fitness=?1,
+                     sharpe=?2,
+                     returns=?3,
+                     turnover=?4,
+                     pass_count=?5,
+                     fail_count=?6,
+                     checks_summary=?7,
+                     raw_data=?8,
+                     is_failed_on_wq=?9,
+                     failure_reason=?10,
+                     is_submitted=CASE WHEN ?9=1 THEN 0 ELSE is_submitted END,
+                     submitted_timestamp=CASE WHEN ?9=1 THEN NULL ELSE submitted_timestamp END
+                 WHERE id=?11",
+                params![
+                    metrics.fitness,
+                    metrics.sharpe,
+                    metrics.returns,
+                    metrics.turnover,
+                    metrics.pass_count,
+                    metrics.fail_count,
+                    metrics.checks_summary,
+                    raw_data.to_string(),
+                    failed as i64,
+                    failure_reason,
+                    id
+                ],
             )?;
             Ok::<_, anyhow::Error>(())
-        }).await.context("database result task")?
+        })
+        .await
+        .context("database result task")?
     }
 }
 
@@ -786,6 +846,24 @@ fn alpha_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AlphaRecord> {
             .and_then(|v| serde_json::from_str(&v).ok())
             .unwrap_or(Value::Null),
     })
+}
+
+fn load_generation_pool(
+    conn: &Connection,
+    predicate: &str,
+    order_by: &str,
+    limit: i64,
+) -> Result<Vec<AlphaRecord>> {
+    let sql = format!(
+        "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+         FROM alphas
+         WHERE {predicate}
+         ORDER BY {order_by}
+         LIMIT ?1"
+    );
+    let mut statement = conn.prepare(&sql)?;
+    let rows = statement.query_map([limit.max(0)], alpha_from_row)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
 pub fn stable_id(expression: &str) -> String {
@@ -937,6 +1015,78 @@ mod tests {
         assert_eq!(resimulating["active"]["wq_alpha_id"], "remote-second");
         assert_eq!(resimulating["active"]["pass_count"], 7);
 
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn generation_pools_classify_rows_and_submission_moves_candidate_to_successful() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-rs-generation-pools-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, is_submitted, is_failed_on_wq, raw_data, created_at, submitted_timestamp) VALUES ('winner-low','rank(low);',1.1,1.4,1,0,'{}','2025-01-01','2025-01-02')", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, is_submitted, is_failed_on_wq, raw_data, created_at, submitted_timestamp) VALUES ('winner-high','rank(high);',1.8,1.5,1,0,'{}','2025-01-02','2025-01-03')", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('candidate','rank(close);',2.5,2.0,0,0,'{}','2025-01-04')", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, is_submitted, is_failed_on_wq, failure_reason, raw_data, created_at) VALUES ('failure','rank(open);',3.0,2.2,0,1,'SELF_CORRELATION','{}','2025-01-05')", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, sharpe, is_submitted, is_failed_on_wq, failure_reason, raw_data, created_at) VALUES ('conflict','rank(volume);',4.0,3.0,1,1,'CONFLICT','{}','2025-01-06')", []).unwrap();
+        drop(conn);
+        let store = AlphaStore::new(&path);
+
+        let before = store.generation_pools(10).await.unwrap();
+        assert_eq!(
+            before
+                .successful
+                .iter()
+                .map(|alpha| alpha.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["winner-high", "winner-low"]
+        );
+        assert_eq!(before.candidates[0].id, "candidate");
+        assert_eq!(before.failures[0].id, "failure");
+        assert!(!before
+            .successful
+            .iter()
+            .chain(before.candidates.iter())
+            .chain(before.failures.iter())
+            .any(|alpha| alpha.id == "conflict"));
+
+        store.mark_submitted("rank(close);".into()).await.unwrap();
+        let after = store.generation_pools(10).await.unwrap();
+        assert!(after.candidates.is_empty());
+        assert!(after.successful.iter().any(|alpha| alpha.id == "candidate"));
+        assert_eq!(
+            after.failures[0].failure_reason.as_deref(),
+            Some("SELF_CORRELATION")
+        );
+
+        store
+            .mark_failed("rank(close);".into(), "SUBMIT_REJECTED".into())
+            .await
+            .unwrap();
+        let rejected = store.generation_pools(10).await.unwrap();
+        assert!(!rejected
+            .successful
+            .iter()
+            .any(|alpha| alpha.id == "candidate"));
+        assert!(rejected
+            .failures
+            .iter()
+            .any(|alpha| alpha.id == "candidate"));
+
+        store.mark_submitted("rank(close);".into()).await.unwrap();
+        let recovered = store.generation_pools(10).await.unwrap();
+        let candidate = recovered
+            .successful
+            .iter()
+            .find(|alpha| alpha.id == "candidate")
+            .unwrap();
+        assert!(!candidate.is_failed_on_wq);
+        assert_eq!(candidate.failure_reason, None);
         let _ = std::fs::remove_file(path);
     }
 }

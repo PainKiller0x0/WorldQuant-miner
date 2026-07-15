@@ -38,6 +38,13 @@ pub struct AlphaRecord {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct AlphaPools {
+    pub successful: Vec<AlphaRecord>,
+    pub candidates: Vec<AlphaRecord>,
+    pub failures: Vec<AlphaRecord>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct ExpressionPolicy {
     pub fields: Vec<String>,
     pub operators: Vec<String>,

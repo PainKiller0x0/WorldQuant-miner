@@ -7,6 +7,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -36,24 +37,193 @@ pub struct LiveWorldQuant {
     api_key: String,
     auth_lock: Arc<Mutex<bool>>,
     request_lock: Arc<Mutex<()>>,
-    limiter: Arc<Mutex<TokenBucket>>,
+    limiter: Arc<Mutex<AdaptiveRateController>>,
+    limiter_state_path: PathBuf,
+    limiter_state_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug)]
-struct TokenBucket {
+struct AdaptiveRateController {
     timestamps: Vec<Instant>,
-    tpm: usize,
-    last_429: Option<Instant>,
+    current_tpm: usize,
+    min_tpm: usize,
+    max_tpm: usize,
+    cooldown_until: Option<Instant>,
+    request_latency_ewma_ms: Option<f64>,
+    simulation_duration_ewma_sec: Option<f64>,
+    successful_requests: usize,
+    last_adjustment: Instant,
+    last_adjustment_reason: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct LimiterSnapshot {
+    mode: String,
+    current_tpm_limit: usize,
+    min_tpm_limit: usize,
+    max_tpm_limit: usize,
+    request_latency_ewma_ms: Option<f64>,
+    simulation_duration_ewma_sec: Option<f64>,
+    cooldown_until_epoch: Option<i64>,
+    last_adjustment_reason: String,
+    updated_at_epoch: i64,
+}
+
+impl AdaptiveRateController {
+    const MIN_TPM: usize = 6;
+    const MAX_TPM: usize = 60;
+
+    fn new(initial_tpm: usize, now: Instant) -> Self {
+        Self {
+            timestamps: Vec::new(),
+            current_tpm: initial_tpm.clamp(Self::MIN_TPM, Self::MAX_TPM),
+            min_tpm: Self::MIN_TPM,
+            max_tpm: Self::MAX_TPM,
+            cooldown_until: None,
+            request_latency_ewma_ms: None,
+            simulation_duration_ewma_sec: None,
+            successful_requests: 0,
+            last_adjustment: now,
+            last_adjustment_reason: "startup",
+        }
+    }
+
+    fn current_tpm(&self) -> usize {
+        self.current_tpm
+    }
+
+    fn throttle_wait(&mut self, now: Instant) -> Duration {
+        self.timestamps
+            .retain(|timestamp| now.duration_since(*timestamp) < Duration::from_secs(60));
+        if let Some(until) = self.cooldown_until {
+            if until > now {
+                return until.duration_since(now);
+            }
+            self.cooldown_until = None;
+        }
+        if self.timestamps.len() >= self.current_tpm {
+            return Duration::from_secs(60).saturating_sub(now.duration_since(self.timestamps[0]))
+                + Duration::from_millis(100);
+        }
+        self.timestamps.push(now);
+        Duration::ZERO
+    }
+
+    fn observe_request_success(&mut self, latency: Duration, now: Instant) {
+        self.request_latency_ewma_ms = Some(ewma(
+            self.request_latency_ewma_ms,
+            latency.as_secs_f64() * 1000.0,
+            0.2,
+        ));
+        self.successful_requests += 1;
+        let healthy = self.request_latency_ewma_ms.unwrap_or(f64::MAX) <= 1_500.0;
+        if healthy
+            && self.successful_requests >= 10
+            && now.duration_since(self.last_adjustment) >= Duration::from_secs(30)
+        {
+            self.increase((self.current_tpm / 10).max(1), now, "healthy_requests");
+        }
+    }
+
+    fn observe_rate_limit(&mut self, retry_after: Duration, now: Instant) {
+        self.current_tpm = ((self.current_tpm * 2) / 3).max(self.min_tpm);
+        self.cooldown_until = Some(now + retry_after.max(Duration::from_secs(1)));
+        self.successful_requests = 0;
+        self.last_adjustment = now;
+        self.last_adjustment_reason = "http_429";
+    }
+
+    fn observe_simulation(&mut self, duration: Duration, status: &str, now: Instant) {
+        let seconds = duration.as_secs_f64();
+        if status == "TIMEOUT" {
+            self.decrease((self.current_tpm / 4).max(3), now, "simulation_failed");
+            return;
+        }
+        if status != "COMPLETE" {
+            self.last_adjustment_reason = "simulation_rejected";
+            return;
+        }
+        self.simulation_duration_ewma_sec =
+            Some(ewma(self.simulation_duration_ewma_sec, seconds, 0.3));
+        if seconds <= 120.0 {
+            self.increase((self.current_tpm / 8).max(2), now, "fast_simulation");
+        } else if seconds <= 240.0 {
+            self.increase(1, now, "healthy_simulation");
+        } else if seconds > 600.0 {
+            self.decrease((self.current_tpm / 10).max(2), now, "slow_simulation");
+        }
+    }
+
+    fn increase(&mut self, amount: usize, now: Instant, reason: &'static str) {
+        self.current_tpm = (self.current_tpm + amount).min(self.max_tpm);
+        self.successful_requests = 0;
+        self.last_adjustment = now;
+        self.last_adjustment_reason = reason;
+    }
+
+    fn decrease(&mut self, amount: usize, now: Instant, reason: &'static str) {
+        self.current_tpm = self.current_tpm.saturating_sub(amount).max(self.min_tpm);
+        self.successful_requests = 0;
+        self.last_adjustment = now;
+        self.last_adjustment_reason = reason;
+    }
+
+    fn cooldown_remaining(&self, now: Instant) -> Duration {
+        self.cooldown_until
+            .and_then(|until| (until > now).then(|| until.duration_since(now)))
+            .unwrap_or_default()
+    }
+
+    fn snapshot(&self, now: Instant) -> LimiterSnapshot {
+        let now_epoch = chrono::Utc::now().timestamp();
+        let cooldown = self.cooldown_remaining(now);
+        LimiterSnapshot {
+            mode: "adaptive".into(),
+            current_tpm_limit: self.current_tpm,
+            min_tpm_limit: self.min_tpm,
+            max_tpm_limit: self.max_tpm,
+            request_latency_ewma_ms: self.request_latency_ewma_ms.map(round_one),
+            simulation_duration_ewma_sec: self.simulation_duration_ewma_sec.map(round_one),
+            cooldown_until_epoch: (!cooldown.is_zero())
+                .then_some(now_epoch + cooldown.as_secs() as i64),
+            last_adjustment_reason: self.last_adjustment_reason.into(),
+            updated_at_epoch: now_epoch,
+        }
+    }
+}
+
+fn ewma(previous: Option<f64>, sample: f64, alpha: f64) -> f64 {
+    previous
+        .map(|value| value * (1.0 - alpha) + sample * alpha)
+        .unwrap_or(sample)
+}
+
+fn round_one(value: f64) -> f64 {
+    (value * 10.0).round() / 10.0
+}
+
+fn initial_tpm_from_state(path: &Path) -> usize {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<LimiterSnapshot>(&raw).ok())
+        .map(|snapshot| snapshot.current_tpm_limit)
+        .unwrap_or(15)
+        .clamp(
+            AdaptiveRateController::MIN_TPM,
+            AdaptiveRateController::MAX_TPM,
+        )
 }
 
 impl LiveWorldQuant {
-    pub fn new(user_id: String, api_key: String) -> Result<Self> {
-        let tpm = std::env::var("WQ_TPM")
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(15)
-            .clamp(1, 60);
-        Ok(Self {
+    pub fn new(
+        user_id: String,
+        api_key: String,
+        limiter_state_path: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        let limiter_state_path = limiter_state_path.into();
+        let now = Instant::now();
+        let limiter = AdaptiveRateController::new(initial_tpm_from_state(&limiter_state_path), now);
+        let instance = Self {
             client: Client::builder()
                 .cookie_store(true)
                 .connect_timeout(Duration::from_secs(20))
@@ -64,12 +234,12 @@ impl LiveWorldQuant {
             api_key,
             auth_lock: Arc::new(Mutex::new(false)),
             request_lock: Arc::new(Mutex::new(())),
-            limiter: Arc::new(Mutex::new(TokenBucket {
-                timestamps: Vec::new(),
-                tpm,
-                last_429: None,
-            })),
-        })
+            limiter: Arc::new(Mutex::new(limiter)),
+            limiter_state_path,
+            limiter_state_lock: Arc::new(Mutex::new(())),
+        };
+        instance.persist_limiter_state_sync();
+        Ok(instance)
     }
 
     async fn authenticate(&self) -> Result<()> {
@@ -98,23 +268,7 @@ impl LiveWorldQuant {
         loop {
             let wait = {
                 let mut bucket = self.limiter.lock().await;
-                let now = Instant::now();
-                bucket
-                    .timestamps
-                    .retain(|t| now.duration_since(*t) < Duration::from_secs(60));
-                let cooldown = bucket
-                    .last_429
-                    .map(|t| Duration::from_secs(60).saturating_sub(now.duration_since(t)))
-                    .unwrap_or_default();
-                if cooldown > Duration::ZERO {
-                    cooldown
-                } else if bucket.timestamps.len() >= bucket.tpm {
-                    Duration::from_secs(60).saturating_sub(now.duration_since(bucket.timestamps[0]))
-                        + Duration::from_millis(100)
-                } else {
-                    bucket.timestamps.push(now);
-                    Duration::ZERO
-                }
+                bucket.throttle_wait(Instant::now())
             };
             if wait.is_zero() {
                 return;
@@ -136,14 +290,75 @@ impl LiveWorldQuant {
         if let Some(body) = body {
             request = request.json(&body);
         }
+        let started = Instant::now();
         let response = request.send().await.context("WorldQuant request")?;
+        let latency = started.elapsed();
         if response.status() == StatusCode::UNAUTHORIZED {
             *self.auth_lock.lock().await = false;
         }
-        if response.status() == StatusCode::TOO_MANY_REQUESTS {
-            self.limiter.lock().await.last_429 = Some(Instant::now());
+        let status = response.status();
+        let retry_after =
+            (status == StatusCode::TOO_MANY_REQUESTS).then(|| retry_after(&response, 60));
+        let (before, after, reason, persist) = {
+            let mut limiter = self.limiter.lock().await;
+            let before = limiter.current_tpm();
+            if let Some(retry_after) = retry_after {
+                limiter.observe_rate_limit(retry_after, Instant::now());
+            } else if status.is_success() {
+                limiter.observe_request_success(latency, Instant::now());
+            }
+            let after = limiter.current_tpm();
+            let persist = before != after
+                || status == StatusCode::TOO_MANY_REQUESTS
+                || (status.is_success() && limiter.successful_requests % 5 == 0);
+            (before, after, limiter.last_adjustment_reason, persist)
+        };
+        if before != after || status == StatusCode::TOO_MANY_REQUESTS {
+            tracing::info!(
+                before_tpm = before,
+                current_tpm = after,
+                reason,
+                http_status = %status,
+                latency_ms = round_one(latency.as_secs_f64() * 1000.0),
+                "adaptive WQ TPM adjusted"
+            );
+        }
+        if persist {
+            self.persist_limiter_state().await;
         }
         Ok(response)
+    }
+
+    fn persist_limiter_state_sync(&self) {
+        let Ok(limiter) = self.limiter.try_lock() else {
+            return;
+        };
+        let snapshot = limiter.snapshot(Instant::now());
+        if let Some(parent) = self.limiter_state_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(value) = serde_json::to_vec_pretty(&snapshot) {
+            let _ = std::fs::write(&self.limiter_state_path, value);
+        }
+    }
+
+    async fn persist_limiter_state(&self) {
+        let _write = self.limiter_state_lock.lock().await;
+        let snapshot = self.limiter.lock().await.snapshot(Instant::now());
+        if let Some(parent) = self.limiter_state_path.parent() {
+            if tokio::fs::create_dir_all(parent).await.is_err() {
+                return;
+            }
+        }
+        let temporary = self
+            .limiter_state_path
+            .with_extension(format!("json.{}.tmp", std::process::id()));
+        let Ok(value) = serde_json::to_vec_pretty(&snapshot) else {
+            return;
+        };
+        if tokio::fs::write(&temporary, value).await.is_ok() {
+            let _ = tokio::fs::rename(temporary, &self.limiter_state_path).await;
+        }
     }
 
     async fn request(
@@ -187,6 +402,7 @@ impl WorldQuantGateway for LiveWorldQuant {
     }
 
     async fn simulate(&self, expression: &str, settings: Value) -> Result<SimulationResult> {
+        let simulation_started = Instant::now();
         let body = json!({"type":"REGULAR", "regular": expression, "settings": settings});
         let response = self
             .request(
@@ -206,14 +422,13 @@ impl WorldQuantGateway for LiveWorldQuant {
         } else {
             format!("{}{}", self.base_url, location)
         };
-        let started = Instant::now();
-        loop {
-            if started.elapsed() > Duration::from_secs(1800) {
-                return Ok(SimulationResult {
+        let result = loop {
+            if simulation_started.elapsed() > Duration::from_secs(1800) {
+                break SimulationResult {
                     alpha_id: None,
                     status: "TIMEOUT".into(),
                     data: Value::Null,
-                });
+                };
             }
             let response = self
                 .request(reqwest::Method::GET, poll_url.clone(), None)
@@ -242,22 +457,43 @@ impl WorldQuantGateway for LiveWorldQuant {
                     } else {
                         value.clone()
                     };
-                    return Ok(SimulationResult {
+                    break SimulationResult {
                         alpha_id,
                         status,
                         data,
-                    });
+                    };
                 }
                 "ERROR" => {
-                    return Ok(SimulationResult {
+                    break SimulationResult {
                         alpha_id: None,
                         status,
                         data: value,
-                    })
+                    }
                 }
                 _ => tokio::time::sleep(Duration::from_secs(10)).await,
             }
-        }
+        };
+        let duration = simulation_started.elapsed();
+        let (before, after, reason) = {
+            let mut limiter = self.limiter.lock().await;
+            let before = limiter.current_tpm();
+            limiter.observe_simulation(duration, &result.status, Instant::now());
+            (
+                before,
+                limiter.current_tpm(),
+                limiter.last_adjustment_reason,
+            )
+        };
+        tracing::info!(
+            duration_secs = round_one(duration.as_secs_f64()),
+            status = %result.status,
+            before_tpm = before,
+            current_tpm = after,
+            reason,
+            "WorldQuant simulation observed by adaptive limiter"
+        );
+        self.persist_limiter_state().await;
+        Ok(result)
     }
 
     async fn find_unsubmitted(&self, metrics: &AlphaMetrics) -> Result<Vec<Value>> {
@@ -483,8 +719,83 @@ impl WorldQuantGateway for FakeWorldQuant {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_completed_checks, has_pending_checks, merge_check_detail};
+    use super::{
+        has_completed_checks, has_pending_checks, merge_check_detail, AdaptiveRateController,
+    };
     use serde_json::json;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn adaptive_rate_increases_for_fast_healthy_worldquant_responses() {
+        let started = Instant::now();
+        let mut limiter = AdaptiveRateController::new(15, started);
+
+        for offset in 0..12 {
+            limiter.observe_request_success(
+                Duration::from_millis(250),
+                started + Duration::from_secs(31 + offset),
+            );
+        }
+
+        assert!(limiter.current_tpm() > 15);
+        let after_requests = limiter.current_tpm();
+        limiter.observe_simulation(
+            Duration::from_secs(75),
+            "COMPLETE",
+            started + Duration::from_secs(90),
+        );
+        assert!(limiter.current_tpm() > after_requests);
+    }
+
+    #[test]
+    fn adaptive_rate_uses_multiplicative_decrease_and_server_cooldown_on_429() {
+        let started = Instant::now();
+        let mut limiter = AdaptiveRateController::new(30, started);
+
+        limiter.observe_rate_limit(Duration::from_secs(45), started + Duration::from_secs(5));
+
+        assert_eq!(limiter.current_tpm(), 20);
+        assert_eq!(
+            limiter.cooldown_remaining(started + Duration::from_secs(10)),
+            Duration::from_secs(40)
+        );
+    }
+
+    #[test]
+    fn adaptive_rate_reduces_pressure_after_a_slow_or_timed_out_simulation() {
+        let started = Instant::now();
+        let mut limiter = AdaptiveRateController::new(30, started);
+
+        limiter.observe_simulation(
+            Duration::from_secs(11 * 60),
+            "COMPLETE",
+            started + Duration::from_secs(11 * 60),
+        );
+        let after_slow = limiter.current_tpm();
+        limiter.observe_simulation(
+            Duration::from_secs(30 * 60),
+            "TIMEOUT",
+            started + Duration::from_secs(31 * 60),
+        );
+
+        assert!(after_slow < 30);
+        assert!(limiter.current_tpm() < after_slow);
+        assert!(limiter.current_tpm() >= 6);
+    }
+
+    #[test]
+    fn expression_rejection_does_not_reduce_worldquant_request_rate() {
+        let started = Instant::now();
+        let mut limiter = AdaptiveRateController::new(24, started);
+
+        limiter.observe_simulation(
+            Duration::from_secs(20),
+            "ERROR",
+            started + Duration::from_secs(20),
+        );
+
+        assert_eq!(limiter.current_tpm(), 24);
+    }
 
     #[test]
     fn pending_check_detection_reads_is_checks() {

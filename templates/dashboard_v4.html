@@ -268,7 +268,21 @@
 
     function updateWQ(wd) {
         wd = wd || {};
-        document.getElementById('wq-tpm-limit').textContent = wd.wq_current_tpm_limit || 'N/A';
+        var tpmEl = document.getElementById('wq-tpm-limit');
+        tpmEl.textContent = wd.wq_current_tpm_limit || 'N/A';
+        if (tpmEl.previousElementSibling) tpmEl.previousElementSibling.textContent = 'TPM（自适应）';
+        var detail = document.getElementById('wq-tpm-details');
+        if (!detail) {
+            detail = document.createElement('div');
+            detail.id = 'wq-tpm-details';
+            detail.className = 'small text-muted text-center mb-2';
+            tpmEl.closest('.row').insertAdjacentElement('afterend', detail);
+        }
+        var simulationSeconds = wd.wq_simulation_duration_ewma_sec;
+        var latencyMs = wd.wq_request_latency_ewma_ms;
+        detail.textContent = '范围 ' + (wd.wq_min_tpm_limit || 6) + '–' + (wd.wq_max_tpm_limit || 60)
+            + ' · 回测均值 ' + (simulationSeconds == null ? '采集中' : Math.round(simulationSeconds) + 's')
+            + ' · API ' + (latencyMs == null ? '采集中' : Math.round(latencyMs) + 'ms');
         var cd = wd.wq_cooldown_remaining_sec || 0;
         document.getElementById('wq-cooldown-status').innerHTML = cd > 0 ? '<span class="text-danger fw-bold"><i class="bi bi-hourglass-split"></i> 冷却 ' + cd + 's</span>' : '<span class="text-success">正常</span>';
     }

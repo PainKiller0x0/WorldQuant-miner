@@ -87,3 +87,5 @@ backups/
 # ---v17.0 忽略升级/fix专用代码---
 up/
 wq_miner.db
+limiter_runtime.json
+limiter_submitter_runtime.json

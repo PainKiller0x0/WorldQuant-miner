@@ -151,21 +151,31 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
         .get("active_nodes")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    let limiter = config
+    let configured_limiter = config
         .get("wq_api_limiter")
         .cloned()
         .unwrap_or_else(|| json!({}));
-    let cooldown = limiter
-        .get("wq_429_cooldown_seconds")
-        .and_then(Value::as_f64)
-        .unwrap_or(60.0);
-    let last_failure = limiter
-        .get("last_failure_timestamp")
-        .and_then(Value::as_f64)
-        .unwrap_or(0.0);
-    let remaining = (cooldown - (Utc::now().timestamp_millis() as f64 / 1000.0 - last_failure))
-        .max(0.0)
-        .round() as i64;
+    let limiter = read_json(&state.root.join("limiter_runtime.json"))
+        .await
+        .unwrap_or(configured_limiter);
+    let now_epoch = Utc::now().timestamp();
+    let remaining = limiter
+        .get("cooldown_until_epoch")
+        .and_then(Value::as_i64)
+        .map(|until| (until - now_epoch).max(0))
+        .unwrap_or_else(|| {
+            let cooldown = limiter
+                .get("wq_429_cooldown_seconds")
+                .and_then(Value::as_f64)
+                .unwrap_or(60.0);
+            let last_failure = limiter
+                .get("last_failure_timestamp")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            (cooldown - (Utc::now().timestamp_millis() as f64 / 1000.0 - last_failure))
+                .max(0.0)
+                .round() as i64
+        });
     let journal_logs = read_worker_journal().await;
     if let Err(error) = &journal_logs {
         tracing::warn!(?error, "worker journal unavailable; using legacy log files");
@@ -205,6 +215,12 @@ async fn status(State(state): State<DashboardState>) -> impl IntoResponse {
             "evolver_budget_limit": budget_value(&budgets, &active_nodes, "evolver", "daily_limit"),
             "evolver_active_node": active_nodes.get("evolver").cloned().unwrap_or_else(|| json!("evolver")),
             "wq_current_tpm_limit": limiter.get("current_tpm_limit").cloned().unwrap_or_else(|| json!(60)),
+            "wq_tpm_mode": limiter.get("mode").cloned().unwrap_or_else(|| json!("static")),
+            "wq_min_tpm_limit": limiter.get("min_tpm_limit").cloned().unwrap_or_else(|| json!(6)),
+            "wq_max_tpm_limit": limiter.get("max_tpm_limit").cloned().unwrap_or_else(|| json!(60)),
+            "wq_request_latency_ewma_ms": limiter.get("request_latency_ewma_ms").cloned().unwrap_or(Value::Null),
+            "wq_simulation_duration_ewma_sec": limiter.get("simulation_duration_ewma_sec").cloned().unwrap_or(Value::Null),
+            "wq_last_adjustment_reason": limiter.get("last_adjustment_reason").cloned().unwrap_or_else(|| json!("startup")),
             "wq_cooldown_status": if remaining > 0 { format!("IN_COOLDOWN ({remaining}s)") } else { "OK".to_owned() },
             "wq_cooldown_remaining_sec": remaining
         }

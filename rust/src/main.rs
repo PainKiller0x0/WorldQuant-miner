@@ -97,6 +97,7 @@ async fn main() -> Result<()> {
                     Arc::new(LiveWorldQuant::new(
                         config.wq_user_id.clone(),
                         config.wq_api_key.clone(),
+                        config.root.join("limiter_runtime.json"),
                     )?)
                 };
             let interval = Duration::from_secs(interval_secs.max(1));
@@ -130,7 +131,11 @@ async fn main() -> Result<()> {
                 if std::env::var("WQ_FAKE").ok().as_deref() == Some("1") {
                     Arc::new(FakeWorldQuant)
                 } else {
-                    Arc::new(LiveWorldQuant::new(config.wq_user_id, config.wq_api_key)?)
+                    Arc::new(LiveWorldQuant::new(
+                        config.wq_user_id,
+                        config.wq_api_key,
+                        config.root.join("limiter_submitter_runtime.json"),
+                    )?)
                 };
             let result = workflow::process_submissions(
                 store,

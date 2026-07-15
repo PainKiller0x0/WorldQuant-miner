@@ -297,46 +297,31 @@ impl WorldQuantGateway for LiveWorldQuant {
 
     async fn check_submission(&self, alpha_id: &str) -> Result<Value> {
         let url = format!("{}/alphas/{}/check", self.base_url, alpha_id);
-        let started = Instant::now();
-        loop {
-            if started.elapsed() > Duration::from_secs(120) {
-                return Err(anyhow!("submission check timed out for {alpha_id}"));
-            }
-            let response = self
-                .request_unchecked(reqwest::Method::GET, url.clone(), None)
-                .await?;
-            if response.status() == StatusCode::TOO_MANY_REQUESTS {
-                tokio::time::sleep(retry_after(&response, 60)).await;
-                continue;
-            }
-            let response = response.error_for_status()?;
-            let retry = response
-                .headers()
-                .get(RETRY_AFTER)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.parse::<f64>().ok())
-                .map(Duration::from_secs_f64);
-            let bytes = response.bytes().await?;
-            let value = if bytes.is_empty() {
-                Value::Null
-            } else {
-                serde_json::from_slice(&bytes).context("parse submission check response")?
-            };
-            if has_completed_checks(&value) {
-                let detail = self.alpha(alpha_id).await?;
-                return Ok(merge_check_detail(detail, &value));
-            }
-            if let Some(wait) = retry {
-                tokio::time::sleep(wait.max(Duration::from_secs(1))).await;
-                continue;
-            }
-            let detail = self.alpha(alpha_id).await?;
-            if has_pending_checks(&detail) {
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                continue;
-            }
-            return Ok(if detail.is_null() { value } else { detail });
+        let response = self
+            .request_unchecked(reqwest::Method::GET, url, None)
+            .await?;
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            let wait = retry_after(&response, 60);
+            return Err(anyhow!(
+                "submission check rate limited for {alpha_id}; retry after {}s",
+                wait.as_secs()
+            ));
         }
+        let response = response.error_for_status()?;
+        let bytes = response.bytes().await?;
+        let check_response = if bytes.is_empty() {
+            Value::Null
+        } else {
+            serde_json::from_slice(&bytes).context("parse submission check response")?
+        };
+        let detail = self.alpha(alpha_id).await?;
+        Ok(if check_response.get("is").is_some() {
+            merge_check_detail(detail, &check_response)
+        } else if detail.is_null() {
+            check_response
+        } else {
+            detail
+        })
     }
 
     async fn submit(&self, alpha_id: &str) -> Result<Value> {
@@ -390,6 +375,7 @@ fn retry_after(response: &reqwest::Response, default_seconds: u64) -> Duration {
         .max(Duration::from_secs(1))
 }
 
+#[cfg(test)]
 fn has_pending_checks(detail: &Value) -> bool {
     detail
         .get("is")
@@ -404,6 +390,7 @@ fn has_pending_checks(detail: &Value) -> bool {
         .unwrap_or(true)
 }
 
+#[cfg(test)]
 fn has_completed_checks(detail: &Value) -> bool {
     detail
         .get("is")
@@ -412,9 +399,12 @@ fn has_completed_checks(detail: &Value) -> bool {
         .and_then(Value::as_array)
         .map(|checks| {
             !checks.is_empty()
-                && checks
-                    .iter()
-                    .all(|check| check.get("result").and_then(Value::as_str) != Some("PENDING"))
+                && checks.iter().all(|check| {
+                    matches!(
+                        check.get("result").and_then(Value::as_str),
+                        Some("PASS" | "FAIL")
+                    )
+                })
         })
         .unwrap_or(false)
 }
@@ -501,5 +491,15 @@ mod tests {
         assert_eq!(merged["is"]["selfCorrelated"]["max"], 0.7);
         assert!(has_completed_checks(&check_response));
         assert!(!has_pending_checks(&merged));
+    }
+
+    #[test]
+    fn check_error_is_not_a_completed_submission_check() {
+        let check_response = json!({"is":{"checks":[
+            {"name":"LOW_SHARPE","result":"PASS"},
+            {"name":"SELF_CORRELATION","result":"ERROR"}
+        ]}});
+
+        assert!(!has_completed_checks(&check_response));
     }
 }

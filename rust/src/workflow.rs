@@ -106,8 +106,7 @@ async fn retry_pending(
 
 #[derive(Debug, Default, Serialize)]
 pub struct SubmissionBatchResult {
-    pub configured_daily_limit: i64,
-    pub effective_daily_limit: i64,
+    pub submission_limit: &'static str,
     pub submitted_last_24h: i64,
     pub processed: usize,
     pub matched: usize,
@@ -124,6 +123,7 @@ pub struct SubmissionBatchResult {
 enum SubmissionState {
     Stale,
     Failed(Vec<String>),
+    CheckError(Vec<String>),
     CheckPending,
     Ready,
     Waiting,
@@ -135,42 +135,40 @@ pub async fn process_submissions(
     limit: i64,
     dry_run: bool,
     auto_submit: bool,
-    ramp_submit: bool,
-    daily_limit: i64,
 ) -> Result<SubmissionBatchResult> {
     let include_ready = dry_run || auto_submit;
-    let mut candidates = store
-        .get_submission_candidates(1, include_ready, Some(true))
-        .await?;
-    let remaining = limit.saturating_sub(candidates.len() as i64);
-    if remaining > 0 {
-        candidates.extend(
-            store
-                .get_submission_candidates(remaining, include_ready, Some(false))
-                .await?,
-        );
-    }
     let already_submitted = store.submitted_today().await?;
-    let effective_daily_limit = if ramp_submit {
-        daily_limit.min(submit_ramp_limit(
-            store.auto_submit_started_at().await?,
-            Utc::now().timestamp(),
-        ))
+    let mut candidates = if include_ready {
+        store.get_ready_submission_candidates(limit).await?
     } else {
-        daily_limit
+        Vec::new()
     };
-    let mut submit_slots = effective_daily_limit
-        .saturating_sub(already_submitted)
-        .max(0);
+    let active_candidate = if dry_run {
+        store
+            .get_submission_candidates(1, false, None)
+            .await?
+            .into_iter()
+            .next()
+    } else {
+        store.claim_submission_candidate().await?
+    };
+    let active_candidate_id = active_candidate
+        .as_ref()
+        .map(|candidate| candidate.id.clone());
+    if let Some(candidate) = active_candidate {
+        if !candidates.iter().any(|ready| ready.id == candidate.id) {
+            candidates.push(candidate);
+        }
+    }
     let mut result = SubmissionBatchResult {
-        configured_daily_limit: daily_limit,
-        effective_daily_limit,
+        submission_limit: "unlimited",
         submitted_last_24h: already_submitted,
         ..SubmissionBatchResult::default()
     };
 
     for candidate in candidates {
         result.processed += 1;
+        let is_active_check = active_candidate_id.as_deref() == Some(candidate.id.as_str());
         let linked_id = candidate
             .raw_data
             .get("wq_alpha_id")
@@ -185,11 +183,31 @@ pub async fn process_submissions(
             let exact = select_exact_alpha(&candidate.expression, &matches);
             let Some(exact) = exact else {
                 result.skipped += 1;
+                if !dry_run && is_active_check {
+                    store
+                        .record_submission_queue_error(
+                            &candidate.id,
+                            "match_missing",
+                            "no exact unsubmitted WorldQuant alpha match",
+                        )
+                        .await?;
+                    store.release_submission_candidate(&candidate.id).await?;
+                }
                 warn!(id=%candidate.id, "no exact unsubmitted WorldQuant alpha match");
                 continue;
             };
             let Some(alpha_id) = exact.get("id").and_then(Value::as_str).map(str::to_owned) else {
                 result.skipped += 1;
+                if !dry_run && is_active_check {
+                    store
+                        .record_submission_queue_error(
+                            &candidate.id,
+                            "match_missing",
+                            "matched WorldQuant alpha has no id",
+                        )
+                        .await?;
+                    store.release_submission_candidate(&candidate.id).await?;
+                }
                 warn!(id=%candidate.id, "matched WorldQuant alpha has no id");
                 continue;
             };
@@ -205,6 +223,9 @@ pub async fn process_submissions(
                 info!(id=%candidate.id, alpha_id, "dry-run: stale simulation requires rerun");
                 continue;
             }
+            store
+                .record_submission_stage(&candidate.id, "resimulating", Some(&alpha_id))
+                .await?;
             let settings = detail
                 .get("settings")
                 .cloned()
@@ -219,6 +240,9 @@ pub async fn process_submissions(
                 store
                     .update_result(candidate.id.clone(), metrics, raw, true, reason)
                     .await?;
+                if is_active_check {
+                    store.release_submission_candidate(&candidate.id).await?;
+                }
                 continue;
             };
             alpha_id = new_alpha_id;
@@ -229,7 +253,7 @@ pub async fn process_submissions(
             info!(id=%candidate.id, alpha_id, ?state, "stale alpha resimulated");
         }
 
-        if matches!(state, SubmissionState::CheckPending) {
+        if matches!(state, SubmissionState::CheckPending) && is_active_check {
             if dry_run {
                 info!(id=%candidate.id, alpha_id, "dry-run: submission check required");
                 continue;
@@ -239,6 +263,16 @@ pub async fn process_submissions(
                 Ok(detail) => detail,
                 Err(error) => {
                     result.skipped += 1;
+                    let retry_count = store
+                        .record_submission_queue_error(
+                            &candidate.id,
+                            "check_error",
+                            &error.to_string(),
+                        )
+                        .await?;
+                    if retry_count >= 3 {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
                     warn!(?error, id=%candidate.id, alpha_id, "submission check remains pending");
                     continue;
                 }
@@ -261,23 +295,27 @@ pub async fn process_submissions(
                     persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
                         .await?;
                 }
-                if !auto_submit || dry_run || submit_slots == 0 {
+                if !auto_submit || dry_run {
+                    if !dry_run && is_active_check {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
                     info!(
                         id=%candidate.id,
                         alpha_id,
                         auto_submit,
-                        submit_slots,
                         "alpha ready for submission"
                     );
                     continue;
                 }
+                store
+                    .record_submission_stage(&candidate.id, "submitting", Some(&alpha_id))
+                    .await?;
                 worldquant.submit(&alpha_id).await?;
                 store.mark_submitted(candidate.expression.clone()).await?;
-                if ramp_submit {
-                    store.mark_auto_submit_started().await?;
+                if is_active_check {
+                    store.release_submission_candidate(&candidate.id).await?;
                 }
                 result.submitted += 1;
-                submit_slots -= 1;
                 info!(id=%candidate.id, alpha_id, "alpha submitted");
             }
             SubmissionState::Failed(ref reasons) => {
@@ -285,36 +323,51 @@ pub async fn process_submissions(
                 if !dry_run {
                     persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
                         .await?;
+                    if is_active_check {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
                 }
                 info!(id=%candidate.id, alpha_id, ?reasons, "alpha rejected by submission checks");
             }
+            SubmissionState::CheckError(ref reasons) => {
+                result.skipped += 1;
+                if !dry_run {
+                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, true)
+                        .await?;
+                    if is_active_check && queue_retry_count(&candidate) + 1 >= 3 {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
+                }
+                warn!(id=%candidate.id, alpha_id, ?reasons, "submission check returned retryable error");
+            }
             SubmissionState::Stale => {
                 result.skipped += 1;
+                if !dry_run && is_active_check {
+                    store.release_submission_candidate(&candidate.id).await?;
+                }
                 warn!(id=%candidate.id, alpha_id, "fresh simulation is still marked old");
             }
             SubmissionState::CheckPending | SubmissionState::Waiting => {
                 result.skipped += 1;
                 if !dry_run {
-                    persist_remote_state(&store, &candidate, &alpha_id, &detail, &state, false)
-                        .await?;
+                    persist_remote_state(
+                        &store,
+                        &candidate,
+                        &alpha_id,
+                        &detail,
+                        &state,
+                        matches!(state, SubmissionState::Waiting),
+                    )
+                    .await?;
+                    if is_active_check && matches!(state, SubmissionState::Waiting) {
+                        store.release_submission_candidate(&candidate.id).await?;
+                    }
                 }
                 info!(id=%candidate.id, alpha_id, ?state, "alpha is not ready for submission");
             }
         }
     }
     Ok(result)
-}
-
-fn submit_ramp_limit(started_at: Option<i64>, now: i64) -> i64 {
-    let Some(started_at) = started_at else {
-        return 1;
-    };
-    let completed_days = now.saturating_sub(started_at) / 86_400;
-    if completed_days == 0 {
-        1
-    } else {
-        (3 + completed_days).min(10)
-    }
 }
 
 async fn persist_remote_state(
@@ -332,6 +385,15 @@ async fn persist_remote_state(
     };
     let (metrics, mut raw, base_reason) = simulation_data(&simulation);
     if let Value::Object(map) = &mut raw {
+        for key in [
+            "submission_enqueued_at",
+            "submission_check_retry_count",
+            "submission_last_error",
+        ] {
+            if let Some(value) = candidate.raw_data.get(key) {
+                map.insert(key.into(), value.clone());
+            }
+        }
         map.insert("submission_phase".into(), json!(submission_phase(state)));
         if mark_attempt {
             map.insert(
@@ -340,6 +402,19 @@ async fn persist_remote_state(
             );
         } else if let Some(last_attempt) = candidate.raw_data.get("submission_last_attempt_at") {
             map.insert("submission_last_attempt_at".into(), last_attempt.clone());
+        }
+        if let SubmissionState::CheckError(reasons) = state {
+            map.insert(
+                "submission_check_retry_count".into(),
+                json!(queue_retry_count(candidate) + 1),
+            );
+            map.insert("submission_last_error".into(), json!(reasons.join(",")));
+        }
+        if matches!(state, SubmissionState::Ready | SubmissionState::Failed(_)) {
+            map.insert(
+                "submission_completed_at".into(),
+                json!(Utc::now().timestamp()),
+            );
         }
     }
     let failure_reason = match state {
@@ -361,10 +436,19 @@ fn submission_phase(state: &SubmissionState) -> &'static str {
     match state {
         SubmissionState::Stale => "resimulation_required",
         SubmissionState::Failed(_) => "failed",
+        SubmissionState::CheckError(_) => "check_error",
         SubmissionState::CheckPending => "checking",
         SubmissionState::Ready => "ready",
         SubmissionState::Waiting => "waiting",
     }
+}
+
+fn queue_retry_count(candidate: &AlphaRecord) -> i64 {
+    candidate
+        .raw_data
+        .get("submission_check_retry_count")
+        .and_then(Value::as_i64)
+        .unwrap_or_default()
 }
 
 fn select_exact_alpha(expression: &str, matches: &[Value]) -> Option<Value> {
@@ -412,6 +496,15 @@ fn classify_submission(detail: &Value) -> SubmissionState {
     }
     if !failed.is_empty() {
         return SubmissionState::Failed(failed);
+    }
+    let errors = checks
+        .iter()
+        .filter(|check| check.get("result").and_then(Value::as_str) == Some("ERROR"))
+        .filter_map(|check| check.get("name").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if !errors.is_empty() {
+        return SubmissionState::CheckError(errors);
     }
     let passed = checks
         .iter()
@@ -585,7 +678,7 @@ fn number(value: &Value, key: &str) -> f64 {
 mod tests {
     use super::{
         build_prompt, classify_submission, default_policy, process_submissions, select_exact_alpha,
-        simulation_data, submit_ramp_limit, SubmissionState,
+        simulation_data, SubmissionState,
     };
     use crate::domain::{AlphaMetrics, AlphaRecord, Role};
     use crate::gateway::{SimulationResult, WorldQuantGateway};
@@ -594,7 +687,10 @@ mod tests {
     use async_trait::async_trait;
     use serde_json::json;
     use serde_json::Value;
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn alpha(expression: &str, fitness: f64, sharpe: f64) -> AlphaRecord {
@@ -686,6 +782,19 @@ mod tests {
     }
 
     #[test]
+    fn self_correlation_error_is_retryable_instead_of_failure() {
+        let checks = (0..7)
+            .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+            .chain([json!({"name":"SELF_CORRELATION","result":"ERROR"})])
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            classify_submission(&json!({"is":{"checks":checks}})),
+            SubmissionState::CheckError(vec!["SELF_CORRELATION".into()])
+        );
+    }
+
+    #[test]
     fn simulation_metrics_read_checks_from_is_payload() {
         let result = SimulationResult {
             alpha_id: Some("alpha-1".into()),
@@ -712,18 +821,6 @@ mod tests {
             raw.get("wq_alpha_id").and_then(|value| value.as_str()),
             Some("alpha-1")
         );
-    }
-
-    #[test]
-    fn submit_limit_ramps_from_one_to_four_then_one_per_day() {
-        let start = 1_000_000;
-        assert_eq!(submit_ramp_limit(None, start), 1);
-        assert_eq!(submit_ramp_limit(Some(start), start), 1);
-        assert_eq!(submit_ramp_limit(Some(start), start + 86_399), 1);
-        assert_eq!(submit_ramp_limit(Some(start), start + 86_400), 4);
-        assert_eq!(submit_ramp_limit(Some(start), start + 2 * 86_400), 5);
-        assert_eq!(submit_ramp_limit(Some(start), start + 7 * 86_400), 10);
-        assert_eq!(submit_ramp_limit(Some(start), start + 30 * 86_400), 10);
     }
 
     #[derive(Default)]
@@ -785,8 +882,6 @@ mod tests {
             1,
             false,
             false,
-            false,
-            4,
         )
         .await
         .unwrap();
@@ -803,6 +898,80 @@ mod tests {
                 .and_then(Value::as_str),
             Some("remote-1")
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    struct ReadySubmitGateway {
+        submitted: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl WorldQuantGateway for ReadySubmitGateway {
+        async fn operators(&self) -> Result<Vec<String>> {
+            Ok(Vec::new())
+        }
+
+        async fn simulate(&self, _expression: &str, _settings: Value) -> Result<SimulationResult> {
+            unreachable!()
+        }
+
+        async fn find_unsubmitted(&self, _metrics: &AlphaMetrics) -> Result<Vec<Value>> {
+            unreachable!()
+        }
+
+        async fn alpha(&self, alpha_id: &str) -> Result<Value> {
+            let checks = (0..8)
+                .map(|index| json!({"name":format!("PASS_{index}"),"result":"PASS"}))
+                .collect::<Vec<_>>();
+            Ok(
+                json!({"id":alpha_id,"is":{"fitness":1.3,"sharpe":1.7,"returns":0.1,"turnover":0.2,"checks":checks}}),
+            )
+        }
+
+        async fn check_submission(&self, _alpha_id: &str) -> Result<Value> {
+            unreachable!()
+        }
+
+        async fn submit(&self, alpha_id: &str) -> Result<Value> {
+            self.submitted.fetch_add(1, Ordering::SeqCst);
+            Ok(json!({"status":"submitted","alpha_id":alpha_id}))
+        }
+    }
+
+    #[tokio::test]
+    async fn automatic_submission_has_no_daily_quota() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-unlimited-submit-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at, submitted_timestamp) VALUES ('old','rank(low);',8,0,1,0,'{}',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('one','rank(close);',1.3,8,0,0,0,'{\"wq_alpha_id\":\"remote-one\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, fitness, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('two','rank(open);',1.2,8,0,0,0,'{\"wq_alpha_id\":\"remote-two\"}',CURRENT_TIMESTAMP)", []).unwrap();
+        drop(conn);
+        let store = Arc::new(AlphaStore::new(&path));
+        let submitted = Arc::new(AtomicUsize::new(0));
+
+        let result = process_submissions(
+            store,
+            Arc::new(ReadySubmitGateway {
+                submitted: submitted.clone(),
+            }),
+            10,
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.submission_limit, "unlimited");
+        assert_eq!(result.submitted_last_24h, 1);
+        assert_eq!(result.submitted, 2);
+        assert_eq!(submitted.load(Ordering::SeqCst), 2);
         let _ = std::fs::remove_file(path);
     }
 }

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>官网 Check 队列 - WQ Alpha 舰队</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: "Segoe UI", Arial, sans-serif; }
+        .metric-card { border: 0; border-left: 4px solid var(--accent); }
+        .metric-value { font-size: 1.75rem; font-weight: 700; }
+        .active-card { border: 1px solid rgba(255,193,7,.45); background: linear-gradient(135deg, rgba(255,193,7,.12), rgba(13,110,253,.06)); }
+        .expression { max-width: 560px; font-family: Consolas, monospace; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: copy; }
+        .phase { display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .65rem; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+        .phase-checking { color: #ffd86b; background: rgba(255,193,7,.15); border: 1px solid rgba(255,193,7,.4); }
+        .phase-matching { color: #79b8ff; background: rgba(13,110,253,.15); border: 1px solid rgba(13,110,253,.4); }
+        .phase-resimulating { color: #c9a7ff; background: rgba(111,66,193,.16); border: 1px solid rgba(111,66,193,.42); }
+        .phase-submitting { color: #62dbd4; background: rgba(32,201,151,.15); border: 1px solid rgba(32,201,151,.42); }
+        .phase-retrying, .phase-retry_wait { color: #ff9f74; background: rgba(253,126,20,.15); border: 1px solid rgba(253,126,20,.4); }
+        .phase-ready, .phase-submitted { color: #62db9b; background: rgba(25,135,84,.16); border: 1px solid rgba(25,135,84,.4); }
+        .phase-failed { color: #ff808b; background: rgba(220,53,69,.16); border: 1px solid rgba(220,53,69,.4); }
+        .phase-queued { color: #aeb8c4; background: rgba(108,117,125,.15); border: 1px solid rgba(108,117,125,.4); }
+        .check-pill { display:inline-block; font-size:.72rem; margin:1px 3px 1px 0; padding:2px 6px; border-radius:4px; }
+        .check-pass { background:rgba(25,135,84,.16); color:#62db9b; }
+        .check-fail { background:rgba(220,53,69,.16); color:#ff808b; }
+        .check-error { background:rgba(253,126,20,.16); color:#ff9f74; }
+        .check-pending { background:rgba(255,193,7,.16); color:#ffd86b; }
+        .table td { vertical-align: middle; }
+        .sticky-summary { position: sticky; top: 56px; z-index: 10; backdrop-filter: blur(8px); }
+        .pulse { width:10px; height:10px; border-radius:50%; background:#ffc107; box-shadow:0 0 0 0 rgba(255,193,7,.6); animation:pulse 1.7s infinite; }
+        @keyframes pulse { 70% { box-shadow:0 0 0 9px rgba(255,193,7,0); } 100% { box-shadow:0 0 0 0 rgba(255,193,7,0); } }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg bg-body-tertiary sticky-top shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold text-primary" href="/"><i class="bi bi-cpu-fill"></i> WQ Alpha 舰队</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> 仪表盘</a></li>
+        <li class="nav-item"><a class="nav-link" href="/chart"><i class="bi bi-graph-up"></i> 统计图表</a></li>
+        <li class="nav-item"><a class="nav-link" href="/settings"><i class="bi bi-sliders"></i> 设置</a></li>
+        <li class="nav-item"><a class="nav-link" href="/pending"><i class="bi bi-hourglass-split"></i> 待处理</a></li>
+        <li class="nav-item"><a class="nav-link active" href="/queue"><i class="bi bi-list-ol"></i> Check 队列</a></li>
+      </ul>
+      <span class="small text-muted"><span id="live-dot" class="d-inline-block me-2"></span><span id="refresh-status">连接中</span></span>
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid px-4 py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+        <div><h3 class="mb-1"><i class="bi bi-signpost-split text-warning"></i> 官网 Check 单通道队列</h3><div class="text-muted">同一时间只处理一个 Alpha；真实 8 PASS 后立即 Submit，不设每日上限。</div></div>
+        <div class="small text-muted">数据每 5 秒刷新 · <span id="updated-at">--</span></div>
+    </div>
+
+    <section class="row g-3 mb-3 sticky-summary">
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#ffc107"><div class="card-body"><div class="text-muted small">当前处理</div><div id="count-active" class="metric-value">0</div></div></div></div>
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#6c757d"><div class="card-body"><div class="text-muted small">排队</div><div id="count-queued" class="metric-value">0</div></div></div></div>
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#fd7e14"><div class="card-body"><div class="text-muted small">等待重试</div><div id="count-retrying" class="metric-value">0</div></div></div></div>
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#198754"><div class="card-body"><div class="text-muted small">可提交</div><div id="count-ready" class="metric-value">0</div></div></div></div>
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#0d6efd"><div class="card-body"><div class="text-muted small">近 24h 已提交</div><div id="count-submitted" class="metric-value">0</div></div></div></div>
+        <div class="col-6 col-lg"><div class="card metric-card h-100" style="--accent:#20c997"><div class="card-body"><div class="text-muted small">提交上限</div><div class="metric-value fs-4">不限</div></div></div></div>
+    </section>
+
+    <section class="card active-card mb-4">
+        <div class="card-header bg-transparent d-flex align-items-center gap-2"><span class="pulse"></span><strong>当前官网 Check</strong></div>
+        <div id="active-alpha" class="card-body text-muted">等待队列调度...</div>
+    </section>
+
+    <section class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center"><strong><i class="bi bi-list-ol"></i> 实时队列</strong><span class="badge text-bg-secondary" id="queue-total">0</span></div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>#</th><th>状态</th><th>Alpha</th><th>指标</th><th>官网 Checks</th><th>重试</th><th>入库时间</th></tr></thead>
+                <tbody id="queue-body"><tr><td colspan="7" class="text-center text-muted py-5">加载中...</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card border-0 shadow-sm">
+        <div class="card-header bg-body-tertiary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <strong><i class="bi bi-clock-history"></i> 最近官网结果</strong>
+            <div class="btn-group btn-group-sm" id="result-filter">
+                <button class="btn btn-outline-secondary active" data-filter="all">全部</button>
+                <button class="btn btn-outline-success" data-filter="submitted">已提交</button>
+                <button class="btn btn-outline-danger" data-filter="failed">失败</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>结果</th><th>Alpha</th><th>指标</th><th>失败原因 / Checks</th><th>完成时间</th></tr></thead>
+                <tbody id="result-body"><tr><td colspan="5" class="text-center text-muted py-5">加载中...</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let latest = null;
+let resultFilter = 'all';
+let loading = false;
+
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const number = value => Number(value || 0).toFixed(4).replace(/\.0+$/, '');
+const epochTime = value => value ? new Date(Number(value) * 1000).toLocaleString('zh-CN', {hour12:false}) : '--';
+const phaseText = phase => ({matching:'匹配官网记录', resimulating:'补回测', checking:'Check 中', retrying:'正在重试', retry_wait:'等待重试', submitting:'正在提交', queued:'排队', ready:'可提交', submitted:'已提交', failed:'失败'})[phase] || phase;
+const phaseBadge = phase => `<span class="phase phase-${esc(phase)}">${esc(phaseText(phase))}</span>`;
+
+function checksHtml(checks) {
+    if (!Array.isArray(checks) || !checks.length) return '<span class="text-muted">暂无</span>';
+    return checks.map(check => {
+        const result = String(check.result || 'UNKNOWN').toLowerCase();
+        const cls = ['pass','fail','error','pending'].includes(result) ? result : 'pending';
+        const detail = check.value !== undefined ? ` ${number(check.value)} / ${number(check.limit)}` : '';
+        return `<span class="check-pill check-${cls}" title="${esc(check.name)}">${esc(check.name)}: ${esc(check.result)}${esc(detail)}</span>`;
+    }).join('');
+}
+
+function expressionHtml(row) {
+    return `<div class="fw-semibold">${esc(row.wq_alpha_id || row.id || '--')}</div><div class="expression text-muted" title="点击复制" data-expression="${esc(row.expression)}">${esc(row.expression)}</div>`;
+}
+
+function metricHtml(row) {
+    return `<div class="small text-nowrap">Fit <b>${number(row.fitness)}</b> · Sharpe <b>${number(row.sharpe)}</b><br>Ret ${number(row.returns)} · Turn ${number(row.turnover)}</div>`;
+}
+
+function render(data) {
+    latest = data;
+    const summary = data.summary || {};
+    document.getElementById('count-active').textContent = data.active ? 1 : 0;
+    document.getElementById('count-queued').textContent = summary.queued || 0;
+    document.getElementById('count-retrying').textContent = summary.retrying || 0;
+    document.getElementById('count-ready').textContent = summary.ready || 0;
+    document.getElementById('count-submitted').textContent = data.submitted_last_24h || 0;
+    document.getElementById('queue-total').textContent = summary.total || 0;
+    document.getElementById('updated-at').textContent = new Date(data.updated_at).toLocaleString('zh-CN', {hour12:false});
+    document.getElementById('refresh-status').textContent = '实时连接';
+    document.getElementById('live-dot').className = 'pulse d-inline-block me-2';
+
+    const active = data.active;
+    document.getElementById('active-alpha').innerHTML = active ? `
+        <div class="row g-3 align-items-center">
+            <div class="col-lg-5">${phaseBadge(active.phase)}<div class="mt-2">${expressionHtml(active)}</div></div>
+            <div class="col-lg-3">${metricHtml(active)}</div>
+            <div class="col-lg-4"><div class="small text-muted">最近轮询：${epochTime(active.last_attempt_at)} · 重试 ${active.retry_count || 0} 次</div><div class="text-warning mt-1">${esc(active.last_error || '')}</div><div class="mt-2">${checksHtml(active.checks)}</div></div>
+        </div>` : '<span class="text-muted">当前没有正在执行的官网 Check，下一轮会领取队首 Alpha。</span>';
+
+    const queue = Array.isArray(data.queue) ? data.queue : [];
+    document.getElementById('queue-body').innerHTML = queue.length ? queue.map(row => `<tr>
+        <td class="fw-bold">${row.position}</td><td>${phaseBadge(row.phase)}</td><td>${expressionHtml(row)}</td><td>${metricHtml(row)}</td>
+        <td style="min-width:260px">${checksHtml(row.checks)}</td>
+        <td><span class="badge text-bg-secondary">${row.retry_count || 0}</span><div class="small text-warning mt-1">${esc(row.last_error || '')}</div><div class="small text-muted">${epochTime(row.last_attempt_at)}</div></td>
+        <td class="small text-muted text-nowrap">${esc(row.created_at || '--')}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="text-center text-success py-5">队列已清空</td></tr>';
+    renderResults();
+}
+
+function renderResults() {
+    const rows = (latest?.recent_results || []).filter(row => resultFilter === 'all' || row.phase === resultFilter);
+    document.getElementById('result-body').innerHTML = rows.length ? rows.map(row => `<tr>
+        <td>${phaseBadge(row.phase)}</td><td>${expressionHtml(row)}</td><td>${metricHtml(row)}</td>
+        <td style="min-width:320px"><div class="${row.phase === 'failed' ? 'text-danger fw-semibold' : 'text-success'}">${esc(row.failure_reason || (row.phase === 'submitted' ? '8 PASS，已自动提交' : ''))}</div><div class="mt-1">${checksHtml(row.checks)}</div></td>
+        <td class="small text-muted text-nowrap">${esc(row.completed_at || row.created_at || '--')}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted py-5">没有对应结果</td></tr>';
+}
+
+async function refresh() {
+    if (loading) return;
+    loading = true;
+    try {
+        const response = await fetch('/api/submission_queue', {cache:'no-store'});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+    } catch (error) {
+        document.getElementById('refresh-status').textContent = `刷新失败：${error.message}`;
+        document.getElementById('live-dot').className = 'd-inline-block me-2 bg-danger rounded-circle';
+        document.getElementById('live-dot').style.cssText = 'width:10px;height:10px';
+    } finally { loading = false; }
+}
+
+document.getElementById('result-filter').addEventListener('click', event => {
+    const button = event.target.closest('button[data-filter]');
+    if (!button) return;
+    resultFilter = button.dataset.filter;
+    document.querySelectorAll('#result-filter button').forEach(item => item.classList.toggle('active', item === button));
+    renderResults();
+});
+document.addEventListener('click', event => {
+    const expression = event.target.closest('[data-expression]');
+    if (expression) navigator.clipboard.writeText(expression.dataset.expression || '');
+});
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

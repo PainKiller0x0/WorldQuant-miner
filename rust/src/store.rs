@@ -44,9 +44,23 @@ impl AlphaStore {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
             let conn = open(&path)?;
-            let changed = conn.execute("UPDATE alphas SET is_submitted=1, submitted_timestamp=CURRENT_TIMESTAMP WHERE expression=?1", [expression])?;
+            let changed = conn.execute(
+                "UPDATE alphas
+                 SET is_submitted=1,
+                     submitted_timestamp=CURRENT_TIMESTAMP,
+                     raw_data=json_set(
+                         CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
+                         '$.submission_phase', 'submitted',
+                         '$.submission_completed_at', CAST(strftime('%s','now') AS INTEGER),
+                         '$.status', 'SUBMITTED'
+                     )
+                 WHERE expression=?1",
+                [expression],
+            )?;
             Ok::<_, anyhow::Error>(changed > 0)
-        }).await.context("database mark submitted task")?
+        })
+        .await
+        .context("database mark submitted task")?
     }
 
     pub async fn insert_candidate(&self, candidate: AlphaCandidate) -> Result<bool> {
@@ -126,6 +140,203 @@ impl AlphaStore {
         .context("database submission candidates task")?
     }
 
+    pub async fn get_ready_submission_candidates(&self, limit: i64) -> Result<Vec<AlphaRecord>> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            let mut stmt = conn.prepare(
+                "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+                 FROM alphas
+                 WHERE pass_count>=8
+                   AND COALESCE(fail_count, 0)=0
+                   AND COALESCE(is_submitted, 0)=0
+                   AND COALESCE(is_failed_on_wq, 0)=0
+                   AND raw_data LIKE '%\"wq_alpha_id\"%'
+                 ORDER BY fitness DESC, created_at ASC
+                 LIMIT ?1",
+            )?;
+            let rows = stmt.query_map([limit], alpha_from_row)?;
+            Ok::<_, anyhow::Error>(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        })
+        .await
+        .context("database ready submission candidates task")?
+    }
+
+    pub async fn claim_submission_candidate(&self) -> Result<Option<AlphaRecord>> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = open(&path)?;
+            let transaction = conn.transaction()?;
+            let active_id: Option<String> = transaction
+                .query_row(
+                    "SELECT value FROM automation_state WHERE key='submission_active_candidate'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if let Some(active_id) = active_id {
+                let active = submission_candidate_by_id(&transaction, &active_id)?;
+                if active.is_some() {
+                    transaction.commit()?;
+                    return Ok::<_, anyhow::Error>(active);
+                }
+                transaction.execute(
+                    "DELETE FROM automation_state WHERE key='submission_active_candidate'",
+                    [],
+                )?;
+            }
+
+            let next = transaction
+                .query_row(
+                    "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+                     FROM alphas
+                     WHERE pass_count>=7
+                       AND pass_count<8
+                       AND COALESCE(fail_count, 0)=0
+                       AND COALESCE(is_submitted, 0)=0
+                       AND COALESCE(is_failed_on_wq, 0)=0
+                     ORDER BY
+                       CASE WHEN json_valid(raw_data) AND json_extract(raw_data, '$.submission_last_attempt_at') IS NOT NULL THEN 1 ELSE 0 END ASC,
+                       COALESCE(CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_last_attempt_at') AS INTEGER) END, 0) ASC,
+                       created_at ASC,
+                       fitness DESC
+                     LIMIT 1",
+                    [],
+                    alpha_from_row,
+                )
+                .optional()?;
+            if let Some(candidate) = &next {
+                transaction.execute(
+                    "INSERT INTO automation_state (key, value)
+                     VALUES ('submission_active_candidate', ?1)
+                     ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    [&candidate.id],
+                )?;
+                transaction.execute(
+                    "UPDATE alphas
+                     SET raw_data=json_set(
+                         CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
+                         '$.submission_phase', CASE
+                             WHEN CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.wq_alpha_id') END IS NULL THEN 'matching'
+                             ELSE 'checking'
+                         END,
+                         '$.submission_enqueued_at', COALESCE(
+                             CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_enqueued_at') END,
+                             CAST(strftime('%s','now') AS INTEGER)
+                         )
+                     )
+                     WHERE id=?1",
+                    [&candidate.id],
+                )?;
+            }
+            transaction.commit()?;
+            Ok::<_, anyhow::Error>(next)
+        })
+        .await
+        .context("database claim submission candidate task")?
+    }
+
+    pub async fn release_submission_candidate(&self, id: &str) -> Result<()> {
+        let path = self.path.clone();
+        let id = id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            conn.execute(
+                "UPDATE alphas
+                 SET raw_data=json_set(
+                     CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
+                     '$.submission_last_attempt_at', COALESCE(
+                         CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_last_attempt_at') END,
+                         CAST(strftime('%s','now') AS INTEGER)
+                     ),
+                     '$.submission_phase', CASE
+                         WHEN CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_phase') END='checking' THEN 'queued'
+                         ELSE COALESCE(CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_phase') END, 'queued')
+                     END
+                 )
+                 WHERE id=?1",
+                [&id],
+            )?;
+            conn.execute(
+                "DELETE FROM automation_state
+                 WHERE key='submission_active_candidate' AND value=?1",
+                [id],
+            )?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .context("database release submission candidate task")?
+    }
+
+    pub async fn record_submission_queue_error(
+        &self,
+        id: &str,
+        phase: &str,
+        message: &str,
+    ) -> Result<i64> {
+        let path = self.path.clone();
+        let id = id.to_owned();
+        let phase = phase.to_owned();
+        let message = message.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            conn.execute(
+                "UPDATE alphas
+                 SET raw_data=json_set(
+                     CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
+                     '$.submission_phase', ?2,
+                     '$.submission_last_attempt_at', CAST(strftime('%s','now') AS INTEGER),
+                     '$.submission_check_retry_count', COALESCE(
+                         CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_check_retry_count') AS INTEGER) END,
+                         0
+                     ) + 1,
+                     '$.submission_last_error', ?3
+                 )
+                 WHERE id=?1",
+                params![id, phase, message],
+            )?;
+            Ok::<_, anyhow::Error>(conn.query_row(
+                "SELECT COALESCE(CAST(json_extract(raw_data, '$.submission_check_retry_count') AS INTEGER), 0) FROM alphas WHERE id=?1",
+                [&id],
+                |row| row.get(0),
+            )?)
+        })
+        .await
+        .context("database submission queue error task")?
+    }
+
+    pub async fn record_submission_stage(
+        &self,
+        id: &str,
+        phase: &str,
+        alpha_id: Option<&str>,
+    ) -> Result<()> {
+        let path = self.path.clone();
+        let id = id.to_owned();
+        let phase = phase.to_owned();
+        let alpha_id = alpha_id.map(str::to_owned);
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            conn.execute(
+                "UPDATE alphas
+                 SET raw_data=json_set(
+                     CASE WHEN json_valid(raw_data) THEN raw_data ELSE '{}' END,
+                     '$.submission_phase', ?2,
+                     '$.submission_last_attempt_at', CAST(strftime('%s','now') AS INTEGER),
+                     '$.wq_alpha_id', COALESCE(
+                         ?3,
+                         CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.wq_alpha_id') END
+                     )
+                 )
+                 WHERE id=?1",
+                params![id, phase, alpha_id],
+            )?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .context("database submission stage task")?
+    }
+
     pub async fn submitted_today(&self) -> Result<i64> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
@@ -140,38 +351,6 @@ impl AlphaStore {
         })
         .await
         .context("database daily submitted count task")?
-    }
-
-    pub async fn auto_submit_started_at(&self) -> Result<Option<i64>> {
-        let path = self.path.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = open(&path)?;
-            Ok::<_, anyhow::Error>(
-                conn.query_row(
-                    "SELECT CAST(value AS INTEGER) FROM automation_state WHERE key='auto_submit_started_at'",
-                    [],
-                    |row| row.get(0),
-                )
-                .optional()?,
-            )
-        })
-        .await
-        .context("database auto-submit start task")?
-    }
-
-    pub async fn mark_auto_submit_started(&self) -> Result<()> {
-        let path = self.path.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = open(&path)?;
-            conn.execute(
-                "INSERT OR IGNORE INTO automation_state (key, value)
-                 VALUES ('auto_submit_started_at', CAST(strftime('%s','now') AS TEXT))",
-                [],
-            )?;
-            Ok::<_, anyhow::Error>(())
-        })
-        .await
-        .context("database mark auto-submit start task")?
     }
 
     pub async fn mark_failed(&self, expression: String, reason: String) -> Result<bool> {
@@ -260,6 +439,163 @@ impl AlphaStore {
         }).await.context("dashboard pending task")?
     }
 
+    pub async fn submission_queue_dashboard(&self, limit: i64) -> Result<Value> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = open(&path)?;
+            let active_id: Option<String> = conn
+                .query_row(
+                    "SELECT value FROM automation_state WHERE key='submission_active_candidate'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let mut statement = conn.prepare(
+                "SELECT id, expression, datetime(created_at,'+8 hours'), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, raw_data
+                 FROM alphas
+                 WHERE (pass_count>=7
+                   AND COALESCE(fail_count, 0)=0
+                   AND COALESCE(is_submitted, 0)=0
+                   AND COALESCE(is_failed_on_wq, 0)=0)
+                    OR id=?1
+                 ORDER BY
+                   CASE WHEN id=?1 THEN 0 WHEN pass_count>=8 THEN 1 ELSE 2 END ASC,
+                   CASE WHEN json_valid(raw_data) AND json_extract(raw_data, '$.submission_last_attempt_at') IS NOT NULL THEN 1 ELSE 0 END ASC,
+                   COALESCE(CASE WHEN json_valid(raw_data) THEN CAST(json_extract(raw_data, '$.submission_last_attempt_at') AS INTEGER) END, 0) ASC,
+                   created_at ASC,
+                   fitness DESC
+                 LIMIT ?2",
+            )?;
+            let queue_rows = statement.query_map(
+                params![active_id.clone().unwrap_or_default(), limit],
+                |row| {
+                    let id: String = row.get(0)?;
+                    let raw = row
+                        .get::<_, Option<String>>(10)?
+                        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+                        .unwrap_or_else(|| json!({}));
+                    let pass_count = row.get::<_, Option<i64>>(7)?.unwrap_or_default();
+                    let raw_phase = raw
+                        .get("submission_phase")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let phase = if active_id.as_deref() == Some(id.as_str()) {
+                        match raw_phase {
+                            "check_error" => "retrying",
+                            "matching" => "matching",
+                            "resimulation_required" | "resimulating" => "resimulating",
+                            "submitting" => "submitting",
+                            _ => "checking",
+                        }
+                    } else if pass_count >= 8 {
+                        "ready"
+                    } else if raw_phase == "check_error" || raw_phase == "match_missing" {
+                        "retry_wait"
+                    } else {
+                        "queued"
+                    };
+                    let checks_summary = row.get::<_, Option<String>>(9)?.unwrap_or_default();
+                    let checks = serde_json::from_str::<Value>(&checks_summary)
+                        .unwrap_or_else(|_| Value::Array(Vec::new()));
+                    Ok(json!({
+                        "id": id,
+                        "wq_alpha_id": raw.get("wq_alpha_id").cloned().unwrap_or(Value::Null),
+                        "expression": row.get::<_, String>(1)?,
+                        "created_at": row.get::<_, Option<String>>(2)?,
+                        "phase": phase,
+                        "fitness": row.get::<_, Option<f64>>(3)?.unwrap_or_default(),
+                        "sharpe": row.get::<_, Option<f64>>(4)?.unwrap_or_default(),
+                        "returns": row.get::<_, Option<f64>>(5)?.unwrap_or_default(),
+                        "turnover": row.get::<_, Option<f64>>(6)?.unwrap_or_default(),
+                        "pass_count": pass_count,
+                        "fail_count": row.get::<_, Option<i64>>(8)?.unwrap_or_default(),
+                        "checks": checks,
+                        "retry_count": raw.get("submission_check_retry_count").and_then(Value::as_i64).unwrap_or_default(),
+                        "last_error": raw.get("submission_last_error").cloned().unwrap_or(Value::Null),
+                        "last_attempt_at": raw.get("submission_last_attempt_at").cloned().unwrap_or(Value::Null)
+                    }))
+                },
+            )?;
+            let mut queue = queue_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+            for (index, row) in queue.iter_mut().enumerate() {
+                if let Some(object) = row.as_object_mut() {
+                    object.insert("position".into(), json!(index + 1));
+                }
+            }
+
+            let mut result_statement = conn.prepare(
+                "SELECT id, expression, datetime(created_at,'+8 hours'), COALESCE(datetime(submitted_timestamp,'+8 hours'), datetime(CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_completed_at') END, 'unixepoch', '+8 hours')), fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+                 FROM alphas
+                 WHERE COALESCE(is_submitted, 0)=1 OR COALESCE(is_failed_on_wq, 0)=1
+                 ORDER BY COALESCE(
+                     submitted_timestamp,
+                     datetime(CASE WHEN json_valid(raw_data) THEN json_extract(raw_data, '$.submission_completed_at') END, 'unixepoch'),
+                     created_at
+                 ) DESC
+                 LIMIT 100",
+            )?;
+            let result_rows = result_statement.query_map([], |row| {
+                let checks_summary = row.get::<_, Option<String>>(10)?.unwrap_or_default();
+                let checks = serde_json::from_str::<Value>(&checks_summary)
+                    .unwrap_or_else(|_| Value::Array(Vec::new()));
+                let submitted = row.get::<_, i64>(11).unwrap_or_default() != 0;
+                Ok(json!({
+                    "id": row.get::<_, Option<String>>(0)?,
+                    "expression": row.get::<_, String>(1)?,
+                    "created_at": row.get::<_, Option<String>>(2)?,
+                    "completed_at": row.get::<_, Option<String>>(3)?,
+                    "phase": if submitted { "submitted" } else { "failed" },
+                    "fitness": row.get::<_, Option<f64>>(4)?.unwrap_or_default(),
+                    "sharpe": row.get::<_, Option<f64>>(5)?.unwrap_or_default(),
+                    "returns": row.get::<_, Option<f64>>(6)?.unwrap_or_default(),
+                    "turnover": row.get::<_, Option<f64>>(7)?.unwrap_or_default(),
+                    "pass_count": row.get::<_, Option<i64>>(8)?.unwrap_or_default(),
+                    "fail_count": row.get::<_, Option<i64>>(9)?.unwrap_or_default(),
+                    "checks": checks,
+                    "is_submitted": submitted,
+                    "is_failed_on_wq": row.get::<_, i64>(12).unwrap_or_default() != 0,
+                    "failure_reason": row.get::<_, Option<String>>(13)?
+                }))
+            })?;
+            let recent_results = result_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+            let submitted_last_24h: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM alphas WHERE COALESCE(is_submitted, 0)=1 AND submitted_timestamp>=datetime('now','-24 hours')",
+                [],
+                |row| row.get(0),
+            )?;
+            let count_phase = |phase: &str| {
+                queue
+                    .iter()
+                    .filter(|row| row.get("phase").and_then(Value::as_str) == Some(phase))
+                    .count()
+            };
+            let active = queue
+                .iter()
+                .find(|row| matches!(row.get("phase").and_then(Value::as_str), Some("checking" | "retrying" | "matching" | "resimulating" | "submitting")))
+                .cloned()
+                .unwrap_or(Value::Null);
+            Ok::<_, anyhow::Error>(json!({
+                "submission_limit": "unlimited",
+                "submitted_last_24h": submitted_last_24h,
+                "active": active,
+                "summary": {
+                    "total": queue.len(),
+                    "queued": count_phase("queued"),
+                    "checking": count_phase("checking"),
+                    "matching": count_phase("matching"),
+                    "resimulating": count_phase("resimulating"),
+                    "submitting": count_phase("submitting"),
+                    "retrying": count_phase("retrying") + count_phase("retry_wait"),
+                    "ready": count_phase("ready")
+                },
+                "queue": queue,
+                "recent_results": recent_results
+            }))
+        })
+        .await
+        .context("dashboard submission queue task")?
+    }
+
     pub async fn submission_daily(&self, days: i64) -> Result<Value> {
         let path = self.path.clone();
         tokio::task::spawn_blocking(move || {
@@ -319,6 +655,23 @@ impl AlphaStore {
             Ok::<_, anyhow::Error>(())
         }).await.context("database result task")?
     }
+}
+
+fn submission_candidate_by_id(conn: &Connection, id: &str) -> Result<Option<AlphaRecord>> {
+    Ok(conn
+        .query_row(
+            "SELECT id, expression, fitness, sharpe, returns, turnover, pass_count, fail_count, checks_summary, is_submitted, is_failed_on_wq, failure_reason, raw_data
+             FROM alphas
+             WHERE id=?1
+               AND pass_count>=7
+               AND pass_count<8
+               AND COALESCE(fail_count, 0)=0
+               AND COALESCE(is_submitted, 0)=0
+               AND COALESCE(is_failed_on_wq, 0)=0",
+            [id],
+            alpha_from_row,
+        )
+        .optional()?)
 }
 
 fn dashboard_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
@@ -485,9 +838,6 @@ mod tests {
             1
         );
         assert_eq!(store.submitted_today().await.unwrap(), 0);
-        assert_eq!(store.auto_submit_started_at().await.unwrap(), None);
-        store.mark_auto_submit_started().await.unwrap();
-        assert!(store.auto_submit_started_at().await.unwrap().is_some());
         let summary = store.dashboard_summary(10).await.unwrap();
         assert_eq!(summary["legacy_submission_backlog"], 1);
         assert_eq!(summary["linked_check_pending"], 0);
@@ -546,6 +896,47 @@ mod tests {
         assert_eq!(high["submission_last_attempt_at"], 100);
         assert_eq!(high["performance"]["fitness"], 2.0);
         assert_eq!(high["pass_count"], 7);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn submission_queue_keeps_exactly_one_active_candidate() {
+        let path = std::env::temp_dir().join(format!(
+            "wq-rs-single-check-queue-{}.db",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE alphas (id TEXT PRIMARY KEY, expression TEXT NOT NULL, fitness REAL, sharpe REAL, returns REAL, turnover REAL, pass_count INTEGER, fail_count INTEGER, checks_summary TEXT, is_submitted INTEGER, is_failed_on_wq INTEGER, failure_reason TEXT, raw_data TEXT, created_at TEXT, submitted_timestamp TEXT);").unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('first','rank(close);',7,0,0,0,'{}','2025-01-01')", []).unwrap();
+        conn.execute("INSERT INTO alphas (id, expression, pass_count, fail_count, is_submitted, is_failed_on_wq, raw_data, created_at) VALUES ('second','rank(open);',7,0,0,0,'{}','2025-01-02')", []).unwrap();
+        drop(conn);
+        let store = AlphaStore::new(&path);
+
+        let first = store.claim_submission_candidate().await.unwrap().unwrap();
+        let same = store.claim_submission_candidate().await.unwrap().unwrap();
+        assert_eq!(first.id, "first");
+        assert_eq!(same.id, "first");
+
+        store.release_submission_candidate("first").await.unwrap();
+        let second = store.claim_submission_candidate().await.unwrap().unwrap();
+        assert_eq!(second.id, "second");
+        let dashboard = store.submission_queue_dashboard(10).await.unwrap();
+        assert_eq!(dashboard["active"]["id"], "second");
+        assert_eq!(dashboard["active"]["phase"], "matching");
+        assert_eq!(dashboard["summary"]["queued"], 1);
+        assert_eq!(dashboard["submission_limit"], "unlimited");
+        store
+            .record_submission_stage("second", "resimulating", Some("remote-second"))
+            .await
+            .unwrap();
+        let resimulating = store.submission_queue_dashboard(10).await.unwrap();
+        assert_eq!(resimulating["active"]["phase"], "resimulating");
+        assert_eq!(resimulating["active"]["wq_alpha_id"], "remote-second");
+        assert_eq!(resimulating["active"]["pass_count"], 7);
+
         let _ = std::fs::remove_file(path);
     }
 }

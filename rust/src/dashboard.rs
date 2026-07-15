@@ -50,6 +50,7 @@ pub async fn serve(
         .route("/settings", get(page_settings))
         .route("/chart", get(page_chart))
         .route("/pending", get(page_pending))
+        .route("/queue", get(page_queue))
         .route("/healthz", get(healthz))
         .route("/status", get(status))
         .route("/api/status", get(status))
@@ -61,6 +62,7 @@ pub async fn serve(
         .route("/api/mark_failed_on_wq", post(mark_failed))
         .route("/api/unmark_failed_on_wq", post(unmark_failed))
         .route("/api/get_pending_alphas", get(get_pending_alphas))
+        .route("/api/submission_queue", get(submission_queue))
         .route("/api/v1/stats/submission_daily", get(submission_daily))
         .route("/api/v1/stats/timeseries", get(timeseries))
         .route("/download_logs/{name}", get(download_log))
@@ -102,6 +104,10 @@ async fn page_chart(State(state): State<DashboardState>) -> Response {
 
 async fn page_pending(State(state): State<DashboardState>) -> Response {
     render_page(&state, "pending.html").await
+}
+
+async fn page_queue(State(state): State<DashboardState>) -> Response {
+    render_page(&state, "submission_queue.html").await
 }
 
 async fn render_page(state: &DashboardState, name: &str) -> Response {
@@ -327,6 +333,21 @@ async fn flag_result(result: Result<bool>) -> Response {
 async fn get_pending_alphas(State(state): State<DashboardState>) -> impl IntoResponse {
     match state.store.pending_dashboard(500).await {
         Ok(value) => (StatusCode::OK, Json(Value::Array(value))),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error":error.to_string()})),
+        ),
+    }
+}
+
+async fn submission_queue(State(state): State<DashboardState>) -> impl IntoResponse {
+    match state.store.submission_queue_dashboard(2_000).await {
+        Ok(mut value) => {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("updated_at".into(), json!(Utc::now().to_rfc3339()));
+            }
+            (StatusCode::OK, Json(value))
+        }
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error":error.to_string()})),

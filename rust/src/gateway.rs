@@ -322,6 +322,10 @@ impl WorldQuantGateway for LiveWorldQuant {
             } else {
                 serde_json::from_slice(&bytes).context("parse submission check response")?
             };
+            if has_completed_checks(&value) {
+                let detail = self.alpha(alpha_id).await?;
+                return Ok(merge_check_detail(detail, &value));
+            }
             if let Some(wait) = retry {
                 tokio::time::sleep(wait.max(Duration::from_secs(1))).await;
                 continue;
@@ -400,6 +404,39 @@ fn has_pending_checks(detail: &Value) -> bool {
         .unwrap_or(true)
 }
 
+fn has_completed_checks(detail: &Value) -> bool {
+    detail
+        .get("is")
+        .and_then(|value| value.get("checks"))
+        .or_else(|| detail.get("checks"))
+        .and_then(Value::as_array)
+        .map(|checks| {
+            !checks.is_empty()
+                && checks
+                    .iter()
+                    .all(|check| check.get("result").and_then(Value::as_str) != Some("PENDING"))
+        })
+        .unwrap_or(false)
+}
+
+fn merge_check_detail(mut detail: Value, check_response: &Value) -> Value {
+    let Some(check_is) = check_response.get("is").and_then(Value::as_object) else {
+        return detail;
+    };
+    let Some(detail_object) = detail.as_object_mut() else {
+        return check_response.clone();
+    };
+    let detail_is = detail_object.entry("is").or_insert_with(|| json!({}));
+    let Some(detail_is_object) = detail_is.as_object_mut() else {
+        *detail_is = check_response.get("is").cloned().unwrap_or(Value::Null);
+        return detail;
+    };
+    for (key, value) in check_is {
+        detail_is_object.insert(key.clone(), value.clone());
+    }
+    detail
+}
+
 #[derive(Default)]
 pub struct FakeWorldQuant;
 
@@ -431,7 +468,7 @@ impl WorldQuantGateway for FakeWorldQuant {
 
 #[cfg(test)]
 mod tests {
-    use super::has_pending_checks;
+    use super::{has_completed_checks, has_pending_checks, merge_check_detail};
     use serde_json::json;
 
     #[test]
@@ -442,5 +479,27 @@ mod tests {
         assert!(!has_pending_checks(&json!({
             "is":{"checks":[{"name":"SELF_CORRELATION","result":"PASS"}]}
         })));
+    }
+
+    #[test]
+    fn completed_check_response_overrides_stale_detail_and_keeps_metrics() {
+        let detail = json!({"is":{
+            "fitness":1.38,
+            "sharpe":2.1,
+            "checks":[{"name":"SELF_CORRELATION","result":"PENDING"}]
+        }});
+        let check_response = json!({"is":{
+            "checks":[{"name":"SELF_CORRELATION","result":"PASS","value":0.7}],
+            "selfCorrelated":{"max":0.7}
+        }});
+
+        let merged = merge_check_detail(detail, &check_response);
+
+        assert_eq!(merged["is"]["fitness"], 1.38);
+        assert_eq!(merged["is"]["sharpe"], 2.1);
+        assert_eq!(merged["is"]["checks"][0]["result"], "PASS");
+        assert_eq!(merged["is"]["selfCorrelated"]["max"], 0.7);
+        assert!(has_completed_checks(&check_response));
+        assert!(!has_pending_checks(&merged));
     }
 }
